@@ -14,6 +14,7 @@ import time
 import pstats
 import os
 
+from common import _get_filename
 from log import log
 
 
@@ -38,13 +39,6 @@ def func_time(f):
 CPROFILE_PATH = "./.cache/cprofile/"
 
 
-def _get_filename(preffix="Stats", suffix=".cprofile", path=CPROFILE_PATH):
-    if(not os.path.exists(path)):
-        os.makedirs(path)
-    date_str = time.strftime('%Y%m%d_%H%M%S')
-    return os.path.join(path, ''.join((preffix, date_str, suffix)))
-
-
 def func_cprofile(func):
     """
     内建分析器
@@ -61,7 +55,7 @@ def func_cprofile(func):
         finally:
             try:
                 profile.dump_stats('profile_dump')  # Dump Binary File
-                with open(_get_filename(), "w") as filesteam:
+                with open(_get_filename("Stats_",".cprofile",CPROFILE_PATH), "w") as filesteam:
                     ps = pstats.Stats("profile_dump", stream=filesteam)
                     # ps.strip_dirs().sort_stats("time").print_stats()
                     ps.sort_stats("time").print_stats()
