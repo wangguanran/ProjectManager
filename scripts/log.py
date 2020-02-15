@@ -16,6 +16,8 @@ import time
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 
+LOG_PATH = "./.cache/logs/"
+
 
 class Log_Manager(object):
 
@@ -23,7 +25,7 @@ class Log_Manager(object):
         self._check_logpath()
         self.log = self._init_logger()
 
-    def _get_filename(self, preffix="Log", suffix=".log", logpath="./.cache/logs/"):
+    def _get_filename(self, preffix="Log", suffix=".log", logpath=LOG_PATH):
         date_str = time.strftime('%Y%m%d_%H%M%S')
         return os.path.join(logpath, ''.join((preffix, date_str, suffix)))
 
@@ -81,7 +83,7 @@ class Log_Manager(object):
         logging.config.dictConfig(config)
         return logging.getLogger("FileLogger")
 
-    def _check_logpath(self, logpath="./.cache/logs/"):
+    def _check_logpath(self, logpath=LOG_PATH):
         if(not os.path.exists(logpath)):
             os.makedirs(logpath)
 

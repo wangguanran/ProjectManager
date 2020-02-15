@@ -10,9 +10,11 @@
 
 import sys
 import time
+import traceback
 
 from operate_database import Operate_Database
 from log import log
+from analyse import func_cprofile
 
 
 class Project_Manager(object):
@@ -24,8 +26,8 @@ class Project_Manager(object):
     @staticmethod
     def print_help():
         log.info("\t -b name              指定主板项目名，不加-b参数代表客户项目")
-        log.info(
-            "\t --server=ServerIP    指定执行该操作的服务器IP，未指定则为本地创建，指定为auto则自动查询服务器状态并分配新建任务")
+        log.info("\t --server=ServerIP    指定执行该操作的服务器IP，未指定则为本地创建\
+                                            指定为auto则自动查询服务器状态并分配新建任务")
         log.info("\t --build_confirm=yes  指定新建项目需要编译确认，默认为no不编译，仅保存相关信息")
         log.info("\t --base=name          指定项目新建参考的模板项目")
         log.info("\t --platform=XXX       指定新建项目的平台")
@@ -33,6 +35,7 @@ class Project_Manager(object):
 
     "Project_Manager Main"
     @staticmethod
+    @func_cprofile
     def main(self):
         log.debug("In!")
         # TODO 连接数据库
@@ -51,7 +54,6 @@ class Project_Manager(object):
 
         # 查询服务器状态
         # 分发新建命令至服务器（未指定-s参数时查询服务器状态自动分配）
-        pass
 
 
 if __name__ == "__main__":
