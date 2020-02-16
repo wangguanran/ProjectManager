@@ -19,17 +19,17 @@ LOG_PATH = "./.cache/logs/"
 class LogManager(object):
 
     def __init__(self):
-        self.log = self._init_logger()
+        self.logger = self._init_logger()
 
     def _init_logger(self):
         config = {
-            'version': 1,
+            'version': 1.0,
             'formatters': {
                 'console_formatter': {
-                    'format': '[%(asctime)s] [%(levelname)-10s]\t%(message)s',
+                    'format': '[%(asctime)s]\t%(message)s',
                 },
                 'file_formatter': {
-                    'format': '[%(asctime)s] [%(levelname)-10s] [%(filename)-20s] [%(funcName)-10s] [%(lineno)-5d]\t%(message)s',
+                    'format': '[%(asctime)s] [%(levelname)-10s] [%(filename)-20s] [%(funcName)-20s] [%(lineno)-5d]\t%(message)s',
                 },
                 # 其他的 formatter
             },
@@ -78,7 +78,7 @@ class LogManager(object):
         return logging.getLogger("FileLogger")
 
     def getLogger(self):
-        return self.log
+        return self.logger
 
 
 if __name__ == "__main__":

@@ -18,19 +18,19 @@ from scripts.common import _get_filename
 from scripts.log import log
 
 
-def func_time(f):
+def func_time(func):
     """
     简单记录执行时间
-    :param f:
+    :param func:
     :return:
     """
 
-    @wraps(f)
+    @wraps(func)
     def wrapper(*args, **kwargs):
         start = time.time()
-        result = f(*args, **kwargs)
+        result = func(*args, **kwargs)
         end = time.time()
-        print(f.__name__, 'took', end - start, 'seconds')
+        print(func.__name__, 'took', end - start, 'seconds')
         return result
 
     return wrapper
@@ -55,7 +55,7 @@ def func_cprofile(func):
         finally:
             try:
                 profile.dump_stats('profile_dump')  # Dump Binary File
-                with open(_get_filename("Stats_",".cprofile",CPROFILE_PATH), "w") as filesteam:
+                with open(_get_filename("Stats_", ".cprofile", CPROFILE_PATH), "w") as filesteam:
                     ps = pstats.Stats("profile_dump", stream=filesteam)
                     # ps.strip_dirs().sort_stats("time").print_stats()
                     ps.sort_stats("time").print_stats()
@@ -83,8 +83,8 @@ try:
                 try:
                     profiler = LineProfiler()
                     profiler.add_function(func)
-                    for f in follow:
-                        profiler.add_function(f)
+                    for func in follow:
+                        profiler.add_function(func)
                     profiler.enable_by_count()
                     return func(*args, **kwargs)
                 finally:
@@ -95,6 +95,8 @@ try:
         return decorate
 
 except ImportError:
+    # log.exception("Can not import line_profiler")
+
     def func_line_time(follow=[]):
         "Helpful if you accidentally leave in production!"
         def decorate(func):
@@ -105,3 +107,18 @@ except ImportError:
             return nothing
 
         return decorate
+
+
+# def func_try_except(func):
+#     """
+#     保存程序运行错误日志
+#     """
+
+#     @wraps(func)
+#     def wrapper(*args, **kwargs):
+#         try:
+#             return func(*args, **kwargs)
+#         except:
+#             log.exception("Something error!")
+
+#     return wrapper
