@@ -8,14 +8,14 @@
 @FilePath: \vprojects\scripts\analyse.py
 '''
 
-from functools import wraps
 import cProfile
-import time
-import pstats
 import os
+import pstats
+import time
+from functools import wraps
 
-from common import _get_filename
-from log import log
+from scripts.common import _get_filename
+from scripts.log import log
 
 
 def func_time(f):

@@ -11,12 +11,12 @@
 import logging
 import logging.config
 
-from common import _get_filename
+from scripts.common import _get_filename
 
 LOG_PATH = "./.cache/logs/"
 
 
-class Log_Manager(object):
+class LogManager(object):
 
     def __init__(self):
         self.log = self._init_logger()
@@ -46,6 +46,7 @@ class Log_Manager(object):
                     'mode': 'w',
                     'formatter': 'file_formatter',
                     'encoding': 'utf8',
+                    'delay':'True',
                 },
                 'file_base_time': {
                     'class': 'logging.handlers.TimedRotatingFileHandler',
@@ -53,9 +54,10 @@ class Log_Manager(object):
                     'level': 'DEBUG',
                     'formatter': 'file_formatter',
                     'encoding': 'utf8',
+                    'delay':'True',
                     # 'interval':1,
-                    'when': 'S',
-                    'backupCount': 10,
+                    # 'when': 'S',
+                    # 'backupCount': 10,
                 },
                 # 其他的 handler
             },
@@ -82,4 +84,4 @@ class Log_Manager(object):
 if __name__ == "__main__":
     pass
 else:
-    log = Log_Manager().getLogger()
+    log = LogManager().getLogger()

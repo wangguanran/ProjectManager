@@ -7,12 +7,17 @@
 @Description: Operate database py file
 @FilePath: \vprojects\scripts\operate_database.py
 '''
-from log import log
+from scripts.log import log
 
-class Operate_Database(object):
+
+class OperateDatabase(object):
+    '''
+    数据库操作类
+    '''
 
     def __init__(self):
-        log.debug("Operate_Database Im in")
+        log.debug("Operate_Database Im In")
+
 
 if __name__ == "__main__":
     pass
