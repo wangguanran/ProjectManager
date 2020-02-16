@@ -21,7 +21,7 @@ global_info = {
     'support_operate': {
         "new_project":"_new_project",
         "new_board":"_new_board",
-        "complie_project":"_complie_project",
+        "compile_project":"_compile_project",
         "del_project":"_del_project",
     }
 }

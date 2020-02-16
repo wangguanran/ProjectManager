@@ -26,7 +26,7 @@ class LogManager(object):
             'version': 1.0,
             'formatters': {
                 'console_formatter': {
-                    'format': '[%(asctime)s]\t%(message)s',
+                    'format': '[%(asctime)s] [%(levelname)-10s]\t%(message)s',
                 },
                 'file_formatter': {
                     'format': '[%(asctime)s] [%(levelname)-10s] [%(filename)-20s] [%(funcName)-20s] [%(lineno)-5d]\t%(message)s',

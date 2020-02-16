@@ -17,7 +17,7 @@ from scripts.common import global_info
 from scripts.operate_database import OperateDatabase
 from scripts.log import log
 from scripts.analyse import func_cprofile
-from scripts.project import Project
+from scripts.platform.platform_manager import PlatformManager
 
 PROJECT_INFO_PATH = "./.cache/project_info"
 version = global_info['version']
@@ -30,7 +30,8 @@ class ProjectManager(object):
         log.debug("Project_Manager __init__ Im In")
         self.prj_info = self._get_prj_info(project_name)
         log.debug("prj_info = %s" % (self.prj_info))
-        self.project = Project(self.prj_info)
+        self.platform_manager = PlatformManager()
+        self.project = self.platform_manager.compatible(self.prj_info)
 
     def _get_prj_info(self, project_name):
         log.debug("In")
@@ -69,5 +70,9 @@ def parse_cmd():
 
 if __name__ == "__main__":
     argsdict = parse_cmd()
-    project = ProjectManager(argsdict['project_name']).get_project()
-    # project.dispatch(argsdict['operate'], argsdict['info'])
+    project_manager = ProjectManager(argsdict['project_name'])
+    project = project_manager.get_project()
+    if project is None:
+        log.error("Can not find platform '%s'"%(project_manager.prj_info.platform))
+        sys.exit()
+    project.dispatch(argsdict)
