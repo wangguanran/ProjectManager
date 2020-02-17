@@ -12,10 +12,13 @@ import os
 from functools import partial
 
 from scripts.log import log
-from scripts.common import global_info
 
-support_operate = global_info['support_operate']
-
+support_operate = {
+    "new_project": "_new_project",
+    "new_board": "_new_board",
+    "compile_project": "_compile_project",
+    "del_project": "_del_project",
+}
 # PLATFORM_FILE_PATH = "scripts/platform/"
 get_full_path = partial(os.path.join, os.getcwd(), "scripts", "platform")
 PLATFORM_PLUGIN_PATH = get_full_path()
@@ -51,26 +54,38 @@ class PlatformManager(object):
     def add_platform(self, platform):
         attr = dir(platform)
         log.debug(attr)
+
         support_count = 0
         for op, func in support_operate.items():
             if not func in attr:
-                log.warning("Missing attributes = %s "%(func))
+                log.warning("Missing attributes = %s " % (func))
             else:
                 support_count += 1
+
         if support_count == len(support_operate):
             if "support_list" in attr:
-                log.debug("Add platform (%s)"%(platform.support_list))
+                log.debug("Add platform (%s)" % (platform.support_list))
                 for data in platform.support_list:
-                    log.debug("platform '%s' register successfully!"%(data))
+                    if data in self._platform_info:
+                        log.warning(
+                            "The platform '%s' is already registered" % (data))
+                    else:
+                        log.debug(
+                            "platform '%s' register successfully!" % (data))
                     self._platform_info[data] = platform
             else:
-                log.warning("%s object has no attribute 'support_list'",platform.__class__)
+                log.warning(
+                    "%s object has no attribute 'support_list'", platform.__class__)
         else:
             log.warning("platform is invalid!")
 
     def compatible(self, prj_info):
         log.debug("In!")
-        return self._platform_info[prj_info["platform"]]
+        try:
+            return self._platform_info[prj_info["platform"]]
+        except:
+            log.exception("Invalid platform '%s'" % (prj_info["platform"]))
+            return None
 
 
 if __name__ == "__main__":

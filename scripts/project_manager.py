@@ -13,28 +13,29 @@ import time
 import traceback
 import argparse
 
-from scripts.common import global_info
 from scripts.operate_database import OperateDatabase
 from scripts.log import log
 from scripts.analyse import func_cprofile
 from scripts.platform.platform_manager import PlatformManager
-
-PROJECT_INFO_PATH = "./.cache/project_info"
-version = global_info['version']
-isSupportDb = global_info['isSupportMysql'] | global_info['isSupportRedis']
 
 
 class ProjectManager(object):
 
     def __init__(self, project_name):
         log.debug("Project_Manager __init__ Im In")
+
+        # Get project info from file or database
         self.prj_info = self._get_prj_info(project_name)
         log.debug("prj_info = %s" % (self.prj_info))
+
+        # Compatible operate platform
         self.platform_manager = PlatformManager()
         self.project = self.platform_manager.compatible(self.prj_info)
 
     def _get_prj_info(self, project_name):
         log.debug("In")
+        PROJECT_INFO_PATH = "./.cache/project_info"
+
         prj_info = {}
         prj_info['name'] = project_name
 
@@ -58,8 +59,7 @@ class ProjectManager(object):
 def parse_cmd():
     log.debug("argv = %s" % (sys.argv))
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--version', action="version",
-                        version=global_info['version'])
+    parser.add_argument('-v', '--version', action="version", version="1.0")
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")
     parser.add_argument("--info", nargs="+", help="project info")
@@ -73,6 +73,6 @@ if __name__ == "__main__":
     project_manager = ProjectManager(argsdict['project_name'])
     project = project_manager.get_project()
     if project is None:
-        log.error("Can not find platform '%s'"%(project_manager.prj_info.platform))
         sys.exit()
-    project.dispatch(argsdict)
+    else:
+        project.dispatch(argsdict)

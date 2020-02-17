@@ -14,6 +14,7 @@ from scripts.log import log
 class MTKCommon(object):
 
     def __init__(self):
+        self.vendor = "MTK"
         self.support_list = [
             "MT6735",
             "MT6739",
@@ -29,7 +30,11 @@ class MTKCommon(object):
         log.debug("operate = %s" % (args["operate"]))
         log.debug("project_name = %s" % (args["project_name"]))
         log.debug("info = %s" % (args["info"]))
-        return self.op_handler[args["operate"]](args["project_name"],args["info"])
+        try:
+            return self.op_handler[args["operate"]](args["project_name"],args["info"])
+        except:
+            log.exception("The platform is not support '%s'"%(args["operate"]))
+            return None
 
     def _new_project(self,project_name,info):
         log.debug("In!")
