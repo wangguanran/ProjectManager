@@ -26,17 +26,16 @@ class MTKCommon(object):
             "del_project": self._del_project,
         }
 
-    def dispatch(self, args):
+    def dispatch(self, prj_info, args):
         log.debug("operate = %s" % (args["operate"]))
-        log.debug("project_name = %s" % (args["project_name"]))
         log.debug("info = %s" % (args["info"]))
         try:
-            return self.op_handler[args["operate"]](args["project_name"],args["info"])
+            return self.op_handler[args["operate"]](prj_info, args["info"])
         except:
-            log.exception("The platform is not support '%s'"%(args["operate"]))
+            log.exception("Not support '%s'" % (args["operate"]))
             return None
 
-    def _new_project(self,project_name,info):
+    def _new_project(self, prj_info, arginfo):
         log.debug("In!")
         # TODO 本地创建项目所需要的文件
         # * 根据新建项目所在平台（MTK/SPRD/RK）动态加载相关模块（mtk/sprd/rk_manager.py）(传入参数：项目名、项目平台)（返回操作句柄）
@@ -45,15 +44,15 @@ class MTKCommon(object):
         # * Device目录下 拷贝.mk等配置信息，替换目录名
         pass
 
-    def _new_board(self,project_name,info):
+    def _new_board(self, prj_info, arginfo):
         log.debug("In!")
         pass
 
-    def _del_project(self,project_name,info):
+    def _del_project(self, prj_info, arginfo):
         log.debug("In!")
         pass
 
-    def _compile_project(self,project_name,info):
+    def _compile_project(self, prj_info, arginfo):
         log.debug("In!")
         pass
 

@@ -9,6 +9,7 @@
 '''
 
 import os
+import sys
 from functools import partial
 
 from scripts.log import log
@@ -53,7 +54,7 @@ class PlatformManager(object):
 
     def add_platform(self, platform):
         attr = dir(platform)
-        log.debug(attr)
+        # log.debug(attr)
 
         support_count = 0
         for op, func in support_operate.items():
@@ -85,7 +86,7 @@ class PlatformManager(object):
             return self._platform_info[prj_info["platform"]]
         except:
             log.exception("Invalid platform '%s'" % (prj_info["platform"]))
-            return None
+            sys.exit(-1)
 
 
 if __name__ == "__main__":
