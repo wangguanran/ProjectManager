@@ -14,28 +14,12 @@ from scripts.log import log
 class MTKCommon(object):
 
     def __init__(self):
-        self.vendor = "MTK"
         self.support_list = [
             "MT6735",
             "MT6739",
         ]
-        self.op_handler = {
-            "new_project": self._new_project,
-            "new_board": self._new_board,
-            "compile_project": self._compile_project,
-            "del_project": self._del_project,
-        }
 
-    def dispatch(self, prj_info, args):
-        log.debug("operate = %s" % (args["operate"]))
-        log.debug("info = %s" % (args["info"]))
-        try:
-            return self.op_handler[args["operate"]](prj_info, args["info"])
-        except:
-            log.exception("Not support '%s'" % (args["operate"]))
-            return None
-
-    def _new_project(self, prj_info, arginfo):
+    def new_project(self, prj_info, args_info):
         log.debug("In!")
         # TODO 本地创建项目所需要的文件
         # * 根据新建项目所在平台（MTK/SPRD/RK）动态加载相关模块（mtk/sprd/rk_manager.py）(传入参数：项目名、项目平台)（返回操作句柄）
@@ -44,20 +28,15 @@ class MTKCommon(object):
         # * Device目录下 拷贝.mk等配置信息，替换目录名
         pass
 
-    def _new_board(self, prj_info, arginfo):
+    def del_project(self, prj_info, args_info):
         log.debug("In!")
         pass
 
-    def _del_project(self, prj_info, arginfo):
-        log.debug("In!")
-        pass
-
-    def _compile_project(self, prj_info, arginfo):
+    def compile_project(self, prj_info, args_info):
         log.debug("In!")
         pass
 
 
-def register_platform(platform_manager):
-    log.debug("In!")
-    platform = MTKCommon()
-    platform_manager.add_platform(platform)
+# All platform scripts must contain this interface
+def get_platform():
+    return MTKCommon()
