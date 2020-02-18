@@ -14,18 +14,18 @@ from functools import partial
 
 from scripts.log import log
 
-support_operate = {
-    "new_project": "_new_project",
-    "new_board": "_new_board",
-    "compile_project": "_compile_project",
-    "del_project": "_del_project",
-}
-# PLATFORM_FILE_PATH = "scripts/platform/"
 get_full_path = partial(os.path.join, os.getcwd(), "scripts", "platform")
 PLATFORM_PLUGIN_PATH = get_full_path()
 
 
 class PlatformManager(object):
+
+    __instance = None
+
+    def __new__(cls):
+        if cls.__instance is None:
+            cls.__instance = super().__new__(cls)
+        return cls.__instance
 
     def __init__(self):
         self.name = __name__
@@ -33,11 +33,9 @@ class PlatformManager(object):
         self._loadPlugins()
 
     def _loadPlugins(self):
-        # log.debug(os.listdir(PLATFORM_PLUGIN_PATH))
         for dirname in os.listdir(PLATFORM_PLUGIN_PATH):
             dirfullname = get_full_path(dirname)
             if os.path.isdir(dirfullname):
-                # log.debug(os.listdir(dirfullname))
                 for filename in os.listdir(dirfullname):
                     if not filename.endswith(".py") or filename.startswith("_"):
                         continue
@@ -49,36 +47,39 @@ class PlatformManager(object):
         packageName = "scripts.platform."+dirname+'.'+pluginName
         log.debug("packageName = %s" % (packageName))
         plugin = __import__(packageName, fromlist=[pluginName])
-        # Errors may be occured. Handle it yourself.
-        plugin.register_platform(self)
+
+        platform = plugin.get_platform()
+        platform.filename = plugin.__file__
+        platform.pluginName = pluginName
+        platform.vendor = dirname
+        platform.packageName = packageName
+        self.add_platform(platform)
 
     def add_platform(self, platform):
-        attr = dir(platform)
-        # log.debug(attr)
+        attrlist = dir(platform)
+        log.debug(attrlist)
 
-        support_count = 0
-        for op, func in support_operate.items():
-            if not func in attr:
-                log.warning("Missing attributes = %s " % (func))
-            else:
-                support_count += 1
+        platform.op_handler = {}
+        for attr in attrlist:
+            if not attr.startswith("_"):
+                funcaddr = getattr(platform, attr)
+                if callable(funcaddr):
+                    platform.op_handler[attr] = funcaddr
+        log.debug(platform.op_handler)
 
-        if support_count == len(support_operate):
-            if "support_list" in attr:
-                log.debug("Add platform (%s)" % (platform.support_list))
-                for data in platform.support_list:
-                    if data in self._platform_info:
-                        log.warning(
-                            "The platform '%s' is already registered" % (data))
-                    else:
-                        log.debug(
-                            "platform '%s' register successfully!" % (data))
+        if "support_list" in attrlist:
+            log.debug("%s support list (%s)" % (platform.pluginName,platform.support_list))
+            for data in platform.support_list:
+                if data in self._platform_info:
+                    log.warning(
+                        "The platform '%s' is already registered by %s,%s register failed" % (data, self._platform_info[data].filename, platform.filename))
+                else:
+                    log.info(
+                        "platform '%s' register successfully!" % (data))
                     self._platform_info[data] = platform
-            else:
-                log.warning(
-                    "%s object has no attribute 'support_list'", platform.__class__)
         else:
-            log.warning("platform is invalid!")
+            log.warning(
+                "%s object has no attribute 'support_list'", platform.__class__)
 
     def compatible(self, prj_info):
         log.debug("In!")
