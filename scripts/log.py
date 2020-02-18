@@ -36,7 +36,7 @@ class LogManager(object):
             'handlers': {
                 'console': {
                     'class': 'logging.StreamHandler',
-                    'level': 'INFO',
+                    'level': 'WARNING',
                     'formatter': 'console_formatter'
                 },
                 'file': {
