@@ -21,16 +21,16 @@ from scripts.analyse import func_cprofile
 from scripts.platform.platform_manager import PlatformManager
 
 
-class ProjectManager(object):
+class Project(object):
 
     def __init__(self, project_name):
         log.debug("Project_Manager __init__ Im In")
 
-        self.project = {}
+        self.prj_info = {}
         # Get project info from file or database
-        self.project["info"] = self._get_prj_info(project_name)
+        self.prj_info = self._get_prj_info(project_name)
         # Compatible operate platform
-        self.project["platform"] = PlatformManager().compatible(self.project["info"])
+        self.prj_info["platform"] = PlatformManager().compatible(self.prj_info)
 
     def _get_prj_info(self, project_name):
         prj_info = None
@@ -61,10 +61,11 @@ class ProjectManager(object):
         return prj_info
 
     def get_project(self):
-        return self.project
+        return self.prj_info
 
-    def dispatch(self,args_dict):
-        return self.project["platform"].op_handler[args_dict["operate"]](self.project["info"],args_dict["info"])
+    def dispatch(self,operate,info):
+        self.prj_info["arg_list"] = info
+        return self.prj_info["platform"].op_handler[operate](self.prj_info)
 
 
 def parse_cmd():
@@ -73,7 +74,7 @@ def parse_cmd():
     parser.add_argument('-v', '--version', action="version", version="1.0")
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")
-    parser.add_argument("--info", nargs="+", help="project info")
+    parser.add_argument("--info", nargs="+", help="command info")
     args = parser.parse_args()
     log.info(args.__dict__)
     return args.__dict__
@@ -81,5 +82,5 @@ def parse_cmd():
 
 if __name__ == "__main__":
     args_dict = parse_cmd()
-    project_manager = ProjectManager(args_dict['project_name'])
-    project_manager.dispatch(args_dict)
+    project = Project(args_dict['project_name'])
+    project.dispatch(args_dict["operate"],args_dict["info"])
