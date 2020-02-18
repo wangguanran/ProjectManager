@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-15 21:30:21
+@LastEditTime: 2020-02-18 22:53:09
 @LastEditors: WangGuanran
 @Description: project_manager py file
-@FilePath: \vprojects\scripts\project_manager.py
+@FilePath: \vprojects\scripts\project.py
 '''
 
 import os
@@ -63,8 +63,8 @@ class Project(object):
     def get_project(self):
         return self.prj_info
 
-    def dispatch(self,operate,info):
-        self.prj_info["arg_list"] = info
+    def dispatch(self,operate,arg_list):
+        self.prj_info["arg_list"] = arg_list
         return self.prj_info["platform"].op_handler[operate](self.prj_info)
 
 
@@ -74,7 +74,7 @@ def parse_cmd():
     parser.add_argument('-v', '--version', action="version", version="1.0")
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")
-    parser.add_argument("--info", nargs="+", help="command info")
+    parser.add_argument("arg_list", nargs="+", help="command info")
     args = parser.parse_args()
     log.info(args.__dict__)
     return args.__dict__
@@ -83,4 +83,4 @@ def parse_cmd():
 if __name__ == "__main__":
     args_dict = parse_cmd()
     project = Project(args_dict['project_name'])
-    project.dispatch(args_dict["operate"],args_dict["info"])
+    project.dispatch(args_dict["operate"],args_dict["arg_list"])
