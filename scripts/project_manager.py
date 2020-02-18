@@ -26,22 +26,24 @@ class ProjectManager(object):
     def __init__(self, project_name):
         log.debug("Project_Manager __init__ Im In")
 
-        self._project = {}
+        self.project = {}
         # Get project info from file or database
-        self._prj_info = self._get_prj_info(project_name)
+        self.project["info"] = self._get_prj_info(project_name)
         # Compatible operate platform
-        self._platform_manager = PlatformManager()
-        self._platform = self._platform_manager.compatible(self._prj_info)
-
-        self._project["info"] = self._prj_info
-        self._project["platform_manager"] = self._platform_manager
-        self._project["platform"] = self._platform
+        self.project["platform"] = PlatformManager().compatible(self.project["info"])
 
     def _get_prj_info(self, project_name):
-        log.debug("In")
-        prj_info = {}
+        prj_info = None
         PROJECT_INFO_PATH = "./.cache/project_info.json"
 
+        # TODO 查询数据库确认该项目数据是否有更新
+        # 有则更新 PROJECT_INFO_PATH 缓存文件，未找到项目信息直接返回
+        log.debug("query database")
+        # Save project info into cache(PROJECT_INFO_PATH)
+        # json.dump(prj_info, open(PROJECT_INFO_PATH, "a"))
+        # END
+
+        # Search project info in PROJECT_INFO_PATH first
         if os.path.exists(PROJECT_INFO_PATH):
             with open(PROJECT_INFO_PATH, "r") as f_read:
                 lines = f_read.readlines()
@@ -50,21 +52,19 @@ class ProjectManager(object):
                 if(temp_info["name"] == project_name):
                     prj_info = temp_info
                     break
-        if len(prj_info) == 0:
-            # Query Database
-            log.debug("query database")
-            # Save project info into cache(PROJECT_INFO_PATH)
-            # json.dump(prj_info, open(PROJECT_INFO_PATH, "a"))
 
-        if len(prj_info) == 0:
+        if prj_info is None:
             log.error("The project('%s') info is None" % (project_name))
             sys.exit(-1)
         else:
-            log.debug("prj_info = %s" % (prj_info))
+            log.info("prj_info = %s" % (prj_info))
         return prj_info
 
     def get_project(self):
-        return self._project
+        return self.project
+
+    def dispatch(self,args_dict):
+        return self.project["platform"].op_handler[args_dict["operate"]](self.project["info"],args_dict["info"])
 
 
 def parse_cmd():
@@ -80,7 +80,6 @@ def parse_cmd():
 
 
 if __name__ == "__main__":
-    argsdict = parse_cmd()
-    project_manager = ProjectManager(argsdict['project_name'])
-    project = project_manager.get_project()
-    project["platform"].dispatch(project["info"],argsdict)
+    args_dict = parse_cmd()
+    project_manager = ProjectManager(args_dict['project_name'])
+    project_manager.dispatch(args_dict)
