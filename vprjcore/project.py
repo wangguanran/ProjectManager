@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 00:35:38
+@LastEditTime: 2020-02-20 00:44:35
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -78,12 +78,14 @@ class Project(object):
     def before_operate(self):
         for plugin in self.plugin_info.values():
             if self.current_operate in plugin.operate_list:
-                plugin.operate_list[self.current_operate]["before"](self)
+                if "before" in plugin.operate_list[self.current_operate]:
+                    plugin.operate_list[self.current_operate]["before"](self)
 
     def after_operate(self):
         for plugin in self.plugin_info.values():
             if self.current_operate in plugin.operate_list:
-                plugin.operate_list[self.current_operate]["after"](self)
+                if "after" in plugin.operate_list[self.current_operate]:
+                    plugin.operate_list[self.current_operate]["after"](self)
 
 
 def parse_cmd():
