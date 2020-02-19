@@ -2,12 +2,15 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 15:16:55
-@LastEditTime: 2020-02-19 18:14:25
+@LastEditTime: 2020-02-19 22:45:10
 @LastEditors: WangGuanran
 @Description: Log_Manager py File
 @FilePath: \vprojects\vprjcore\log.py
 '''
 
+import os
+import sys
+import shutil
 import logging
 import logging.config
 
@@ -19,7 +22,10 @@ LOG_PATH = "./.cache/logs/"
 class LogManager(object):
 
     def __init__(self):
+        # Initialize logger object
         self.logger = self._init_logger()
+        # Organize log files
+        self.organize_log_files()
 
     def _init_logger(self):
         config = {
@@ -46,7 +52,7 @@ class LogManager(object):
                     'mode': 'w',
                     'formatter': 'file_formatter',
                     'encoding': 'utf8',
-                    'delay':'True',
+                    'delay': 'True',
                 },
                 'file_base_time': {
                     'class': 'logging.handlers.TimedRotatingFileHandler',
@@ -54,7 +60,7 @@ class LogManager(object):
                     'level': 'DEBUG',
                     'formatter': 'file_formatter',
                     'encoding': 'utf8',
-                    'delay':'True',
+                    'delay': 'True',
                     # 'interval':1,
                     # 'when': 'S',
                     # 'backupCount': 10,
@@ -80,8 +86,16 @@ class LogManager(object):
     def getLogger(self):
         return self.logger
 
+    def organize_log_files(self):
+        if os.path.exists(LOG_PATH):
+            file_list = os.listdir(LOG_PATH)
+            for file in file_list:
+                if os.path.isfile(LOG_PATH + file):
+                    log_data = file.split("_")[1]
+                    log_dir = LOG_PATH + "LOG_"+log_data
+                    if not os.path.exists(log_dir):
+                        os.makedirs(log_dir)
+                    shutil.move(LOG_PATH+file, log_dir)
 
-if __name__ == "__main__":
-    pass
-else:
-    log = LogManager().getLogger()
+
+log = LogManager().getLogger()
