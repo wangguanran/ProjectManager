@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-19 18:22:03
+@LastEditTime: 2020-02-19 19:09:19
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -14,7 +14,11 @@ from functools import partial
 
 from vprjcore.log import log
 
-get_full_path = partial(os.path.join, os.getcwd(), "scripts", "platform")
+print(__package__)
+if __package__ is None:
+    get_full_path = partial(os.path.join, os.getcwd(), "vprjcore", "platform")
+else:
+    get_full_path = partial(os.path.join, os.getcwd(), __package__, "platform")
 PLATFORM_PLUGIN_PATH = get_full_path()
 
 
@@ -44,7 +48,7 @@ class PlatformManager(object):
     def _runPlugin(self, dirname, filename):
         pluginName = os.path.splitext(filename)[0]
         log.debug("pluginName = %s" % (pluginName))
-        packageName = "scripts.platform."+dirname+'.'+pluginName
+        packageName = "vprjcore.platform."+dirname+'.'+pluginName
         log.debug("packageName = %s" % (packageName))
         plugin = __import__(packageName, fromlist=[pluginName])
 
