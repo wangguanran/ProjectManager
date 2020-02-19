@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-19 19:09:19
+@LastEditTime: 2020-02-19 19:13:17
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -14,7 +14,6 @@ from functools import partial
 
 from vprjcore.log import log
 
-print(__package__)
 if __package__ is None:
     get_full_path = partial(os.path.join, os.getcwd(), "vprjcore", "platform")
 else:
