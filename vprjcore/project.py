@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-18 22:53:09
+@LastEditTime: 2020-02-19 18:48:15
 @LastEditors: WangGuanran
 @Description: project_manager py file
-@FilePath: \vprojects\scripts\project.py
+@FilePath: \vprojects\vprjcore\project.py
 '''
 
 import os
@@ -15,11 +15,10 @@ import traceback
 import argparse
 import json
 
-from scripts.operate_database import OperateDatabase
-from scripts.log import log
-from scripts.analyse import func_cprofile
-from scripts.platform.platform_manager import PlatformManager
-
+from vprjcore.operate_database import OperateDatabase
+from vprjcore.log import log
+from vprjcore.analyse import func_cprofile
+from vprjcore.platform_manager import PlatformManager
 
 class Project(object):
 

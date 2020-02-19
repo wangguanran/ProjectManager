@@ -1,9 +1,9 @@
 '''
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
-@Date: 2020-02-16 18:50:40
-@LastEditTime: 2020-02-16 18:50:40
+@Date: 2020-02-19 18:36:31
+@LastEditTime: 2020-02-19 18:36:32
 @LastEditors: WangGuanran
 @Description: __init__ py file
-@FilePath: \vprojects\scripts\plugins\__init__.py
+@FilePath: \vprojects\vprjcore\__init__.py
 '''

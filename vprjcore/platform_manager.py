@@ -2,17 +2,17 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-16 18:41:42
+@LastEditTime: 2020-02-19 18:22:03
 @LastEditors: WangGuanran
 @Description: platform manager py ile
-@FilePath: \vprojects\scripts\platform_manager.py
+@FilePath: \vprojects\vprjcore\platform_manager.py
 '''
 
 import os
 import sys
 from functools import partial
 
-from scripts.log import log
+from vprjcore.log import log
 
 get_full_path = partial(os.path.join, os.getcwd(), "scripts", "platform")
 PLATFORM_PLUGIN_PATH = get_full_path()

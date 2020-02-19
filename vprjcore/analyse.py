@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 22:10:25
-@LastEditTime: 2020-02-15 23:59:59
+@LastEditTime: 2020-02-19 18:48:36
 @LastEditors: WangGuanran
 @Description: analyse py file
-@FilePath: \vprojects\scripts\analyse.py
+@FilePath: \vprojects\vprjcore\analyse.py
 '''
 
 import cProfile
@@ -14,8 +14,8 @@ import pstats
 import time
 from functools import wraps
 
-from scripts.common import _get_filename
-from scripts.log import log
+from vprjcore.common import _get_filename
+from vprjcore.log import log
 
 
 def func_time(func):

@@ -2,12 +2,12 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 13:33:21
-@LastEditTime: 2020-02-15 13:33:21
+@LastEditTime: 2020-02-19 18:14:18
 @LastEditors: WangGuanran
 @Description: Operate database py file
-@FilePath: \vprojects\scripts\operate_database.py
+@FilePath: \vprojects\vprjcore\operate_database.py
 '''
-from scripts.log import log
+from vprjcore.log import log
 
 
 class OperateDatabase(object):

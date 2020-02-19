@@ -2,13 +2,13 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-16 22:36:08
+@LastEditTime: 2020-02-19 18:15:14
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
-@FilePath: \vprojects\scripts\platform\MTK\mtk_common.py
+@FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
 '''
 
-from scripts.log import log
+from vprjcore.log import log
 
 
 class MTKCommon(object):

@@ -2,16 +2,16 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 15:16:55
-@LastEditTime: 2020-02-15 21:50:43
+@LastEditTime: 2020-02-19 18:14:25
 @LastEditors: WangGuanran
 @Description: Log_Manager py File
-@FilePath: \vprojects\scripts\log.py
+@FilePath: \vprojects\vprjcore\log.py
 '''
 
 import logging
 import logging.config
 
-from scripts.common import _get_filename
+from vprjcore.common import _get_filename
 
 LOG_PATH = "./.cache/logs/"
 
