@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-19 23:12:54
+@LastEditTime: 2020-02-20 00:13:50
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -51,12 +51,16 @@ class PlatformManager(object):
         log.debug("packageName = %s" % (packageName))
         plugin = __import__(packageName, fromlist=[pluginName])
 
-        platform = plugin.get_platform()
-        platform.filename = plugin.__file__
-        platform.pluginName = pluginName
-        platform.vendor = dirname
-        platform.packageName = packageName
-        self.add_platform(platform)
+        if hasattr(plugin, "get_platform"):
+            platform = plugin.get_platform()
+            platform.filename = plugin.__file__
+            platform.pluginName = pluginName
+            platform.vendor = dirname
+            platform.packageName = packageName
+            self.add_platform(platform)
+        else:
+            log.warning("file '%s' does not have 'get_platform',fail to register plugin" %
+                        (plugin.__file__))
 
     def add_platform(self, platform):
         attrlist = dir(platform)
@@ -71,7 +75,8 @@ class PlatformManager(object):
         log.debug(platform.op_handler)
 
         if "support_list" in attrlist:
-            log.debug("%s support list (%s)" % (platform.pluginName,platform.support_list))
+            log.debug("%s support list (%s)" %
+                      (platform.pluginName, platform.support_list))
             for data in platform.support_list:
                 if data in self._platform_info:
                     log.warning(
