@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 15:16:55
-@LastEditTime: 2020-02-19 22:45:10
+@LastEditTime: 2020-02-20 00:40:05
 @LastEditors: WangGuanran
 @Description: Log_Manager py File
 @FilePath: \vprojects\vprjcore\log.py
@@ -37,7 +37,7 @@ class LogManager(object):
                 'file_formatter': {
                     'format': '[%(asctime)s] [%(levelname)-10s] [%(filename)-20s] [%(funcName)-20s] [%(lineno)-5d]\t%(message)s',
                 },
-                # 其他的 formatter
+                # other formatter
             },
             'handlers': {
                 'console': {
@@ -65,7 +65,7 @@ class LogManager(object):
                     # 'when': 'S',
                     # 'backupCount': 10,
                 },
-                # 其他的 handler
+                # other handler
             },
             'loggers': {
                 'StreamLogger': {
@@ -73,11 +73,11 @@ class LogManager(object):
                     'level': 'DEBUG',
                 },
                 'FileLogger': {
-                    # 既有 console Handler，还有 file Handler
+                    # both 'console Handler' and 'file Handler'
                     'handlers': ['console', 'file'],
                     'level': 'DEBUG',
                 },
-                # 其他的 Logger
+                # other Logger
             }
         }
         logging.config.dictConfig(config)

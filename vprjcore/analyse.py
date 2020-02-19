@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 22:10:25
-@LastEditTime: 2020-02-19 18:48:36
+@LastEditTime: 2020-02-20 00:41:51
 @LastEditors: WangGuanran
 @Description: analyse py file
 @FilePath: \vprojects\vprjcore\analyse.py
@@ -19,11 +19,6 @@ from vprjcore.log import log
 
 
 def func_time(func):
-    """
-    简单记录执行时间
-    :param func:
-    :return:
-    """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -40,9 +35,6 @@ CPROFILE_PATH = "./.cache/cprofile/"
 
 
 def func_cprofile(func):
-    """
-    内建分析器
-    """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -72,11 +64,7 @@ try:
     from line_profiler import LineProfiler
 
     def func_line_time(follow=[]):
-        """
-        每行代码执行时间详细报告
-        :param follow: 内部调用方法
-        :return:
-        """
+
         def decorate(func):
             @wraps(func)
             def profiled_func(*args, **kwargs):
@@ -111,7 +99,7 @@ except ImportError:
 
 # def func_try_except(func):
 #     """
-#     保存程序运行错误日志
+#     save exception log
 #     """
 
 #     @wraps(func)

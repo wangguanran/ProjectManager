@@ -2,17 +2,17 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-16 00:35:03
+@LastEditTime: 2020-02-20 00:41:07
 @LastEditors: WangGuanran
 @Description: common py file
-@FilePath: \vprojects\scripts\common.py
+@FilePath: \vprojects\vprjcore\common.py
 '''
 import os
 import time
 
 def _get_filename(preffix, suffix, path):
     '''
-    根据时间获取动态文件名
+    return file name based on time
     '''
     if(not os.path.exists(path)):
         os.makedirs(path)

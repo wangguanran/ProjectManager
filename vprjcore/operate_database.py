@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 13:33:21
-@LastEditTime: 2020-02-19 18:14:18
+@LastEditTime: 2020-02-20 00:38:58
 @LastEditors: WangGuanran
 @Description: Operate database py file
 @FilePath: \vprojects\vprjcore\operate_database.py
@@ -11,9 +11,7 @@ from vprjcore.log import log
 
 
 class OperateDatabase(object):
-    '''
-    数据库操作类
-    '''
+
     __instance = None
 
     def __new__(cls):
