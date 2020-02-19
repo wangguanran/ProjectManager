@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-19 19:05:20
+@LastEditTime: 2020-02-19 22:43:49
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -37,11 +37,13 @@ class Project(object):
     def _get_prj_info(self, project_name):
         prj_info = None
 
-        # TODO 查询数据库确认该项目数据是否有更新
-        # 有则更新 PROJECT_INFO_PATH 缓存文件，未找到项目信息直接返回
+        # TODO Query the database to confirm whether the project data is updated
+        # If yes, update the cache file. If no project information is found, an error will be returned
         log.debug("query database")
         # Save project info into cache(PROJECT_INFO_PATH)
-        # json.dump(prj_info, open(PROJECT_INFO_PATH, "a"))
+        # with open(PROJECT_INFO_PATH, "a+") as f_write:
+        #     json.dump(prj_info, f_write)
+        #     f_write.write("\n")
         # END
 
         # Search project info in PROJECT_INFO_PATH first
@@ -60,9 +62,6 @@ class Project(object):
         else:
             log.info("prj_info = %s" % (prj_info))
         return prj_info
-
-    def get_project(self):
-        return self.prj_info
 
     def dispatch(self, operate, arg_list):
         self.prj_info["arg_list"] = arg_list
@@ -88,7 +87,10 @@ def create_fake_info(args_dict):
     prj_info["kernel_version"] = 3.18
     prj_info["android_version"] = 7.0
     prj_info["platform"] = "MT6735"
-    json.dump(prj_info, open(PROJECT_INFO_PATH, "a"))
+    with open(PROJECT_INFO_PATH, "a+") as f_write:
+        json.dump(prj_info, f_write)
+        f_write.write("\n")
+        json.dump(prj_info, f_write)
 
 
 if __name__ == "__main__":
