@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-19 22:43:49
+@LastEditTime: 2020-02-20 00:35:38
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -19,6 +19,7 @@ from vprjcore.operate_database import OperateDatabase
 from vprjcore.log import log
 from vprjcore.analyse import func_cprofile
 from vprjcore.platform_manager import PlatformManager
+from vprjcore.plugin_manager import PluginManager
 
 PROJECT_INFO_PATH = "./.cache/project_info.json"
 
@@ -32,7 +33,8 @@ class Project(object):
         # Get project info from file or database
         self.prj_info = self._get_prj_info(project_name)
         # Compatible operate platform
-        self.prj_info["platform"] = PlatformManager().compatible(self.prj_info)
+        self.platform = PlatformManager().compatible(self.prj_info)
+        self.plugin_info = PluginManager().get_plugin_info()
 
     def _get_prj_info(self, project_name):
         prj_info = None
@@ -64,8 +66,24 @@ class Project(object):
         return prj_info
 
     def dispatch(self, operate, arg_list):
-        self.prj_info["arg_list"] = arg_list
-        return self.prj_info["platform"].op_handler[operate](self.prj_info)
+        self.current_operate = operate
+        self.arg_list = arg_list
+        try:
+            self.before_operate()
+            self.platform.op_handler[operate](self)
+            self.after_operate()
+        except:
+            log.exception("Error occurred!")
+
+    def before_operate(self):
+        for plugin in self.plugin_info.values():
+            if self.current_operate in plugin.operate_list:
+                plugin.operate_list[self.current_operate]["before"](self)
+
+    def after_operate(self):
+        for plugin in self.plugin_info.values():
+            if self.current_operate in plugin.operate_list:
+                plugin.operate_list[self.current_operate]["after"](self)
 
 
 def parse_cmd():
