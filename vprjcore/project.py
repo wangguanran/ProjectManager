@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 14:09:29
+@LastEditTime: 2020-02-20 17:32:55
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -72,47 +72,42 @@ class Project(object):
         except:
             log.exception("Error occurred!")
 
-    def before_operate(self):
-        for plugin in self.plugin_info.values():
-            isConflict = None
-            if hasattr(plugin, "support_list"):
-                if not self.prj_info["platform_name"] in plugin.support_list:
-                    continue
-                else:
-                    isConflict = False
-            if hasattr(plugin, "unsupported_list"):
-                if self.prj_info["platform_name"] in plugin.unsupported_list:
-                    if not isConflict is None:
-                        isConflict = True
-                    if isConflict:
-                        log.warning(
-                            "The platform exists in both the support list and the unsupported list")
-                    continue
+    def _check_required_list(self, plugin):
+        isInSupportList = False
+        isInUnsupported = False
+        if hasattr(plugin, "support_list"):
+            if self.prj_info["platform_name"] in plugin.support_list:
+                isInSupportList = True
+        if hasattr(plugin, "unsupported_list"):
+            if self.prj_info["platform_name"] in plugin.unsupported_list:
+                isInUnsupported = True
 
-            if self.current_operate in plugin.operate_list:
-                if "before" in plugin.operate_list[self.current_operate]:
-                    plugin.operate_list[self.current_operate]["before"](self)
+        if isInSupportList and isInUnsupported:
+            log.warning(
+                "('%s')The platform exists in both the support list and the unsupported list" % (plugin.pluginName))
+            plugin.support_list.remove(self.prj_info["platform_name"])
+            plugin.unsupported_list.remove(self.prj_info["platform_name"])
+            return False
+        elif isInSupportList:
+            return True
+        elif isInUnsupported:
+            return False
+        else:
+            return True
+
+    def _polling_plugin_list_and_execute(self, exec_pos):
+        for plugin in self.plugin_info.values():
+            if self._check_required_list(plugin):
+                if self.current_operate in plugin.operate_list:
+                    if exec_pos in plugin.operate_list[self.current_operate]:
+                        plugin.operate_list[self.current_operate][exec_pos](
+                            self)
+
+    def before_operate(self):
+        self._polling_plugin_list_and_execute("before")
 
     def after_operate(self):
-        for plugin in self.plugin_info.values():
-            isConflict = None
-            if hasattr(plugin, "support_list"):
-                if not self.prj_info["platform_name"] in plugin.support_list:
-                    continue
-                else:
-                    isConflict = False
-            if hasattr(plugin, "unsupported_list"):
-                if self.prj_info["platform_name"] in plugin.unsupported_list:
-                    if not isConflict is None:
-                        isConflict = True
-                    if isConflict:
-                        log.warning(
-                            "The platform exists in both the support list and the unsupported list")
-                    continue
-
-            if self.current_operate in plugin.operate_list:
-                if "after" in plugin.operate_list[self.current_operate]:
-                    plugin.operate_list[self.current_operate]["after"](self)
+        self._polling_plugin_list_and_execute("after")
 
 
 def parse_cmd():
