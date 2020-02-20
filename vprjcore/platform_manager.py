@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-20 00:13:50
+@LastEditTime: 2020-02-20 13:42:33
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -78,6 +78,8 @@ class PlatformManager(object):
             log.debug("%s support list (%s)" %
                       (platform.pluginName, platform.support_list))
             for data in platform.support_list:
+                # Case insensitive
+                data = data.upper()
                 if data in self._platform_info:
                     log.warning(
                         "The platform '%s' is already registered by %s,%s register failed" % (data, self._platform_info[data].filename, platform.filename))
@@ -92,7 +94,7 @@ class PlatformManager(object):
     def compatible(self, prj_info):
         log.debug("In!")
         try:
-            return self._platform_info[prj_info["platform"]]
+            return self._platform_info[prj_info["platform"].upper()]
         except:
             log.exception("Invalid platform '%s'" % (prj_info["platform"]))
             sys.exit(-1)
