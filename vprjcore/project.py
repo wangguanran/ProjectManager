@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 17:59:21
+@LastEditTime: 2020-02-20 22:57:37
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -21,6 +21,7 @@ from vprjcore.analyse import func_cprofile
 from vprjcore.platform_manager import PlatformManager
 from vprjcore.plugin_manager import PluginManager
 
+VPRJCORE_VERSION = "0.0.1"
 PROJECT_INFO_PATH = "./.cache/project_info.json"
 
 
@@ -58,13 +59,14 @@ class Project(object):
         if os.path.exists(PROJECT_INFO_PATH):
             json_info = json.load(open(PROJECT_INFO_PATH, "r"))
             for prj_name, temp_info in json_info.items():
-                if(prj_name == project_name):
+                if(prj_name.lower() == project_name.lower()):
                     prj_info = temp_info
 
         if prj_info is None:
             log.error("The project('%s') info is None" % (project_name))
             sys.exit(-1)
         else:
+            prj_info["name"] = project_name.lower()
             log.info("prj_info = %s" % (prj_info))
         return prj_info
 
@@ -154,11 +156,16 @@ def parse_cmd():
     '''
     log.debug("argv = %s" % (sys.argv))
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--version', action="version", version="1.0")
-    parser.add_argument('-d', '--debug', action="store_true", dest='isDebug')
+    parser.add_argument('-v', '--version', action="version", version=VPRJCORE_VERSION)
+    parser.add_argument('-d', '--debug', action="store_true", dest='is_debug',help="debug switch")
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")
-    parser.add_argument("arg_list", nargs="+", help="command info")
+    # parser.add_argument("arg_list", nargs="+", help="command info")
+
+    group = parser.add_argument_group("new_project")
+    group.add_argument('-b',action="store_true",dest="is_board",help="specify the new project as the board project")
+    group.add_argument("--base",help="specify a new project to be created based on this")
+
     args = parser.parse_args()
     log.info(args.__dict__)
     return args.__dict__
@@ -193,7 +200,7 @@ def create_fake_info(args_dict):
         prj_info["android_version"] = 7.0
         prj_info["platform_name"] = "MT6735"
 
-        json_info[args_dict["project_name"]] = prj_info
+        json_info[args_dict["project_name"].lower()] = prj_info
         with open(PROJECT_INFO_PATH, "w+") as f_write:
             json.dump(json_info, f_write, indent=4)
             f_write.close()
@@ -203,7 +210,7 @@ def create_fake_info(args_dict):
 
 if __name__ == "__main__":
     args_dict = parse_cmd()
-    if args_dict["isDebug"]:
+    if args_dict["is_debug"]:
         create_fake_info(args_dict)
     project = Project(args_dict['project_name'])
-    project.dispatch(args_dict["operate"], args_dict["arg_list"])
+    project.dispatch(args_dict["operate"], args_dict)
