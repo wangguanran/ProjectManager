@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-21 00:03:10
+@LastEditTime: 2020-02-21 00:05:44
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -32,10 +32,10 @@ class MTKCommon(object):
         log.debug("In!")
         project_name = args[0].prj_info["name"].lower()
         is_board = args[0].arg_list["is_board"]
-        base = args[0].arg_list["base"].lower()
-        log.debug("project_name = %s,is_board = %s,base = %s" %
-                  (project_name, is_board, base))
-        basedir = get_full_path(base)
+        platform = args[0].arg_list["platform"].lower()
+        log.debug("project_name = %s,is_board = %s,platform = %s" %
+                  (project_name, is_board, platform))
+        basedir = get_full_path(platform)
         destdir = os.path.join(os.getcwd(), project_name)
         log.debug("basedir = %s destdir = %s" % (basedir, destdir))
         if os.path.exists(basedir):

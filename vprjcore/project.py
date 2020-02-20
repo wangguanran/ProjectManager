@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 23:32:59
+@LastEditTime: 2020-02-21 00:05:20
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -165,7 +165,7 @@ def parse_cmd():
 
     group = parser.add_argument_group("new_project")
     group.add_argument('-b',action="store_true",dest="is_board",help="specify the new project as the board project")
-    group.add_argument("--base",help="specify a new project to be created based on this")
+    group.add_argument("--platform",help="specify a new project to be created based on this")
 
     args = parser.parse_args()
     log.info(args.__dict__)
