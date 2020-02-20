@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 00:44:35
+@LastEditTime: 2020-02-20 13:25:19
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -43,20 +43,17 @@ class Project(object):
         # If yes, update the cache file. If no project information is found, an error will be returned
         log.debug("query database")
         # Save project info into cache(PROJECT_INFO_PATH)
-        # with open(PROJECT_INFO_PATH, "a+") as f_write:
+        # with open(PROJECT_INFO_PATH, "w+") as f_write:
         #     json.dump(prj_info, f_write)
         #     f_write.write("\n")
         # END
 
         # Search project info in PROJECT_INFO_PATH first
         if os.path.exists(PROJECT_INFO_PATH):
-            with open(PROJECT_INFO_PATH, "r") as f_read:
-                lines = f_read.readlines()
-            for line in lines:
-                temp_info = json.loads(line)
-                if(temp_info["name"] == project_name):
+            json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+            for prj_name, temp_info in json_info.items():
+                if(prj_name == project_name):
                     prj_info = temp_info
-                    break
 
         if prj_info is None:
             log.error("The project('%s') info is None" % (project_name))
@@ -102,21 +99,40 @@ def parse_cmd():
 
 
 def create_fake_info(args_dict):
+    json_info = {}
     prj_info = {}
-    prj_info["name"] = args_dict["project_name"]
-    prj_info["kernel_version"] = 3.18
-    prj_info["android_version"] = 7.0
-    prj_info["platform"] = "MT6735"
-    with open(PROJECT_INFO_PATH, "a+") as f_write:
-        json.dump(prj_info, f_write)
-        f_write.write("\n")
-        json.dump(prj_info, f_write)
+    if os.path.exists(PROJECT_INFO_PATH):
+        with open(PROJECT_INFO_PATH, "r") as f_read:
+            try:
+                if os.path.getsize(PROJECT_INFO_PATH):
+                    json_info = json.load(f_read)
+                else:
+                    log.warning("json file size is zero")
+            except:
+                log.exception("Json file format error")
+            f_read.close()
+
+    for prj_name, temp_info in json_info.items():
+        if(prj_name == args_dict["project_name"]):
+            prj_info = temp_info
+    if len(prj_info) == 0:
+        log.debug("Insert fake project info")
+        # prj_info["name"] = args_dict["project_name"]
+        prj_info["kernel_version"] = 3.18
+        prj_info["android_version"] = 7.0
+        prj_info["platform"] = "MT6735"
+
+        json_info[args_dict["project_name"]] = prj_info
+        with open(PROJECT_INFO_PATH, "w+") as f_write:
+            json.dump(json_info, f_write, indent=4)
+            f_write.close()
+    else:
+        log.debug("project info is already exist,skip this step")
 
 
 if __name__ == "__main__":
     args_dict = parse_cmd()
     if args_dict["isDebug"]:
-        if not os.path.exists(PROJECT_INFO_PATH):
-            create_fake_info(args_dict)
+        create_fake_info(args_dict)
     project = Project(args_dict['project_name'])
     project.dispatch(args_dict["operate"], args_dict["arg_list"])
