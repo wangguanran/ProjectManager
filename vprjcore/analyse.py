@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 22:10:25
-@LastEditTime: 2020-02-20 00:41:51
+@LastEditTime: 2020-02-21 00:15:34
 @LastEditors: WangGuanran
 @Description: analyse py file
 @FilePath: \vprojects\vprjcore\analyse.py
@@ -12,6 +12,7 @@ import cProfile
 import os
 import pstats
 import time
+import shutil
 from functools import wraps
 
 from vprjcore.common import _get_filename
@@ -33,6 +34,16 @@ def func_time(func):
 
 CPROFILE_PATH = "./.cache/cprofile/"
 
+def organize_cprofile_files():
+    if os.path.exists(CPROFILE_PATH):
+        file_list = os.listdir(CPROFILE_PATH)
+        for file in file_list:
+            if os.path.isfile(CPROFILE_PATH + file):
+                log_data = file.split("_")[1]
+                log_dir = CPROFILE_PATH + "CPROFILE_"+log_data
+                if not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
+                shutil.move(CPROFILE_PATH+file, log_dir)
 
 def func_cprofile(func):
 
@@ -46,6 +57,7 @@ def func_cprofile(func):
             return result
         finally:
             try:
+                organize_cprofile_files()
                 profile.dump_stats('profile_dump')  # Dump Binary File
                 with open(_get_filename("Stats_", ".cprofile", CPROFILE_PATH), "w") as filesteam:
                     ps = pstats.Stats("profile_dump", stream=filesteam)

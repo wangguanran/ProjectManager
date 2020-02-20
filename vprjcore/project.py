@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-21 00:05:20
+@LastEditTime: 2020-02-21 00:10:31
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -70,6 +70,7 @@ class Project(object):
             log.info("prj_info = %s" % (prj_info))
         return prj_info
 
+    @func_cprofile
     def dispatch(self, operate, arg_list):
         '''
         @description: Distribute operations to platform interface

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-21 00:05:44
+@LastEditTime: 2020-02-21 00:19:06
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -56,11 +56,12 @@ class MTKCommon(object):
     def modify_filename(self, path, project_name):
         for p in os.listdir(path):
             p = os.path.join(path, p)
-            p_dest = os.path.join(os.path.dirname(
-                p), os.path.basename(p).replace(DEFAULT_BASE_NAME, project_name))
-            os.rename(p, p_dest)
-            if os.path.isdir(p_dest):
-                self.modify_filename(p_dest, project_name)
+            if os.path.isdir(p):
+                self.modify_filename(p, project_name)
+            if DEFAULT_BASE_NAME in os.path.basename(p):
+                p_dest = os.path.join(os.path.dirname(
+                    p), os.path.basename(p).replace(DEFAULT_BASE_NAME, project_name))
+                os.rename(p, p_dest)
 
     def modify_filecontent(self, path, project_name):
         ini_filepath = os.path.join(path, "env_"+project_name+".ini")
