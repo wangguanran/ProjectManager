@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 22:57:37
+@LastEditTime: 2020-02-20 23:32:59
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -81,8 +81,9 @@ class Project(object):
         self.arg_list = arg_list
         try:
             self._before_operate()
-            self.platform.op_handler[operate](self)
-            self._after_operate()
+            ret = self.platform.op_handler[operate](self)
+            if ret:
+                self._after_operate()
         except:
             log.exception("Error occurred!")
 

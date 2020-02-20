@@ -2,14 +2,13 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-20 22:57:26
+@LastEditTime: 2020-02-20 23:27:41
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
 '''
 
 import os
-import sys
 import shutil
 
 from vprjcore.log import log
@@ -44,8 +43,12 @@ class MTKCommon(object):
                 shutil.copytree(basedir, destdir)
                 self.modify_filename(destdir, project_name)
                 self.modify_filecontent(destdir, project_name)
+                log.debug("new project '%s' down!"%(project_name))
+                return True
         else:
             log.error("No platform file, unable to create new project")
+
+        return False
 
     def modify_filename(self, path, project_name):
         for p in os.listdir(path):
