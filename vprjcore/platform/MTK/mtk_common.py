@@ -2,13 +2,20 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-20 18:11:39
+@LastEditTime: 2020-02-20 22:57:26
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
 '''
 
+import os
+import sys
+import shutil
+
 from vprjcore.log import log
+
+NEW_PROJECT_DIR = "./new_project_base/"
+DEFAULT_BASE_NAME = "demo"
 
 
 class MTKCommon(object):
@@ -21,7 +28,45 @@ class MTKCommon(object):
 
     def new_project(self, *args, **kwargs):
         log.debug("In!")
-        log.debug(args[0])
+        project_name = args[0].prj_info["name"].lower()
+        is_board = args[0].arg_list["is_board"]
+        base = args[0].arg_list["base"].upper()
+        log.debug("project_name = %s,is_board = %s,base = %s" %
+                  (project_name, is_board, base))
+        basedir = NEW_PROJECT_DIR + base
+        destdir = os.path.join(os.getcwd(), project_name)
+        log.debug("basedir = %s,destdir = %s" % (basedir, destdir))
+        if os.path.exists(basedir):
+            if os.path.exists(destdir):
+                log.error(
+                    "The project has been created and cannot be created repeatedly")
+            else:
+                shutil.copytree(basedir, destdir)
+                self.modify_filename(destdir, project_name)
+                self.modify_filecontent(destdir, project_name)
+        else:
+            log.error("No platform file, unable to create new project")
+
+    def modify_filename(self, path, project_name):
+        for p in os.listdir(path):
+            p = os.path.join(path, p)
+            p_dest = os.path.join(os.path.dirname(
+                p), os.path.basename(p).replace(DEFAULT_BASE_NAME, project_name))
+            os.rename(p, p_dest)
+            if os.path.isdir(p_dest):
+                self.modify_filename(p_dest, project_name)
+
+    def modify_filecontent(self, path, project_name):
+        ini_filepath = os.path.join(path, "env_"+project_name+".ini")
+        log.debug("ini_filepath = %s" % (ini_filepath))
+        with open(ini_filepath, "r+") as f_rw:
+            content = f_rw.readlines()
+            f_rw.seek(0)
+            f_rw.truncate()
+            for line in content:
+                line = line.replace(DEFAULT_BASE_NAME, project_name)
+                f_rw.write(line)
+            f_rw.close()
 
     def del_project(self, *args, **kwargs):
         log.debug("In!")
