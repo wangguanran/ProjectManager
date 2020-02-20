@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 13:25:19
+@LastEditTime: 2020-02-20 14:09:29
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -74,12 +74,42 @@ class Project(object):
 
     def before_operate(self):
         for plugin in self.plugin_info.values():
+            isConflict = None
+            if hasattr(plugin, "support_list"):
+                if not self.prj_info["platform_name"] in plugin.support_list:
+                    continue
+                else:
+                    isConflict = False
+            if hasattr(plugin, "unsupported_list"):
+                if self.prj_info["platform_name"] in plugin.unsupported_list:
+                    if not isConflict is None:
+                        isConflict = True
+                    if isConflict:
+                        log.warning(
+                            "The platform exists in both the support list and the unsupported list")
+                    continue
+
             if self.current_operate in plugin.operate_list:
                 if "before" in plugin.operate_list[self.current_operate]:
                     plugin.operate_list[self.current_operate]["before"](self)
 
     def after_operate(self):
         for plugin in self.plugin_info.values():
+            isConflict = None
+            if hasattr(plugin, "support_list"):
+                if not self.prj_info["platform_name"] in plugin.support_list:
+                    continue
+                else:
+                    isConflict = False
+            if hasattr(plugin, "unsupported_list"):
+                if self.prj_info["platform_name"] in plugin.unsupported_list:
+                    if not isConflict is None:
+                        isConflict = True
+                    if isConflict:
+                        log.warning(
+                            "The platform exists in both the support list and the unsupported list")
+                    continue
+
             if self.current_operate in plugin.operate_list:
                 if "after" in plugin.operate_list[self.current_operate]:
                     plugin.operate_list[self.current_operate]["after"](self)
@@ -120,7 +150,7 @@ def create_fake_info(args_dict):
         # prj_info["name"] = args_dict["project_name"]
         prj_info["kernel_version"] = 3.18
         prj_info["android_version"] = 7.0
-        prj_info["platform"] = "MT6735"
+        prj_info["platform_name"] = "MT6735"
 
         json_info[args_dict["project_name"]] = prj_info
         with open(PROJECT_INFO_PATH, "w+") as f_write:

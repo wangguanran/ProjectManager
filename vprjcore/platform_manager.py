@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-20 13:42:33
+@LastEditTime: 2020-02-20 13:48:57
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -94,7 +94,7 @@ class PlatformManager(object):
     def compatible(self, prj_info):
         log.debug("In!")
         try:
-            return self._platform_info[prj_info["platform"].upper()]
+            return self._platform_info[prj_info["platform_name"].upper()]
         except:
             log.exception("Invalid platform '%s'" % (prj_info["platform"]))
             sys.exit(-1)
