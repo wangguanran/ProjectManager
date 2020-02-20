@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-20 23:45:05
+@LastEditTime: 2020-02-21 00:01:22
 @LastEditors: WangGuanran
 @Description: patch override py file
 @FilePath: \vprojects\vprjcore\plugins\po.py
@@ -48,7 +48,7 @@ class PO(object):
             if os.path.isdir(p):
                 self._modify_filename(p, project_name)
             if project_name in os.path.basename(p):
-                p_dest = os.path.join(p, p+".overrides.base")
+                p_dest = os.path.join(p, p+".override.base")
                 os.rename(p, p_dest)
 
     def before_compile(self, project):

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-20 23:27:41
+@LastEditTime: 2020-02-21 00:03:10
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -10,10 +10,13 @@
 
 import os
 import shutil
+from functools import partial
 
 from vprjcore.log import log
 
-NEW_PROJECT_DIR = "./new_project_base/"
+
+get_full_path = partial(os.path.join, os.getcwd(), "new_project_base")
+NEW_PROJECT_DIR = get_full_path()
 DEFAULT_BASE_NAME = "demo"
 
 
@@ -29,12 +32,12 @@ class MTKCommon(object):
         log.debug("In!")
         project_name = args[0].prj_info["name"].lower()
         is_board = args[0].arg_list["is_board"]
-        base = args[0].arg_list["base"].upper()
+        base = args[0].arg_list["base"].lower()
         log.debug("project_name = %s,is_board = %s,base = %s" %
                   (project_name, is_board, base))
-        basedir = NEW_PROJECT_DIR + base
+        basedir = get_full_path(base)
         destdir = os.path.join(os.getcwd(), project_name)
-        log.debug("basedir = %s,destdir = %s" % (basedir, destdir))
+        log.debug("basedir = %s destdir = %s" % (basedir, destdir))
         if os.path.exists(basedir):
             if os.path.exists(destdir):
                 log.error(
@@ -43,7 +46,7 @@ class MTKCommon(object):
                 shutil.copytree(basedir, destdir)
                 self.modify_filename(destdir, project_name)
                 self.modify_filecontent(destdir, project_name)
-                log.debug("new project '%s' down!"%(project_name))
+                log.debug("new project '%s' down!" % (project_name))
                 return True
         else:
             log.error("No platform file, unable to create new project")
