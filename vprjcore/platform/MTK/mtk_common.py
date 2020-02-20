@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-21 00:19:06
+@LastEditTime: 2020-02-21 00:30:16
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -43,7 +43,7 @@ class MTKCommon(object):
                 log.error(
                     "The project has been created and cannot be created repeatedly")
             else:
-                shutil.copytree(basedir, destdir)
+                shutil.copytree(basedir, destdir,symlinks="True")
                 self.modify_filename(destdir, project_name)
                 self.modify_filecontent(destdir, project_name)
                 log.debug("new project '%s' down!" % (project_name))
