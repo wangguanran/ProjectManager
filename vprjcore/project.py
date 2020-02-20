@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-20 17:32:55
+@LastEditTime: 2020-02-20 17:59:21
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -34,9 +34,15 @@ class Project(object):
         self.prj_info = self._get_prj_info(project_name)
         # Compatible operate platform
         self.platform = PlatformManager().compatible(self.prj_info)
+        # Get plugin information
         self.plugin_info = PluginManager().get_plugin_info()
 
     def _get_prj_info(self, project_name):
+        '''
+        @description: get project information from cache file or db
+        @param {type} project_name:project name(str)
+        @return: project info(dict)
+        '''
         prj_info = None
 
         # TODO Query the database to confirm whether the project data is updated
@@ -63,16 +69,28 @@ class Project(object):
         return prj_info
 
     def dispatch(self, operate, arg_list):
+        '''
+        @description: Distribute operations to platform interface
+        @param {type}   operate :operation command(str)
+                        arg_list:parameter list(list)
+        @return: None
+        '''
         self.current_operate = operate
         self.arg_list = arg_list
         try:
-            self.before_operate()
+            self._before_operate()
             self.platform.op_handler[operate](self)
-            self.after_operate()
+            self._after_operate()
         except:
             log.exception("Error occurred!")
 
     def _check_required_list(self, plugin):
+        '''
+        @description: Check support_list and unsupported_list in the plug-in
+                        to determine if this platform is supported
+        @param {type} plugin:plugin information
+        @return: is supported(true or false)
+        '''
         isInSupportList = False
         isInUnsupported = False
         if hasattr(plugin, "support_list"):
@@ -93,9 +111,17 @@ class Project(object):
         elif isInUnsupported:
             return False
         else:
+            # If support_list and unsupported_list are not specified in the plug-in,
+            #   all platforms are supported by default
             return True
 
     def _polling_plugin_list_and_execute(self, exec_pos):
+        '''
+        @description: Poll to check if the plug-in list has operations
+                        at the location specified by exec_pos
+        @param {type} exec_pos:execution position
+        @return: None
+        '''
         for plugin in self.plugin_info.values():
             if self._check_required_list(plugin):
                 if self.current_operate in plugin.operate_list:
@@ -103,14 +129,29 @@ class Project(object):
                         plugin.operate_list[self.current_operate][exec_pos](
                             self)
 
-    def before_operate(self):
+    def _before_operate(self):
+        '''
+        @description: Perform operation in 'before' position
+        @param {type} None
+        @return: None
+        '''
         self._polling_plugin_list_and_execute("before")
 
-    def after_operate(self):
+    def _after_operate(self):
+        '''
+        @description: Perform operation in 'after' position
+        @param {type} None
+        @return: None
+        '''
         self._polling_plugin_list_and_execute("after")
 
 
 def parse_cmd():
+    '''
+    @description: Parsing command line parameters
+    @param {type} None
+    @return: arg list(dict)
+    '''
     log.debug("argv = %s" % (sys.argv))
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', action="version", version="1.0")
@@ -124,6 +165,11 @@ def parse_cmd():
 
 
 def create_fake_info(args_dict):
+    '''
+    @description: Create some fake information to debug(write to json file)
+    @param {type} args_dict:parameter list
+    @return: None
+    '''
     json_info = {}
     prj_info = {}
     if os.path.exists(PROJECT_INFO_PATH):

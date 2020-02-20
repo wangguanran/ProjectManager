@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-20 13:48:57
+@LastEditTime: 2020-02-20 18:15:24
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -23,6 +23,9 @@ PLATFORM_PLUGIN_PATH = get_full_path()
 
 class PlatformManager(object):
 
+    '''
+    Singleton mode
+    '''
     __instance = None
 
     def __new__(cls):
@@ -102,3 +105,30 @@ class PlatformManager(object):
 
 if __name__ == "__main__":
     platform = PlatformManager()
+
+'''
+from vprjcore.log import log
+
+class Platform(object):
+
+    def __init__(self):
+        self.support_list = [
+            "MT6735",
+            "MT6739",
+        ]
+
+    def new_project(self, *args, **kwargs):
+        log.debug("In!")
+        log.debug(args[0])
+
+    def del_project(self, *args, **kwargs):
+        log.debug("In!")
+
+    def compile_project(self, *args, **kwargs):
+        log.debug("In!")
+
+
+# All platform scripts must contain this interface
+def get_platform():
+    return Platform()
+'''

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-19 23:10:49
-@LastEditTime: 2020-02-20 00:27:12
+@LastEditTime: 2020-02-20 18:10:38
 @LastEditors: WangGuanran
 @Description: Plugin manager py file
 @FilePath: \vprojects\vprjcore\plugin_manager.py
@@ -22,6 +22,9 @@ PROJECT_PLUGIN_PATH = get_full_path()
 
 class PluginManager(object):
 
+    '''
+    Singleton mode
+    '''
     __instance = None
 
     def __new__(cls):
@@ -55,7 +58,7 @@ class PluginManager(object):
             plugin.packageName = packageName
             self.register_plugin(plugin)
         else:
-            log.warning("file '%s' does not have 'get_plugin_object',fail to register plugin" %
+            log.warning("file '%s' does not have attr:'get_plugin_object',fail to register plugin" %
                         (plugin_module.__file__))
 
     def register_plugin(self, plugin):
@@ -85,3 +88,32 @@ class PluginManager(object):
 
 if __name__ == "__main__":
     plugin = PluginManager()
+
+'''
+from vprjcore.log import log
+
+class Plugin(object):
+    def __init__(self):
+        # If support_list and unsupported_list are not specified in the plug-in,
+        #   all platforms are supported by default
+        # self.support_list=[
+        #     ""
+        # ]
+        # self.unsupported_list=[
+        #     ""
+        # ]
+        pass
+
+    def before_new_project(self, project):
+        log.debug("In!")
+
+    def before_compile(self, project):
+        log.debug("In!")
+
+    def after_compile(self, project):
+        log.debug("In!")
+
+def get_plugin_object():
+    # All plugin must contain this interface
+    return Plugin()
+'''
