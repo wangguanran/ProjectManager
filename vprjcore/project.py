@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-21 11:51:28
+@LastEditTime: 2020-02-21 14:29:49
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -26,21 +26,19 @@ VPRJCORE_VERSION = "0.0.1"
 
 class Project(object):
 
-    def __init__(self, args_dict, auto_dispatch="True"):
-        log.debug("Project_Manager __init__ Im In")
-
+    def __init__(self, args_dict, auto_dispatch=True):
         self.operate = args_dict.pop("operate").lower()
         self.project_name = args_dict.pop("project_name").lower()
         log.debug("project_name = %s,operate = %s" %
                   (self.project_name, self.operate))
+
         # Get project info from file or database
-        self.prj_info = ProjectManager().get_prj_info(
-            self.project_name, args_dict.pop("is_debug", False))
+        self.prj_info = ProjectManager().get_prj_info(self.project_name)
         # Compatible operate platform
         self.platform_name = args_dict.pop("platform", None).upper()
         if self.platform_name is None:
             if self.prj_info is None:
-                log.error("Can not platform name!")
+                log.error("Can not find platform name!")
                 sys.exit(-1)
             else:
                 self.platform_name = self.prj_info["platform_name"]
@@ -56,7 +54,7 @@ class Project(object):
         '''
         @description: Distribute operations to platform interface
         @param {type}   operate :operation command(str)
-                        arg_list:parameter list(list)
+                        args_dict:parameter dictionary(dict)
         @return: None
         '''
         try:
@@ -81,18 +79,18 @@ class Project(object):
 
         if hasattr(plugin, "support_list"):
             is_has_support_list = True
-            if self.prj_info["platform_name"] in plugin.support_list:
+            if self.platform_name in plugin.support_list:
                 is_in_support_list = True
         if hasattr(plugin, "unsupported_list"):
             is_has_unsupported = True
-            if self.prj_info["platform_name"] in plugin.unsupported_list:
+            if self.platform_name in plugin.unsupported_list:
                 is_in_unsupported = True
 
         if is_in_support_list and is_in_unsupported:
             log.warning(
                 "('%s')The platform exists in both the support list and the unsupported list" % (plugin.pluginName))
-            plugin.support_list.remove(self.prj_info["platform_name"])
-            plugin.unsupported_list.remove(self.prj_info["platform_name"])
+            plugin.support_list.remove(self.platform_name)
+            plugin.unsupported_list.remove(self.platform_name)
             return False
         elif is_in_support_list or (is_has_unsupported and not is_in_unsupported):
             return True
@@ -144,8 +142,8 @@ def parse_cmd():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', action="version",
                         version=VPRJCORE_VERSION)
-    parser.add_argument('-d', '--debug', action="store_true",
-                        dest='is_debug', help="debug switch")
+    # parser.add_argument('-d', '--debug', action="store_true",
+    #                     dest='is_debug', help="debug switch")
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")
     # parser.add_argument("arg_list", nargs="+", help="command info")
