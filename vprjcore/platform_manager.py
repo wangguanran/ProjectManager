@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-20 18:15:24
+@LastEditTime: 2020-02-21 11:10:57
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -94,12 +94,13 @@ class PlatformManager(object):
             log.warning(
                 "%s object has no attribute 'support_list'", platform.__class__)
 
-    def compatible(self, prj_info):
+    def compatible(self, platform_name):
         log.debug("In!")
+        platform_name = platform_name.upper()
         try:
-            return self._platform_info[prj_info["platform_name"].upper()]
+            return self._platform_info[platform_name].op_handler
         except:
-            log.exception("Invalid platform '%s'" % (prj_info["platform"]))
+            log.exception("Invalid platform '%s'" % (platform_name))
             sys.exit(-1)
 
 

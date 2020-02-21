@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-21 00:01:22
+@LastEditTime: 2020-02-21 11:45:01
 @LastEditors: WangGuanran
 @Description: patch override py file
 @FilePath: \vprojects\vprjcore\plugins\po.py
@@ -25,7 +25,7 @@ class PO(object):
 
     def after_new_project(self, project):
         log.debug("In!")
-        project_name = project.prj_info["name"]
+        project_name = project.project_name
         prj_path = os.path.join(os.getcwd(), project_name)
         log.debug("project_name = %s,prj_path = %s" % (project_name, prj_path))
         # e:\vprojects\tnz801\po\po_tnz801_bsp\overrides\...
