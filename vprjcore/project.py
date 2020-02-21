@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-21 00:10:31
+@LastEditTime: 2020-02-21 10:13:55
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -95,24 +95,29 @@ class Project(object):
         @param {type} plugin:plugin information
         @return: is supported(true or false)
         '''
-        isInSupportList = False
-        isInUnsupported = False
-        if hasattr(plugin, "support_list"):
-            if self.prj_info["platform_name"] in plugin.support_list:
-                isInSupportList = True
-        if hasattr(plugin, "unsupported_list"):
-            if self.prj_info["platform_name"] in plugin.unsupported_list:
-                isInUnsupported = True
+        is_in_support_list = False
+        is_in_unsupported = False
+        is_has_support_list = False
+        is_has_unsupported = False
 
-        if isInSupportList and isInUnsupported:
+        if hasattr(plugin, "support_list"):
+            is_has_support_list = True
+            if self.prj_info["platform_name"] in plugin.support_list:
+                is_in_support_list = True
+        if hasattr(plugin, "unsupported_list"):
+            is_has_unsupported = True
+            if self.prj_info["platform_name"] in plugin.unsupported_list:
+                is_in_unsupported = True
+
+        if is_in_support_list and is_in_unsupported:
             log.warning(
                 "('%s')The platform exists in both the support list and the unsupported list" % (plugin.pluginName))
             plugin.support_list.remove(self.prj_info["platform_name"])
             plugin.unsupported_list.remove(self.prj_info["platform_name"])
             return False
-        elif isInSupportList:
+        elif is_in_support_list or (is_has_unsupported and not is_in_unsupported):
             return True
-        elif isInUnsupported:
+        elif is_in_unsupported or is_has_support_list:
             return False
         else:
             # If support_list and unsupported_list are not specified in the plug-in,
