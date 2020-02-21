@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-21 11:38:12
+@LastEditTime: 2020-02-21 15:02:56
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -47,8 +47,8 @@ class MTKCommon(object):
                     "The project has been created and cannot be created repeatedly")
             else:
                 shutil.copytree(basedir, destdir,symlinks="True")
-                self.modify_filename(destdir, project_name)
-                self.modify_filecontent(destdir, project_name)
+                self._modify_filename(destdir, project_name)
+                self._modify_filecontent(destdir, project_name)
                 log.debug("new project '%s' down!" % (project_name))
                 return True
         else:
@@ -56,17 +56,17 @@ class MTKCommon(object):
 
         return False
 
-    def modify_filename(self, path, project_name):
+    def _modify_filename(self, path, project_name):
         for p in os.listdir(path):
             p = os.path.join(path, p)
             if os.path.isdir(p):
-                self.modify_filename(p, project_name)
+                self._modify_filename(p, project_name)
             if DEFAULT_BASE_NAME in os.path.basename(p):
                 p_dest = os.path.join(os.path.dirname(
                     p), os.path.basename(p).replace(DEFAULT_BASE_NAME, project_name))
                 os.rename(p, p_dest)
 
-    def modify_filecontent(self, path, project_name):
+    def _modify_filecontent(self, path, project_name):
         ini_filepath = os.path.join(path, "env_"+project_name+".ini")
         log.debug("ini_filepath = %s" % (ini_filepath))
         with open(ini_filepath, "r+") as f_rw:
