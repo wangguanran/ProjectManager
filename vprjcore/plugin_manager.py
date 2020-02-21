@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-19 23:10:49
-@LastEditTime: 2020-02-20 18:10:38
+@LastEditTime: 2020-02-21 17:55:55
 @LastEditors: WangGuanran
 @Description: Plugin manager py file
 @FilePath: \vprojects\vprjcore\plugin_manager.py
@@ -13,10 +13,7 @@ from functools import partial
 
 from vprjcore.log import log
 
-if __package__ is None:
-    __package__ = "vprjcore"
-
-get_full_path = partial(os.path.join, os.getcwd(), __package__, "plugins")
+get_full_path = partial(os.path.join, os.getcwd(), "vprjcore", "plugins")
 PROJECT_PLUGIN_PATH = get_full_path()
 
 
@@ -42,24 +39,21 @@ class PluginManager(object):
         for filename in os.listdir(PROJECT_PLUGIN_PATH):
             if not filename.endswith(".py") or filename.startswith("_"):
                 continue
-            self._runPlugin(filename)
+            pluginName = os.path.splitext(filename)[0]
+            log.debug("pluginName = %s" % (pluginName))
+            packageName = __package__ + ".plugins."+pluginName
+            log.debug("packageName = %s" % (packageName))
+            plugin_module = __import__(packageName, fromlist=[pluginName])
 
-    def _runPlugin(self, filename):
-        pluginName = os.path.splitext(filename)[0]
-        log.debug("pluginName = %s" % (pluginName))
-        packageName = __package__ + ".plugins."+pluginName
-        log.debug("packageName = %s" % (packageName))
-        plugin_module = __import__(packageName, fromlist=[pluginName])
-
-        if hasattr(plugin_module, "get_plugin_object"):
-            plugin = plugin_module.get_plugin_object()
-            plugin.filename = plugin_module.__file__
-            plugin.pluginName = pluginName
-            plugin.packageName = packageName
-            self.register_plugin(plugin)
-        else:
-            log.warning("file '%s' does not have attr:'get_plugin_object',fail to register plugin" %
-                        (plugin_module.__file__))
+            if hasattr(plugin_module, "get_plugin_object"):
+                plugin = plugin_module.get_plugin_object()
+                plugin.filename = plugin_module.__file__
+                plugin.pluginName = pluginName
+                plugin.packageName = packageName
+                self.register_plugin(plugin)
+            else:
+                log.warning("file '%s' does not have attr:'get_plugin_object',fail to register plugin" %
+                            (plugin_module.__file__))
 
     def register_plugin(self, plugin):
         attrlist = dir(plugin)
@@ -80,11 +74,14 @@ class PluginManager(object):
             log.debug("register '%s' successfully!" % (plugin.pluginName))
             self._plugin_info[plugin.pluginName] = plugin
         else:
-            log.warning("No matching function in '%s' " % (plugin.pluginName))
+            log.warning("No matching function in '%s'" % (plugin.pluginName))
 
     def get_plugin_info(self):
         return self._plugin_info
 
+
+def get_module():
+    return PluginManager()
 
 if __name__ == "__main__":
     plugin = PluginManager()

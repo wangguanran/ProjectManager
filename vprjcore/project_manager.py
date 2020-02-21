@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-21 11:52:43
+@LastEditTime: 2020-02-21 17:49:37
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -99,3 +99,10 @@ class ProjectManager(object):
                 f_write.close()
         else:
             log.debug("project info is already exist,skip this step")
+
+    def before_compile(self, project):
+        project = self.get_prj_info()
+
+
+def get_module():
+    return ProjectManager()

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-15 13:33:21
-@LastEditTime: 2020-02-21 10:51:01
+@LastEditTime: 2020-02-21 17:55:13
 @LastEditors: WangGuanran
 @Description: Operate database py file
 @FilePath: \vprojects\vprjcore\plugins\database.py
@@ -22,6 +22,8 @@ class OperateDatabase(object):
     def __init__(self):
         log.debug("Operate_Database Im In")
 
+def get_module():
+    return OperateDatabase()
 
 if __name__ == "__main__":
     pass
