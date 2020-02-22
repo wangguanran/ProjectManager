@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-22 22:01:37
+@LastEditTime: 2020-02-22 23:12:57
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -101,7 +101,9 @@ def load_module(module_path, max_depth):
     module_list = []
 
     module_path = get_full_path(module_path)
+    log.debug("module path = %s"% module_path)
     if not os.path.exists(module_path):
+        log.warning("the module_path is not exits")
         return None
 
     for filepath in list_file_path(module_path, max_depth):
