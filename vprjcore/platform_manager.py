@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-22 10:44:15
+@LastEditTime: 2020-02-22 14:21:07
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -11,7 +11,7 @@
 import os
 import sys
 
-from vprjcore.common import log, get_full_path, load_module
+from vprjcore.common import log, get_full_path, load_module, list_file_path,dependency
 
 PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "platform")
 
@@ -29,18 +29,18 @@ class PlatformManager(object):
         return cls.__instance
 
     def __init__(self):
-        self.platform_list = load_module(PLATFORM_PLUGIN_PATH, 2)
+        self.platform_list = load_module(PLATFORM_PLUGIN_PATH, max_depth=2)
 
+    @dependency(["project_manager"])
     def before_new_project(self, project):
-        platform_name = project.args_dict["base"]
-        log.debug("platform name = %s"%(platform_name))
+        platform_name = project.platform_name
+        log.debug("platform name = %s" % (platform_name))
 
         for platform in self.platform_list:
             for name in platform.support_list:
                 if(platform_name.upper() == name.upper()):
                     project.platform_handler = platform.operate_list
                     return True
-
 
     def before_compile_project(self):
         pass

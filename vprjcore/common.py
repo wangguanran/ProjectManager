@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-22 10:23:13
+@LastEditTime: 2020-02-22 15:52:44
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -19,6 +19,36 @@ from functools import partial, wraps
 
 get_full_path = partial(os.path.join, os.getcwd())
 LOG_PATH = get_full_path(".cache", "logs")
+
+def dependency(depend_list):
+
+    def decorate(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # log.debug("depend list = %s"%(depend_list))
+            project = args[1]
+            for depend_one in depend_list:
+                # print(depend_list)
+                for plugin in project.plugin_list:
+                    # print(plugin.module_name)
+                    if plugin.module_name == depend_one:
+                        # depend_func = getattr(plugin,func.__name__)
+                        # depend_func(project)
+                        index,operate = func.__name__.split(sep="_",maxsplit=1)
+                        if operate in plugin.operate_list:
+                            if index in plugin.operate_list[operate]:
+                                plugin.operate_list[operate][index](project)
+                                del plugin.operate_list[operate][index]
+                            else:
+                                log.warning("The plugin does not have the attr:'%s'"%(func.__name__))
+                        else:
+                            log.warning("The plugin does not have the attr:'%s'"%(func.__name__))
+
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorate
 
 
 def get_filename(preffix, suffix, path):
@@ -49,7 +79,8 @@ def organize_files(path, preffix):
 #
 ###############################################################
 
-def list_file_path(module_path, max_depth, cur_depth=0):
+
+def list_file_path(module_path, max_depth=0xff, cur_depth=0,list_dir=False,only_dir=False):
     cur_depth += 1
     # log.debug("module_path = %s,max_depth = %d,cur_depth = %d"%(module_path,max_depth,cur_depth))
     for filename in os.listdir(module_path):
@@ -57,10 +88,13 @@ def list_file_path(module_path, max_depth, cur_depth=0):
         if os.path.isdir(filename):
             # log.debug("cur_depth = %d,isdir = %s"%(cur_depth,filename))
             if(cur_depth < max_depth):
-                for subdir_filename in list_file_path(filename, max_depth, cur_depth):
+                for subdir_filename in list_file_path(filename, max_depth, cur_depth,list_dir,only_dir):
                     yield subdir_filename
-        else:
+            if list_dir or only_dir:
+                yield filename
+        elif not only_dir:
             yield filename
+
 
 def load_module(module_path, max_depth):
     # log.debug(module_path)
@@ -84,12 +118,13 @@ def load_module(module_path, max_depth):
 
         if hasattr(import_module, "get_module"):
             module = import_module.get_module()
-            module.filename = import_module.__file__
+            module.filepath = import_module.__file__
             module.module_name = module_name
             module.package_name = package_name
-            if register_module( module):
+            if register_module(module):
                 module_list.append(module)
     return module_list
+
 
 def register_module(module):
     module.operate_list = {}
@@ -109,10 +144,10 @@ def register_module(module):
                 else:
                     module.operate_list[attr] = funcaddr
     if module.operate_list:
-        log.debug("module filename = %s"%(module.module_name))
-        log.debug("module packagename = %s"%(module.package_name))
-        log.debug("module filename = %s"%(module.filename))
-        log.debug("module operate_list = %s"%(module.operate_list))
+        log.debug("module module_name = %s" % (module.module_name))
+        log.debug("module packagename = %s" % (module.package_name))
+        log.debug("module filepath = %s" % (module.filepath))
+        log.debug("module operate_list = %s" % (module.operate_list))
         log.debug("register '%s' successfully!" % (module.module_name))
         return True
     else:
@@ -124,6 +159,8 @@ def register_module(module):
 #       LogManager  ：  For Logging System
 #
 ###############################################################
+
+
 class LogManager(object):
 
     '''
@@ -226,6 +263,7 @@ def func_time(func):
 
 CPROFILE_PATH = "./.cache/cprofile/"
 PROFILE_DUMP_NAME = "profile_dump"
+
 
 def func_cprofile(func):
 

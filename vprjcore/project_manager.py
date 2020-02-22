@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-22 09:40:27
+@LastEditTime: 2020-02-22 16:02:15
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -11,7 +11,7 @@ import os
 import sys
 import json
 
-from vprjcore.common import log
+from vprjcore.common import log, list_file_path
 
 PROJECT_INFO_PATH = "./.cache/project_info.json"
 
@@ -30,6 +30,49 @@ class ProjectManager(object):
 
     def __init__(self):
         super().__init__()
+
+    def before_new_project(self, project):
+        project.by_new_project_base = False
+        base_name = project.args_dict.pop("base", None)
+        if base_name is None:
+            log.error("You need to use '--base' to specify platform information")
+            sys.exit(-1)
+        else:
+            project.base_name = base_name
+        log.debug("base name = %s" % (base_name))
+
+        for dirname in list_file_path("new_project_base", max_depth=1, only_dir=True):
+            if os.path.basename(dirname).upper() == base_name.upper():
+                project.platform_name = base_name.upper()
+                project.by_new_project_base = True
+                return True
+
+        json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+        for prj_name, temp_info in json_info.items():
+            if prj_name == base_name:
+                project.platform_name = temp_info["platform_name"]
+                return True
+
+    def after_new_project(self, project):
+        # save project info
+        prj_info = {}
+        json_info = {}
+        except_list = [
+            "args_dict",
+            "platform_handler",
+            "plugin_list",
+            "operate",
+        ]
+        try:
+            json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+        except:
+            log.debug("%s is null"%(PROJECT_INFO_PATH))
+        for attr in dir(project):
+            var = getattr(project, attr)
+            if not (callable(var) or attr.startswith("_") or attr in except_list):
+                prj_info[attr] = var
+        json_info[project.project_name] = prj_info
+        json.dump(json_info, open(PROJECT_INFO_PATH, "w+"), indent=4)
 
     def before_compile_project(self, project_name, is_debug=False):
         '''

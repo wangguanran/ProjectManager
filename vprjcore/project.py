@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-22 10:46:02
+@LastEditTime: 2020-02-22 14:35:15
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -64,6 +64,7 @@ class Project(object):
             if self.operate in plugin.operate_list:
                 if exec_pos in plugin.operate_list[self.operate]:
                     plugin.operate_list[self.operate][exec_pos](self)
+                    del plugin.operate_list[self.operate][exec_pos]
 
 
     def _before_operate(self):
