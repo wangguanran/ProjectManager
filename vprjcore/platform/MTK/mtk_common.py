@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-21 21:57:35
+@LastEditTime: 2020-02-22 11:01:18
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -25,13 +25,11 @@ class MTKCommon(object):
             "MT6739",
         ]
 
-    def new_project(self, *args, **kwargs):
+    def new_project(self, project):
         log.debug("In!")
-        project = args[0]
-        arg_dict = args[1]
         project_name = project.project_name
-        platform = project.platform_name
-        is_board = arg_dict.pop("is_board", False)
+        platform = project.args_dict["base"]
+        is_board = project.args_dict.pop("is_board", False)
         log.debug("project_name = %s,is_board = %s,platform = %s" %
                   (project_name, is_board, platform))
 

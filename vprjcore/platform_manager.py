@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-22 09:35:25
+@LastEditTime: 2020-02-22 10:44:15
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -29,52 +29,21 @@ class PlatformManager(object):
         return cls.__instance
 
     def __init__(self):
-        self._platform_info = {}
-        self.is_need_split = False
-        # self._loadPlugins()
-        load_module(self, PLATFORM_PLUGIN_PATH, 2)
-        # self._add_platform()
+        self.platform_list = load_module(PLATFORM_PLUGIN_PATH, 2)
 
-    def before_all_command(self,project):
-        log.debug("In!")
+    def before_new_project(self, project):
+        platform_name = project.args_dict["base"]
+        log.debug("platform name = %s"%(platform_name))
 
-    def _add_platform(self,platform):
-        attrlist = dir(platform)
-        log.debug(attrlist)
+        for platform in self.platform_list:
+            for name in platform.support_list:
+                if(platform_name.upper() == name.upper()):
+                    project.platform_handler = platform.operate_list
+                    return True
 
-        platform.op_handler = {}
-        for attr in attrlist:
-            if not attr.startswith("_"):
-                funcaddr = getattr(platform, attr)
-                if callable(funcaddr):
-                    platform.op_handler[attr] = funcaddr
-        log.debug(platform.op_handler)
 
-        if "support_list" in attrlist:
-            log.debug("%s support list (%s)" %
-                      (platform.module_name, platform.support_list))
-            for data in platform.support_list:
-                # Case insensitive
-                data = data.upper()
-                if data in self._platform_info:
-                    log.warning(
-                        "The platform '%s' is already registered by %s,%s register failed" % (data, self._platform_info[data].filename, platform.filename))
-                else:
-                    log.info(
-                        "platform '%s' register successfully!" % (data))
-                    self._platform_info[data] = platform
-        else:
-            log.warning(
-                "%s object has no attribute 'support_list'", platform.__class__)
-
-    def _compatible(self, platform_name):
-        log.debug("In!")
-        platform_name = platform_name.upper()
-        try:
-            return self._platform_info[platform_name].op_handler
-        except:
-            log.exception("Invalid platform '%s'" % (platform_name))
-            sys.exit(-1)
+    def before_compile_project(self):
+        pass
 
 
 def get_module():

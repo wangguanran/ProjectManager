@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-22 09:26:35
+@LastEditTime: 2020-02-22 10:11:47
 @LastEditors: WangGuanran
 @Description: patch override py file
-@FilePath: \vprojects\vprjcore\plugins\patch_override.py
+@FilePath: \vprojects\vprjcore\po_manager.py
 '''
 import os
 import shutil
@@ -52,10 +52,10 @@ class PatchOverride(object):
                     p_dest = os.path.join(p, p+".override.base")
                     os.rename(p, p_dest)
 
-    def before_compile(self, project):
+    def before_compile_project(self, project):
         log.debug("In!")
 
-    def after_compile(self, project):
+    def after_compile_project(self, project):
         log.debug("In!")
 
 

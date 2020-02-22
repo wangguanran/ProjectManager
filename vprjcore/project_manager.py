@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-22 09:34:39
+@LastEditTime: 2020-02-22 09:40:27
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -31,7 +31,7 @@ class ProjectManager(object):
     def __init__(self):
         super().__init__()
 
-    def _get_prj_info(self, project_name, is_debug=False):
+    def before_compile_project(self, project_name, is_debug=False):
         '''
         @description: get project information from cache file or db
         @param {type} project_name:project name(str)
@@ -99,9 +99,6 @@ class ProjectManager(object):
                 f_write.close()
         else:
             log.debug("project info is already exist,skip this step")
-
-    def before_compile_project(self, project):
-        project = self._get_prj_info()
 
 
 def get_module():

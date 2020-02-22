@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-22 09:33:05
+@LastEditTime: 2020-02-22 10:23:13
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -14,13 +14,14 @@ import shutil
 import logging
 import logging.config
 import cProfile
+import pstats
 from functools import partial, wraps
 
 get_full_path = partial(os.path.join, os.getcwd())
 LOG_PATH = get_full_path(".cache", "logs")
 
 
-def _get_filename(preffix, suffix, path):
+def get_filename(preffix, suffix, path):
     '''
     return file name based on time
     '''
@@ -30,7 +31,7 @@ def _get_filename(preffix, suffix, path):
     return os.path.join(path, ''.join((preffix, date_str, suffix)))
 
 
-def organize_log_files(path, preffix):
+def organize_files(path, preffix):
     if os.path.exists(path):
         file_list = os.listdir(path)
         for file in file_list:
@@ -61,9 +62,14 @@ def list_file_path(module_path, max_depth, cur_depth=0):
         else:
             yield filename
 
-def load_module(caller, module_path, max_depth):
+def load_module(module_path, max_depth):
     # log.debug(module_path)
+    module_list = []
+
     module_path = get_full_path(module_path)
+    if not os.path.exists(module_path):
+        return None
+
     for filepath in list_file_path(module_path, max_depth):
         # log.debug(filepath)
         filename = os.path.basename(filepath)
@@ -81,15 +87,11 @@ def load_module(caller, module_path, max_depth):
             module.filename = import_module.__file__
             module.module_name = module_name
             module.package_name = package_name
-            register_module(caller, module)
-        else:
-            if hasattr(caller, "unload_list"):
-                if not os.path.basename(filepath) in caller.unload_list:
-                    log.warning("file '%s' does not have 'get_module',fail to register module" %
-                                (import_module.__file__))
+            if register_module( module):
+                module_list.append(module)
+    return module_list
 
-def register_module(caller, module):
-    caller.module_info = {}
+def register_module(module):
     module.operate_list = {}
 
     attrlist = dir(module)
@@ -106,16 +108,16 @@ def register_module(caller, module):
                 # for new_project
                 else:
                     module.operate_list[attr] = funcaddr
-    # log.debug(module.operate_list)
     if module.operate_list:
         log.debug("module filename = %s"%(module.module_name))
         log.debug("module packagename = %s"%(module.package_name))
         log.debug("module filename = %s"%(module.filename))
         log.debug("module operate_list = %s"%(module.operate_list))
-        caller.module_info[module.module_name] = module
         log.debug("register '%s' successfully!" % (module.module_name))
+        return True
     else:
         log.warning("No matching function in '%s'" % (module.module_name))
+        return False
 
 ###############################################################
 #
@@ -138,7 +140,7 @@ class LogManager(object):
         # Initialize logger object
         self.logger = self._init_logger()
         # Organize log files
-        organize_log_files(LOG_PATH, "LOG_")
+        organize_files(LOG_PATH, "LOG_")
 
     def _init_logger(self):
         config = {
@@ -160,7 +162,7 @@ class LogManager(object):
                 },
                 'file': {
                     'class': 'logging.FileHandler',
-                    'filename': _get_filename("Log_", ".log", LOG_PATH),
+                    'filename': get_filename("Log_", ".log", LOG_PATH),
                     'level': 'DEBUG',
                     'mode': 'w',
                     'formatter': 'file_formatter',
@@ -223,7 +225,7 @@ def func_time(func):
 
 
 CPROFILE_PATH = "./.cache/cprofile/"
-
+PROFILE_DUMP_NAME = "profile_dump"
 
 def func_cprofile(func):
 
@@ -237,16 +239,18 @@ def func_cprofile(func):
             return result
         finally:
             try:
-                organize_cprofile_files(CPROFILE_PATH, "CPROFILE_")
-                profile.dump_stats('profile_dump')  # Dump Binary File
-                with open(_get_filename("Stats_", ".cprofile", CPROFILE_PATH), "w") as filesteam:
-                    ps = pstats.Stats("profile_dump", stream=filesteam)
+                organize_files(CPROFILE_PATH, "CPROFILE_")
+                profile.dump_stats(PROFILE_DUMP_NAME)  # Dump Binary File
+                with open(get_filename("Stats_", ".cprofile", CPROFILE_PATH), "w") as filesteam:
+                    ps = pstats.Stats(PROFILE_DUMP_NAME, stream=filesteam)
                     # ps.strip_dirs().sort_stats("time").print_stats()
                     ps.sort_stats("time").print_stats()
-                    os.remove("profile_dump")
+                    if os.path.exists(PROFILE_DUMP_NAME):
+                        os.remove(PROFILE_DUMP_NAME)
                 # profile.print_stats(sort='time')
             except:
-                os.remove("profile_dump")
+                if os.path.exists(PROFILE_DUMP_NAME):
+                    os.remove(PROFILE_DUMP_NAME)
                 log.exception("fail to dump profile")
 
     return wrapper
