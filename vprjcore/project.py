@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-22 21:57:35
+@LastEditTime: 2020-02-22 22:05:48
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -25,7 +25,6 @@ class Project(object):
 
         :type args_dict: dict
         """
-        self.platform_handler = None
         self.plugin_list = load_module(VPRJCORE_PLUGIN_PATH, 1)
         log.debug("plugin list = %s" % self.plugin_list)
 
