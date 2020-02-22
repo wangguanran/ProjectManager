@@ -2,13 +2,14 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-22 16:35:09
+@LastEditTime: 2020-02-22 16:38:43
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\platform_common.py
 '''
 
 import os
+import sys
 import shutil
 
 from vprjcore.common import log, get_full_path, list_file_path
