@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-22 22:01:47
+@LastEditTime: 2020-02-22 23:35:33
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\platform_common.py
@@ -49,7 +49,7 @@ class PlatformCommon(object):
             else:
                 shutil.copytree(basedir, destdir, symlinks="True")
                 for p in list_file_path(destdir, list_dir=True):
-                    if (not os.path.isdir(p)) and (fnmatch.fnmatch(p,"env*.ini") or p.endswith(".patch")):
+                    if (not os.path.isdir(p)) and (fnmatch.fnmatch(p, "env*.ini") or p.endswith(".patch")):
                         try:
                             with open(p, "r+") as f_rw:
                                 content = f_rw.readlines()
@@ -65,6 +65,7 @@ class PlatformCommon(object):
                     if base_name in os.path.basename(p):
                         p_dest = os.path.join(os.path.dirname(
                             p), os.path.basename(p).replace(base_name, project_name))
+                        log.debug("src file = %s dest file = %s" % (p, p_dest))
                         os.rename(p, p_dest)
                 log.debug("new project '%s' down!" % project_name)
                 return True

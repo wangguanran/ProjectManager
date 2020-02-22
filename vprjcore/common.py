@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-22 23:12:57
+@LastEditTime: 2020-02-22 23:34:27
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -16,7 +16,7 @@ import shutil
 import time
 from functools import partial, wraps
 
-get_full_path = partial(os.path.join, os.getcwd())
+get_full_path = partial(os.path.join, os.getcwd(),"vprojects")
 LOG_PATH = get_full_path(".cache", "logs")
 
 
@@ -54,6 +54,7 @@ def get_filename(prefix, suffix, path):
     """
     return file name based on time
     """
+    path = get_full_path(path)
     if not os.path.exists(path):
         os.makedirs(path)
     date_str = time.strftime('%Y%m%d_%H%M%S')
@@ -82,6 +83,7 @@ def organize_files(path, prefix):
 
 def list_file_path(module_path, max_depth=0xff, cur_depth=0, list_dir=False, only_dir=False):
     cur_depth += 1
+    module_path = get_full_path(module_path)
     # log.debug("module_path = %s,max_depth = %d,cur_depth = %d"%(module_path,max_depth,cur_depth))
     for filename in os.listdir(module_path):
         filename = get_full_path(module_path, filename)
