@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-21 17:49:52
+@LastEditTime: 2020-02-22 09:35:25
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -10,15 +10,10 @@
 
 import os
 import sys
-from functools import partial
 
-from vprjcore.log import log
+from vprjcore.common import log, get_full_path, load_module
 
-if __package__ is None:
-    __package__ = "vprjcore"
-
-get_full_path = partial(os.path.join, os.getcwd(), __package__, "platform")
-PLATFORM_PLUGIN_PATH = get_full_path()
+PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "platform")
 
 
 class PlatformManager(object):
@@ -34,36 +29,16 @@ class PlatformManager(object):
         return cls.__instance
 
     def __init__(self):
-        self.name = __name__
         self._platform_info = {}
-        self._loadPlugins()
+        self.is_need_split = False
+        # self._loadPlugins()
+        load_module(self, PLATFORM_PLUGIN_PATH, 2)
+        # self._add_platform()
 
-    def _loadPlugins(self):
-        for dirname in os.listdir(PLATFORM_PLUGIN_PATH):
-            dirfullname = get_full_path(dirname)
-            if os.path.isdir(dirfullname):
-                for filename in os.listdir(dirfullname):
-                    if not filename.endswith(".py") or filename.startswith("_"):
-                        continue
+    def before_all_command(self,project):
+        log.debug("In!")
 
-                    pluginName = os.path.splitext(filename)[0]
-                    log.debug("pluginName = %s" % (pluginName))
-                    packageName = __package__ + ".platform."+dirname+'.'+pluginName
-                    log.debug("packageName = %s" % (packageName))
-                    plugin = __import__(packageName, fromlist=[pluginName])
-
-                    if hasattr(plugin, "get_platform"):
-                        platform = plugin.get_platform()
-                        platform.filename = plugin.__file__
-                        platform.pluginName = pluginName
-                        platform.vendor = dirname
-                        platform.packageName = packageName
-                        self.add_platform(platform)
-                    else:
-                        log.warning("file '%s' does not have 'get_platform',fail to register plugin" %
-                                    (plugin.__file__))
-
-    def add_platform(self, platform):
+    def _add_platform(self,platform):
         attrlist = dir(platform)
         log.debug(attrlist)
 
@@ -77,7 +52,7 @@ class PlatformManager(object):
 
         if "support_list" in attrlist:
             log.debug("%s support list (%s)" %
-                      (platform.pluginName, platform.support_list))
+                      (platform.module_name, platform.support_list))
             for data in platform.support_list:
                 # Case insensitive
                 data = data.upper()
@@ -92,7 +67,7 @@ class PlatformManager(object):
             log.warning(
                 "%s object has no attribute 'support_list'", platform.__class__)
 
-    def compatible(self, platform_name):
+    def _compatible(self, platform_name):
         log.debug("In!")
         platform_name = platform_name.upper()
         try:
@@ -101,8 +76,10 @@ class PlatformManager(object):
             log.exception("Invalid platform '%s'" % (platform_name))
             sys.exit(-1)
 
+
 def get_module():
     return PlatformManager()
+
 
 if __name__ == "__main__":
     platform = PlatformManager()

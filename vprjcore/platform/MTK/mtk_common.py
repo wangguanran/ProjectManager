@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-21 15:02:56
+@LastEditTime: 2020-02-21 21:57:35
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
@@ -10,13 +10,10 @@
 
 import os
 import shutil
-from functools import partial
 
-from vprjcore.log import log
+from vprjcore.common import log, get_full_path
 
-
-get_full_path = partial(os.path.join, os.getcwd(), "new_project_base")
-NEW_PROJECT_DIR = get_full_path()
+NEW_PROJECT_DIR = get_full_path("new_project_base")
 DEFAULT_BASE_NAME = "demo"
 
 
@@ -34,11 +31,11 @@ class MTKCommon(object):
         arg_dict = args[1]
         project_name = project.project_name
         platform = project.platform_name
-        is_board = arg_dict.pop("is_board",False)
+        is_board = arg_dict.pop("is_board", False)
         log.debug("project_name = %s,is_board = %s,platform = %s" %
                   (project_name, is_board, platform))
 
-        basedir = get_full_path(platform.lower())
+        basedir = get_full_path("new_project_base",platform.lower())
         destdir = os.path.join(os.getcwd(), project_name)
         log.debug("basedir = %s destdir = %s" % (basedir, destdir))
         if os.path.exists(basedir):
@@ -46,7 +43,7 @@ class MTKCommon(object):
                 log.error(
                     "The project has been created and cannot be created repeatedly")
             else:
-                shutil.copytree(basedir, destdir,symlinks="True")
+                shutil.copytree(basedir, destdir, symlinks="True")
                 self._modify_filename(destdir, project_name)
                 self._modify_filecontent(destdir, project_name)
                 log.debug("new project '%s' down!" % (project_name))
@@ -86,5 +83,5 @@ class MTKCommon(object):
 
 
 # All platform scripts must contain this interface
-def get_platform():
+def get_module():
     return MTKCommon()

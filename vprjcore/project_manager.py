@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-21 17:49:37
+@LastEditTime: 2020-02-22 09:34:39
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -11,7 +11,7 @@ import os
 import sys
 import json
 
-from vprjcore.log import log
+from vprjcore.common import log
 
 PROJECT_INFO_PATH = "./.cache/project_info.json"
 
@@ -31,7 +31,7 @@ class ProjectManager(object):
     def __init__(self):
         super().__init__()
 
-    def get_prj_info(self, project_name, is_debug=False):
+    def _get_prj_info(self, project_name, is_debug=False):
         '''
         @description: get project information from cache file or db
         @param {type} project_name:project name(str)
@@ -40,7 +40,7 @@ class ProjectManager(object):
         prj_info = None
 
         if is_debug:
-            self.create_fake_info(project_name)
+            self._create_fake_info(project_name)
         # TODO Query the database to confirm whether the project data is updated
         # If yes, update the cache file. If no project information is found, an error will be returned
         log.debug("query database")
@@ -64,7 +64,7 @@ class ProjectManager(object):
             log.info("prj_info = %s" % (prj_info))
         return prj_info
 
-    def create_fake_info(self, project_name):
+    def _create_fake_info(self, project_name):
         '''
         @description: Create some fake information to debug(write to json file)
         @param {type} args_dict:parameter list
@@ -100,8 +100,8 @@ class ProjectManager(object):
         else:
             log.debug("project info is already exist,skip this step")
 
-    def before_compile(self, project):
-        project = self.get_prj_info()
+    def before_compile_project(self, project):
+        project = self._get_prj_info()
 
 
 def get_module():

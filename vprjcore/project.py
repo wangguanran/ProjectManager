@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-21 17:52:41
+@LastEditTime: 2020-02-21 21:36:59
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -16,24 +16,22 @@ import argparse
 import json
 from functools import partial
 
-from vprjcore.log import log
-from vprjcore.analyse import func_cprofile
-from vprjcore.common import load_module
-# from vprjcore.platform_manager import PlatformManager
-# from vprjcore.plugin_manager import PluginManager
-# from vprjcore.project_manager import ProjectManager
+from vprjcore.common import load_module,func_cprofile,log,get_full_path
 
 VPRJCORE_VERSION = "0.0.1"
-get_full_path = partial(os.path.join, os.getcwd(), "vprjcore")
-VPRJCORE_MANAGER_PATH = get_full_path()
-
+VPRJCORE_MANAGER_PATH = get_full_path("vprjcore")
+PROJECT_PLUGIN_PATH = get_full_path("vprjcore", "plugins")
 
 class Project(object):
 
     def __init__(self, args_dict, auto_dispatch=True):
         self._manager_info = {}
-        # self._load_manager()
+        self.unload_list=[
+            os.path.basename(__file__),
+            "common.py"
+        ]
         load_module(self,VPRJCORE_MANAGER_PATH,1)
+        load_module(self,PROJECT_PLUGIN_PATH,1)
 
         self.args_dict = args_dict
         self.operate = args_dict.pop("operate").lower()
