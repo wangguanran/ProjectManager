@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-22 16:38:43
+@LastEditTime: 2020-02-22 16:44:55
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\platform_common.py
@@ -11,6 +11,7 @@
 import os
 import sys
 import shutil
+import fnmatch
 
 from vprjcore.common import log, get_full_path, list_file_path
 
@@ -47,17 +48,18 @@ class PlatformCommon(object):
             else:
                 shutil.copytree(basedir, destdir, symlinks="True")
                 for p in list_file_path(destdir, list_dir=True):
-                    if (not os.path.isdir(p)) and (p.endswith(".ini") or p.endswith(".patch")):
+                    if (not os.path.isdir(p)) and (fnmatch.fnmatch(p,"env*.ini") or p.endswith(".patch")):
                         try:
                             with open(p, "r+") as f_rw:
                                 content = f_rw.readlines()
                                 f_rw.seek(0)
                                 f_rw.truncate()
                                 for line in content:
-                                    line = line.replace(base_name, project_name)
+                                    line = line.replace(
+                                        base_name, project_name)
                                     f_rw.write(line)
                         except:
-                            log.exception("Can not read file '%s'"%(p))
+                            log.error("Can not read file '%s'" % (p))
                             sys.exit(-1)
                     if base_name in os.path.basename(p):
                         p_dest = os.path.join(os.path.dirname(
