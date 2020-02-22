@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-22 15:52:22
+@LastEditTime: 2020-02-22 16:35:09
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
-@FilePath: \vprojects\vprjcore\platform\MTK\mtk_common.py
+@FilePath: \vprojects\vprjcore\platform\platform_common.py
 '''
 
 import os
@@ -17,7 +17,7 @@ NEW_PROJECT_DIR = get_full_path("new_project_base")
 DEFAULT_BASE_NAME = "demo"
 
 
-class MTKCommon(object):
+class PlatformCommon(object):
 
     def __init__(self):
         self.support_list = [
@@ -47,13 +47,17 @@ class MTKCommon(object):
                 shutil.copytree(basedir, destdir, symlinks="True")
                 for p in list_file_path(destdir, list_dir=True):
                     if (not os.path.isdir(p)) and (p.endswith(".ini") or p.endswith(".patch")):
-                        with open(p, "r+") as f_rw:
-                            content = f_rw.readlines()
-                            f_rw.seek(0)
-                            f_rw.truncate()
-                            for line in content:
-                                line = line.replace(base_name, project_name)
-                                f_rw.write(line)
+                        try:
+                            with open(p, "r+") as f_rw:
+                                content = f_rw.readlines()
+                                f_rw.seek(0)
+                                f_rw.truncate()
+                                for line in content:
+                                    line = line.replace(base_name, project_name)
+                                    f_rw.write(line)
+                        except:
+                            log.exception("Can not read file '%s'"%(p))
+                            sys.exit(-1)
                     if base_name in os.path.basename(p):
                         p_dest = os.path.join(os.path.dirname(
                             p), os.path.basename(p).replace(base_name, project_name))
@@ -74,4 +78,4 @@ class MTKCommon(object):
 
 # All platform scripts must contain this interface
 def get_module():
-    return MTKCommon()
+    return PlatformCommon()

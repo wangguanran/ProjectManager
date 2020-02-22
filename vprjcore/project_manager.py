@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-22 16:02:15
+@LastEditTime: 2020-02-22 16:22:08
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -13,7 +13,8 @@ import json
 
 from vprjcore.common import log, list_file_path
 
-PROJECT_INFO_PATH = "./.cache/project_info.json"
+BOARD_INFO_PATH = "./board_info.json"
+PROJECT_INFO_PATH = "./project_info.json"
 
 
 class ProjectManager(object):
