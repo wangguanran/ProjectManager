@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-22 16:44:55
+@LastEditTime: 2020-02-22 22:01:47
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\platform_common.py
@@ -27,7 +27,8 @@ class PlatformCommon(object):
             "MT6739",
         ]
 
-    def new_project(self, project):
+    @staticmethod
+    def new_project(project):
         log.debug("In!")
         project_name = project.project_name
         base_name = project.base_name
@@ -65,17 +66,19 @@ class PlatformCommon(object):
                         p_dest = os.path.join(os.path.dirname(
                             p), os.path.basename(p).replace(base_name, project_name))
                         os.rename(p, p_dest)
-                log.debug("new project '%s' down!" % (project_name))
+                log.debug("new project '%s' down!" % project_name)
                 return True
         else:
             log.error("No platform file, unable to create new project")
 
         return False
 
-    def del_project(self, *args, **kwargs):
+    @staticmethod
+    def del_project(*args, **kwargs):
         log.debug("In!")
 
-    def compile_project(self, *args, **kwargs):
+    @staticmethod
+    def compile_project(*args, **kwargs):
         log.debug("In!")
 
 

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-22 10:11:47
+@LastEditTime: 2020-02-22 22:01:19
 @LastEditors: WangGuanran
 @Description: patch override py file
 @FilePath: \vprojects\vprjcore\po_manager.py
@@ -28,18 +28,17 @@ class PatchOverride(object):
         project_name = project.project_name
         prj_path = os.path.join(os.getcwd(), project_name)
         log.debug("project_name = %s,prj_path = %s" % (project_name, prj_path))
-        # e:\vprojects\tnz801\po\po_tnz801_bsp\overrides\...
         destdir = os.path.join(prj_path, "po", "po_" +
-                               project_name+"_bsp", "overrides")
-        log.debug("destdir = %s" % (destdir))
+                               project_name + "_bsp", "overrides")
+        log.debug("destdir = %s" % destdir)
         if not os.path.exists(destdir):
             os.makedirs(destdir)
-        for dir in os.listdir(prj_path):
-            dir = os.path.join(prj_path, dir)
-            if os.path.isdir(dir):
-                if os.path.basename(dir) == "po":
+        for dir_name in os.listdir(prj_path):
+            dir_name = os.path.join(prj_path, dir_name)
+            if os.path.isdir(dir_name):
+                if os.path.basename(dir_name) == "po":
                     continue
-                shutil.move(dir, destdir)
+                shutil.move(dir_name, destdir)
         self._modify_filename(destdir, project_name)
 
     def _modify_filename(self, path, project_name):
@@ -48,8 +47,8 @@ class PatchOverride(object):
             if os.path.isdir(p):
                 self._modify_filename(p, project_name)
             if project_name in os.path.basename(p):
-                if not "override" in os.path.basename(p):
-                    p_dest = os.path.join(p, p+".override.base")
+                if "override" not in os.path.basename(p):
+                    p_dest = os.path.join(p, p + ".override.base")
                     os.rename(p, p_dest)
 
     def before_compile_project(self, project):

@@ -2,19 +2,15 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-22 14:35:15
+@LastEditTime: 2020-02-22 21:57:35
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
 '''
 
+import argparse
 import os
 import sys
-import time
-import traceback
-import argparse
-import json
-from functools import partial
 
 from vprjcore.common import load_module, func_cprofile, log, get_full_path
 
@@ -24,9 +20,14 @@ VPRJCORE_PLUGIN_PATH = get_full_path("vprjcore")
 
 class Project(object):
 
-    def __init__(self, args_dict, auto_dispatch=True):
+    def __init__(self, args_dict: dict, auto_dispatch=True):
+        """
+
+        :type args_dict: dict
+        """
+        self.platform_handler = None
         self.plugin_list = load_module(VPRJCORE_PLUGIN_PATH, 1)
-        log.debug("plugin list = %s" % (self.plugin_list))
+        log.debug("plugin list = %s" % self.plugin_list)
 
         self.args_dict = args_dict
         self.operate = args_dict.pop("operate").lower()
@@ -39,11 +40,11 @@ class Project(object):
 
     @func_cprofile
     def dispatch(self):
-        '''
+        """
         @description: Distribute operations to platform interface
         @param {type} None
         @return: None
-        '''
+        """
         try:
             self._before_operate()
             ret = self.platform_handler[self.operate](self)
@@ -54,43 +55,42 @@ class Project(object):
         pass
 
     def _polling_plugin_list_and_execute(self, exec_pos):
-        '''
+        """
         @description: Poll to check if the plug-in list has operations
                         at the location specified by exec_pos
         @param {type} exec_pos:execution position
         @return: None
-        '''
+        """
         for plugin in self.plugin_list:
             if self.operate in plugin.operate_list:
                 if exec_pos in plugin.operate_list[self.operate]:
                     plugin.operate_list[self.operate][exec_pos](self)
                     del plugin.operate_list[self.operate][exec_pos]
 
-
     def _before_operate(self):
-        '''
+        """
         @description: Perform operation in 'before' position
         @param {type} None
         @return: None
-        '''
+        """
         self._polling_plugin_list_and_execute("before")
 
     def _after_operate(self):
-        '''
+        """
         @description: Perform operation in 'after' position
         @param {type} None
         @return: None
-        '''
+        """
         self._polling_plugin_list_and_execute("after")
 
 
 def parse_cmd():
-    '''
+    """
     @description: Parsing command line parameters
     @param {type} None
     @return: arg list(dict)
-    '''
-    log.debug("argv = %s" % (sys.argv))
+    """
+    log.debug("argv = %s" % sys.argv)
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', action="version",
                         version=VPRJCORE_VERSION)

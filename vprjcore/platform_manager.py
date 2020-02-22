@@ -2,25 +2,22 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-22 14:21:07
+@LastEditTime: 2020-02-22 22:01:29
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
 '''
 
-import os
-import sys
-
-from vprjcore.common import log, get_full_path, load_module, list_file_path,dependency
+from vprjcore.common import log, get_full_path, load_module, dependency
 
 PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "platform")
 
 
 class PlatformManager(object):
 
-    '''
+    """
     Singleton mode
-    '''
+    """
     __instance = None
 
     def __new__(cls):
@@ -34,11 +31,11 @@ class PlatformManager(object):
     @dependency(["project_manager"])
     def before_new_project(self, project):
         platform_name = project.platform_name
-        log.debug("platform name = %s" % (platform_name))
+        log.debug("platform name = %s" % platform_name)
 
         for platform in self.platform_list:
             for name in platform.support_list:
-                if(platform_name.upper() == name.upper()):
+                if platform_name.upper() == name.upper():
                     project.platform_handler = platform.operate_list
                     return True
 
