@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-23 13:43:53
+@LastEditTime: 2020-02-23 15:43:09
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -10,12 +10,13 @@
 import os
 import sys
 import json
+import shutil
 import collections
 
 from vprjcore.common import log, list_file_path, get_full_path
 
-BOARD_INFO_PATH = get_full_path("./board_info.json")
-PROJECT_INFO_PATH = get_full_path("./project_info.json")
+BOARD_INFO_PATH = get_full_path("board_info.json")
+PROJECT_INFO_PATH = get_full_path("project_info.json")
 
 
 def _create_fake_info(project_name):
@@ -62,7 +63,7 @@ class ProjectManager(object):
     """
     __instance = None
 
-    def __new__(cls):
+    def __new__(cls,*args,**kwargs):
         if cls.__instance is None:
             cls.__instance = super().__new__(cls)
         return cls.__instance
@@ -83,12 +84,35 @@ class ProjectManager(object):
             self.info_path = BOARD_INFO_PATH
         else:
             self.info_path = PROJECT_INFO_PATH
-        log.debug("info path = %s" % self.info_path)
+        log.debug("info path = '%s'" % self.info_path)
 
         for dir_name in list_file_path("new_project_base", max_depth=1, only_dir=True):
             if os.path.basename(dir_name).upper() == base_name.upper():
                 project.platform_name = base_name.upper()
                 project.by_new_project_base = True
+
+                platform_path = get_full_path(
+                    "new_project_base", project.platform_name)
+                log.debug("platform path = %s" % platform_path)
+                if os.path.exists(self.info_path):
+                    json_info = json.load(open(self.info_path, "r"))
+                    if project.platform_name in json_info.keys():
+                        if "ignore_list" in json_info[project.platform_name]:
+                            ignore_list = json_info[project.platform_name].ignore_list
+                            log.debug("platform '%s' ignore list = %s" %
+                                      (project.platform_name, ignore_list))
+                            ignore_dir = os.path.join(platform_path, "ignore")
+                            if os.path.exists(ignore_list):
+                                os.makedirs(ignore_dir)
+                            for ignore_one in ignore_list:
+                                ignore_path = os.path.join(platform_path,ignore_one)
+                                log.debug("move ignore file '%s'" % ignore_path)
+                                shutil.move(ignore_path, ignore_dir)
+                    else:
+                        log.warning("the platform info is none")
+                else:
+                    log.warning("board info '%s' is null")
+
                 return True
 
         json_info = json.load(open(self.info_path, "r"))
