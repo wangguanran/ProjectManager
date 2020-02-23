@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-23 10:42:39
+@LastEditTime: 2020-02-23 10:56:08
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -69,8 +69,7 @@ class ProjectManager(object):
     def __init__(self):
         super().__init__()
 
-    @staticmethod
-    def before_new_project(project):
+    def before_new_project(self,project):
         project.by_new_project_base = False
         base_name = project.args_dict.pop("base", None)
         if base_name is None:
@@ -79,6 +78,11 @@ class ProjectManager(object):
         else:
             project.base_name = base_name
         log.debug("base name = %s" % base_name)
+        if project.args_dict["is_board"]:
+            self.info_path = BOARD_INFO_PATH
+        else:
+            self.info_path = PROJECT_INFO_PATH
+        log.debug("info path = %s"% self.info_path)
 
         for dir_name in list_file_path("new_project_base", max_depth=1, only_dir=True):
             if os.path.basename(dir_name).upper() == base_name.upper():
@@ -86,14 +90,13 @@ class ProjectManager(object):
                 project.by_new_project_base = True
                 return True
 
-        json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+        json_info = json.load(open(self.info_path, "r"))
         for prj_name, temp_info in json_info.items():
             if prj_name == base_name:
                 project.platform_name = temp_info["platform_name"]
                 return True
 
-    @staticmethod
-    def after_new_project(project):
+    def after_new_project(self,project):
         # save project info
         prj_info = {}
         json_info = {}
@@ -104,18 +107,17 @@ class ProjectManager(object):
             "operate",
         ]
         try:
-            json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+            json_info = json.load(open(self.info_path, "r"))
         except:
-            log.debug("%s is null" % PROJECT_INFO_PATH)
+            log.debug("%s is null" % self.info_path)
         for attr in dir(project):
             var = getattr(project, attr)
             if not (callable(var) or attr.startswith("_") or attr in except_list):
                 prj_info[attr] = var
         json_info[project.project_name] = prj_info
-        json.dump(json_info, open(PROJECT_INFO_PATH, "w+"), indent=4)
+        json.dump(json_info, open(self.info_path, "w+"), indent=4)
 
-    @staticmethod
-    def before_compile_project(project_name):
+    def before_compile_project(self,project_name):
         """
         @description: get project information from cache file or db
         @param {type} project_name:project name(str)
