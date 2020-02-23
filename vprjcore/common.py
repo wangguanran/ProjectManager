@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-23 13:47:52
+@LastEditTime: 2020-02-23 14:18:45
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -18,6 +18,8 @@ from functools import partial, wraps
 
 if os.path.basename(os.getcwd()) == "vprojects":
     get_full_path = partial(os.path.join, os.getcwd())
+elif os.path.basename(os.getcwd()) in ["vprjcore","scripts"]:
+    get_full_path = partial(os.path.join, os.path.dirname(os.getcwd()))
 else:
     get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
 
@@ -115,7 +117,7 @@ def load_module(module_path, max_depth):
     module_path = get_full_path(module_path)
     log.debug("module path = '%s'" % module_path)
     if not os.path.exists(module_path):
-        log.warning("the module_path is not exits")
+        log.warning("the module_path '%s' is not exits" % module_path)
         return None
 
     for filepath in list_file_path(module_path, max_depth):
