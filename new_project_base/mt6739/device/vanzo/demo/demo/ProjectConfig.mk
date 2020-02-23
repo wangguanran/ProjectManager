@@ -1,1 +1,0 @@
-../vz6739_36_1_n1/ProjectConfig.mk
