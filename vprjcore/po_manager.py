@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-23 10:30:13
+@LastEditTime: 2020-02-23 15:43:31
 @LastEditors: WangGuanran
 @Description: patch override py file
 @FilePath: \vprojects\vprjcore\po_manager.py
@@ -14,6 +14,17 @@ from vprjcore.common import log, get_full_path
 
 
 class PatchOverride(object):
+
+    """
+    Singleton mode
+    """
+    __instance = None
+
+    def __new__(cls,*args,**kwargs):
+        if cls.__instance is None:
+            cls.__instance = super().__new__(cls)
+        return cls.__instance
+
     def __init__(self):
         # self.support_list=[
         #     ""
