@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-22 23:35:33
+@LastEditTime: 2020-02-23 10:28:28
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\platform_common.py
@@ -40,8 +40,8 @@ class PlatformCommon(object):
             basedir = get_full_path("new_project_base", base_name.lower())
         else:
             basedir = get_full_path(".", base_name.lower())
-        destdir = os.path.join(os.getcwd(), project_name)
-        log.debug("basedir = %s destdir = %s" % (basedir, destdir))
+        destdir = get_full_path(project_name)
+        log.debug("basedir = '%s' destdir = '%s'" % (basedir, destdir))
         if os.path.exists(basedir):
             if os.path.exists(destdir):
                 log.error(
@@ -49,8 +49,9 @@ class PlatformCommon(object):
             else:
                 shutil.copytree(basedir, destdir, symlinks="True")
                 for p in list_file_path(destdir, list_dir=True):
-                    if (not os.path.isdir(p)) and (fnmatch.fnmatch(p, "env*.ini") or p.endswith(".patch")):
+                    if (not os.path.isdir(p)) and (fnmatch.fnmatch(os.path.basename(p), "env*.ini") or p.endswith(".patch")):
                         try:
+                            log.debug("modify file content '%s'" % p)
                             with open(p, "r+") as f_rw:
                                 content = f_rw.readlines()
                                 f_rw.seek(0)
@@ -60,14 +61,14 @@ class PlatformCommon(object):
                                         base_name, project_name)
                                     f_rw.write(line)
                         except:
-                            log.error("Can not read file '%s'" % (p))
+                            log.error("Can not read file '%s'" % p)
                             sys.exit(-1)
                     if base_name in os.path.basename(p):
                         p_dest = os.path.join(os.path.dirname(
                             p), os.path.basename(p).replace(base_name, project_name))
-                        log.debug("src file = %s dest file = %s" % (p, p_dest))
+                        log.debug("rename src file = '%s' dest file = '%s'" % (p, p_dest))
                         os.rename(p, p_dest)
-                log.debug("new project '%s' down!" % project_name)
+                log.info("new project '%s' down!" % project_name)
                 return True
         else:
             log.error("No platform file, unable to create new project")
