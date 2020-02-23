@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-23 15:43:09
+@LastEditTime: 2020-02-23 15:48:55
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -19,43 +19,6 @@ BOARD_INFO_PATH = get_full_path("board_info.json")
 PROJECT_INFO_PATH = get_full_path("project_info.json")
 
 
-def _create_fake_info(project_name):
-    """
-    @description: Create some fake information to debug(write to json file)
-    @param {type} project_name
-    @return: None
-    """
-    json_info = {}
-    prj_info = {}
-    if os.path.exists(PROJECT_INFO_PATH):
-        with open(PROJECT_INFO_PATH, "r") as f_read:
-            try:
-                if os.path.getsize(PROJECT_INFO_PATH):
-                    json_info = json.load(f_read)
-                else:
-                    log.warning("json file size is zero")
-            except:
-                log.exception("Json file format error")
-            f_read.close()
-
-    for prj_name, temp_info in json_info.items():
-        if(prj_name == project_name):
-            prj_info = temp_info
-    if len(prj_info) == 0:
-        log.debug("Insert fake project info")
-        # prj_info["name"] = project_name
-        prj_info["kernel_version"] = 3.18
-        prj_info["android_version"] = 7.0
-        prj_info["platform_name"] = "MT6735"
-
-        json_info[project_name.lower()] = prj_info
-        with open(PROJECT_INFO_PATH, "w+") as f_write:
-            json.dump(json_info, f_write, indent=4)
-            f_write.close()
-    else:
-        log.debug("project info is already exist,skip this step")
-
-
 class ProjectManager(object):
 
     """
@@ -63,7 +26,7 @@ class ProjectManager(object):
     """
     __instance = None
 
-    def __new__(cls,*args,**kwargs):
+    def __new__(cls, *args, **kwargs):
         if cls.__instance is None:
             cls.__instance = super().__new__(cls)
         return cls.__instance
@@ -105,8 +68,10 @@ class ProjectManager(object):
                             if os.path.exists(ignore_list):
                                 os.makedirs(ignore_dir)
                             for ignore_one in ignore_list:
-                                ignore_path = os.path.join(platform_path,ignore_one)
-                                log.debug("move ignore file '%s'" % ignore_path)
+                                ignore_path = os.path.join(
+                                    platform_path, ignore_one)
+                                log.debug("move ignore file '%s'" %
+                                          ignore_path)
                                 shutil.move(ignore_path, ignore_dir)
                     else:
                         log.warning("the platform info is none")
