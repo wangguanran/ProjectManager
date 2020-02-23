@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-23 10:06:44
+@LastEditTime: 2020-02-23 11:02:54
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: \vprojects\vprjcore\project.py
@@ -37,6 +37,7 @@ class Project(object):
 
         if auto_dispatch:
             self.dispatch()
+        log.info("%s '%s' down!"%(self.operate,self.project_name))
 
     @func_cprofile
     def dispatch(self):

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-23 10:56:08
+@LastEditTime: 2020-02-23 13:35:57
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -10,6 +10,7 @@
 import os
 import sys
 import json
+import collections
 
 from vprjcore.common import log, list_file_path, get_full_path
 
@@ -69,7 +70,7 @@ class ProjectManager(object):
     def __init__(self):
         super().__init__()
 
-    def before_new_project(self,project):
+    def before_new_project(self, project):
         project.by_new_project_base = False
         base_name = project.args_dict.pop("base", None)
         if base_name is None:
@@ -82,7 +83,7 @@ class ProjectManager(object):
             self.info_path = BOARD_INFO_PATH
         else:
             self.info_path = PROJECT_INFO_PATH
-        log.debug("info path = %s"% self.info_path)
+        log.debug("info path = %s" % self.info_path)
 
         for dir_name in list_file_path("new_project_base", max_depth=1, only_dir=True):
             if os.path.basename(dir_name).upper() == base_name.upper():
@@ -96,10 +97,10 @@ class ProjectManager(object):
                 project.platform_name = temp_info["platform_name"]
                 return True
 
-    def after_new_project(self,project):
+    def after_new_project(self, project):
         # save project info
         prj_info = {}
-        json_info = {}
+        json_info = collections.OrderedDict()
         except_list = [
             "args_dict",
             "platform_handler",
@@ -107,17 +108,20 @@ class ProjectManager(object):
             "operate",
         ]
         try:
-            json_info = json.load(open(self.info_path, "r"))
+            temp_json_info = json.load(open(self.info_path, "r"))
         except:
             log.debug("%s is null" % self.info_path)
         for attr in dir(project):
             var = getattr(project, attr)
             if not (callable(var) or attr.startswith("_") or attr in except_list):
                 prj_info[attr] = var
-        json_info[project.project_name] = prj_info
+        temp_json_info[project.project_name] = prj_info
+        prj_list = sorted(temp_json_info.keys())
+        for info in prj_list:
+            json_info[info] = temp_json_info[info]
         json.dump(json_info, open(self.info_path, "w+"), indent=4)
 
-    def before_compile_project(self,project_name):
+    def before_compile_project(self, project_name):
         """
         @description: get project information from cache file or db
         @param {type} project_name:project name(str)

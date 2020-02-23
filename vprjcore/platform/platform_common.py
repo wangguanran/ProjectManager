@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-23 10:28:28
+@LastEditTime: 2020-02-23 11:06:32
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: \vprojects\vprjcore\platform\platform_common.py
@@ -42,6 +42,7 @@ class PlatformCommon(object):
             basedir = get_full_path(".", base_name.lower())
         destdir = get_full_path(project_name)
         log.debug("basedir = '%s' destdir = '%s'" % (basedir, destdir))
+
         if os.path.exists(basedir):
             if os.path.exists(destdir):
                 log.error(
@@ -68,7 +69,6 @@ class PlatformCommon(object):
                             p), os.path.basename(p).replace(base_name, project_name))
                         log.debug("rename src file = '%s' dest file = '%s'" % (p, p_dest))
                         os.rename(p, p_dest)
-                log.info("new project '%s' down!" % project_name)
                 return True
         else:
             log.error("No platform file, unable to create new project")
