@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-23 13:35:57
+@LastEditTime: 2020-02-23 13:43:53
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -100,6 +100,7 @@ class ProjectManager(object):
     def after_new_project(self, project):
         # save project info
         prj_info = {}
+        temp_json_info = {}
         json_info = collections.OrderedDict()
         except_list = [
             "args_dict",

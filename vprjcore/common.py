@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-23 10:29:28
+@LastEditTime: 2020-02-23 13:47:52
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -19,8 +19,11 @@ from functools import partial, wraps
 if os.path.basename(os.getcwd()) == "vprojects":
     get_full_path = partial(os.path.join, os.getcwd())
 else:
-    get_full_path = partial(os.path.join, os.getcwd(),"vprojects")
+    get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
+
 LOG_PATH = get_full_path(".cache", "logs")
+CPROFILE_PATH = get_full_path(".cache", "cprofile")
+PROFILE_DUMP_NAME = "profile_dump"
 
 
 def dependency(depend_list):
@@ -36,15 +39,18 @@ def dependency(depend_list):
                     if plugin.module_name == depend_one:
                         # depend_func = getattr(plugin,func.__name__)
                         # depend_func(project)
-                        index, operate = func.__name__.split(sep="_", maxsplit=1)
+                        index, operate = func.__name__.split(
+                            sep="_", maxsplit=1)
                         if operate in plugin.operate_list:
                             if index in plugin.operate_list[operate]:
                                 plugin.operate_list[operate][index](project)
                                 del plugin.operate_list[operate][index]
                             else:
-                                log.warning("The plugin does not have the attr:'%s'" % func.__name__)
+                                log.warning(
+                                    "The plugin does not have the attr:'%s'" % func.__name__)
                         else:
-                            log.warning("The plugin does not have the attr:'%s'" % func.__name__)
+                            log.warning(
+                                "The plugin does not have the attr:'%s'" % func.__name__)
 
             return func(*args, **kwargs)
 
@@ -65,6 +71,7 @@ def get_filename(prefix, suffix, path):
 
 
 def organize_files(path, prefix):
+    # print("prefix = %s,path = %s" % (prefix, path))
     if os.path.exists(path):
         file_list = os.listdir(path)
         for file in file_list:
@@ -106,7 +113,7 @@ def load_module(module_path, max_depth):
     module_list = []
 
     module_path = get_full_path(module_path)
-    log.debug("module path = '%s'"% module_path)
+    log.debug("module path = '%s'" % module_path)
     if not os.path.exists(module_path):
         log.warning("the module_path is not exits")
         return None
@@ -267,10 +274,6 @@ def func_time(func):
         return result
 
     return wrapper
-
-
-CPROFILE_PATH = "./.cache/cprofile/"
-PROFILE_DUMP_NAME = "profile_dump"
 
 
 def func_cprofile(func):
