@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-23 14:18:45
+@LastEditTime: 2020-02-23 15:35:47
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: \vprojects\vprjcore\common.py
@@ -23,6 +23,7 @@ elif os.path.basename(os.getcwd()) in ["vprjcore","scripts"]:
 else:
     get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
 
+VPRJCORE_VERSION = "0.0.1"
 LOG_PATH = get_full_path(".cache", "logs")
 CPROFILE_PATH = get_full_path(".cache", "cprofile")
 PROFILE_DUMP_NAME = "profile_dump"
