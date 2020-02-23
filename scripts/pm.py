@@ -2,19 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-23 15:29:44
-@LastEditTime: 2020-02-23 15:30:24
+@LastEditTime: 2020-02-23 16:02:27
 @LastEditors: WangGuanran
 @Description: Platform manager operate py file
 @FilePath: \vprojects\scripts\pm.py
-'''
-'''
-@Author: WangGuanran
-@Email: wangguanran@vanzotec.com
-@Date: 2020-02-23 14:06:25
-@LastEditTime: 2020-02-23 14:29:41
-@LastEditors: WangGuanran
-@Description: For all command
-@FilePath: \vprojects\scripts\am.py
 '''
 
 import os
