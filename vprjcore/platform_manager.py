@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-22 22:01:29
+@LastEditTime: 2020-02-23 14:31:52
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: \vprojects\vprjcore\platform_manager.py
@@ -25,8 +25,27 @@ class PlatformManager(object):
             cls.__instance = super().__new__(cls)
         return cls.__instance
 
-    def __init__(self):
+    def __init__(self, args_dict=None):
         self.platform_list = load_module(PLATFORM_PLUGIN_PATH, max_depth=2)
+        if not args_dict is None:
+            self.operate = args_dict.pop("operate")
+            self.args_dict = args_dict
+            log.debug("operate = %s,args_dict = %s" %
+                      (self.operate, self.args_dict))
+            self._dispatch()
+
+    def _dispatch(self):
+        func_name = "_" + self.operate
+        log.debug("func name = %s" % func_name)
+        func_attr = getattr(self, func_name)
+        if func_attr is None:
+            log.error("the operate is not support")
+            return False
+        else:
+            return func_attr()
+
+    def _add_new_platform(self):
+        pass
 
     @dependency(["project_manager"])
     def before_new_project(self, project):
@@ -38,6 +57,8 @@ class PlatformManager(object):
                 if platform_name.upper() == name.upper():
                     project.platform_handler = platform.operate_list
                     return True
+
+        return False
 
     def before_compile_project(self):
         pass
