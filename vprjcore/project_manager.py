@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-22 22:00:52
+@LastEditTime: 2020-02-23 10:42:39
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: \vprojects\vprjcore\project_manager.py
@@ -11,10 +11,10 @@ import os
 import sys
 import json
 
-from vprjcore.common import log, list_file_path
+from vprjcore.common import log, list_file_path, get_full_path
 
-BOARD_INFO_PATH = "./board_info.json"
-PROJECT_INFO_PATH = "./project_info.json"
+BOARD_INFO_PATH = get_full_path("./board_info.json")
+PROJECT_INFO_PATH = get_full_path("./project_info.json")
 
 
 def _create_fake_info(project_name):
