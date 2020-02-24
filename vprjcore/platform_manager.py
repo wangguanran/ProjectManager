@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-24 23:13:08
+@LastEditTime: 2020-02-24 23:27:13
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: /vprojects/vprjcore/platform_manager.py
@@ -57,12 +57,16 @@ class PlatformManager(object):
         log.debug("In")
         log.debug("platform root path = %s" % PLATFORM_ROOT_PATH)
         except_list = [
-            "out", ".repo", "vprojects", "zprojects"
+            "out", ".repo", "vprojects", "zprojects","build"
         ]
         json_info = {}
         file_list = []
         link_list = {}
         platform_info = {}
+
+        if os.path.basename(os.getcwd()) in ["vprojects","vprjcore"]:
+            log.error("This command cannot be executed in the current directory")
+            return False
 
         platform_name = input("Please input the platform name:")
         log.debug("platform name = %s" % platform_name)
