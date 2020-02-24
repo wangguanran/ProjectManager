@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-24 23:27:13
+@LastEditTime: 2020-02-24 23:50:02
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: /vprojects/vprjcore/platform_manager.py
@@ -40,7 +40,8 @@ class PlatformManager(object):
             self.args_dict = args_dict
             log.debug("operate = %s,args_dict = %s" %
                       (self.operate, self.args_dict))
-            self._dispatch()
+            log.info("'%s' down! result = %s" %
+                     (self.operate, self._dispatch()))
 
     @func_cprofile
     def _dispatch(self):
@@ -57,14 +58,14 @@ class PlatformManager(object):
         log.debug("In")
         log.debug("platform root path = %s" % PLATFORM_ROOT_PATH)
         except_list = [
-            "out", ".repo", "vprojects", "zprojects","build"
+            "out", ".repo", "vprojects", "zprojects", "build"
         ]
         json_info = {}
         file_list = []
         link_list = {}
         platform_info = {}
 
-        if os.path.basename(os.getcwd()) in ["vprojects","vprjcore"]:
+        if os.path.basename(os.getcwd()) in ["vprojects", "vprjcore"]:
             log.error("This command cannot be executed in the current directory")
             return False
 
