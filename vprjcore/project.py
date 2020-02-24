@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-23 15:35:55
+@LastEditTime: 2020-02-24 23:52:16
 @LastEditors: WangGuanran
 @Description: project_manager py file
-@FilePath: \vprojects\vprjcore\project.py
+@FilePath: /vprojects/vprjcore/project.py
 '''
 
 import argparse
@@ -35,8 +35,7 @@ class Project(object):
                   (self.project_name, self.operate))
 
         if auto_dispatch:
-            self.dispatch()
-        log.info("%s '%s' down!"%(self.operate,self.project_name))
+            log.info("%s '%s' down! Result = %s"%(self.operate,self.project_name,self._dispatch()))
 
     @func_cprofile
     def dispatch(self):
@@ -49,10 +48,11 @@ class Project(object):
             self._before_operate()
             ret = self.platform_handler[self.operate](self)
             if ret:
-                self._after_operate()
+                ret = self._after_operate()
+            return ret
         except:
             log.exception("Error occurred!")
-        pass
+            return False
 
     def _polling_plugin_list_and_execute(self, exec_pos):
         """
