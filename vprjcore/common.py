@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-25 20:39:25
+@LastEditTime: 2020-02-25 22:19:09
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: /vprojects/vprjcore/common.py
@@ -24,9 +24,21 @@ else:
     get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
 
 VPRJCORE_VERSION = "0.0.1"
+
 LOG_PATH = get_full_path(".cache", "logs")
 CPROFILE_PATH = get_full_path(".cache", "cprofile")
 PROFILE_DUMP_NAME = "profile_dump"
+
+BOARD_INFO_PATH = get_full_path("board_info.json")
+PROJECT_INFO_PATH = get_full_path("project_info.json")
+
+PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "custom")
+PLATFORM_ROOT_PATH = os.path.dirname(get_full_path())
+
+NEW_PROJECT_DIR = get_full_path("new_project_base")
+DEFAULT_KEYWORD = "demo"
+
+VPRJCORE_PLUGIN_PATH = get_full_path("vprjcore")
 
 
 def dependency(depend_list):

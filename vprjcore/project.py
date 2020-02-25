@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-25 21:35:19
+@LastEditTime: 2020-02-25 22:24:21
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: /vprojects/vprjcore/project.py
@@ -12,9 +12,8 @@ import argparse
 import os
 import sys
 
-from vprjcore.common import load_module, func_cprofile, log, get_full_path, VPRJCORE_VERSION
-
-VPRJCORE_PLUGIN_PATH = get_full_path("vprjcore")
+# import vprjcore.common
+from vprjcore.common import load_module, func_cprofile, log, get_full_path, VPRJCORE_VERSION, VPRJCORE_PLUGIN_PATH
 
 
 class Project(object):

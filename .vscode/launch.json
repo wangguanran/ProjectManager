@@ -14,7 +14,8 @@
             "env": {"PYTHONPATH":"${workspaceFolder}"},
             "args": [
                 // "new_platform",
-                "-b","new_project","tnz804","--base=tnz801",
+                // "-b","new_project","tnz801","--base=mt6735",
+                "del_board","tnz801"
             ]
         }
     ]

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-25 21:28:10
+@LastEditTime: 2020-02-25 22:21:46
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: /vprojects/vprjcore/project_manager.py
@@ -13,10 +13,8 @@ import json
 import shutil
 import collections
 
-from vprjcore.common import log, list_file_path, get_full_path
-
-BOARD_INFO_PATH = get_full_path("board_info.json")
-PROJECT_INFO_PATH = get_full_path("project_info.json")
+# import vprjcore.common
+from vprjcore.common import log, list_file_path, get_full_path, BOARD_INFO_PATH, PROJECT_INFO_PATH
 
 
 class ProjectManager(object):
@@ -54,6 +52,7 @@ class ProjectManager(object):
                 project.platform_name = base_name.upper()
                 project.by_new_project_base = True
                 log.debug("get the platform in new_project_base")
+
                 # platform_path = get_full_path(
                 #     "new_project_base", project.platform_name)
                 # log.debug("platform path = %s" % platform_path)
@@ -87,7 +86,26 @@ class ProjectManager(object):
                 log.debug("get the platform in project_info.json")
                 return True
 
-        log.debug("Get the platform failed")
+        log.error("Get the platform failed")
+        return False
+
+    def before_del_project(self, project):
+        log.debug("In!")
+        self.info_path = PROJECT_INFO_PATH
+        pass
+
+    def before_del_board(self, project):
+        log.debug("In!")
+        self.info_path = BOARD_INFO_PATH
+
+        json_info = json.load(open(self.info_path, "r"))
+        for prj_name, temp_info in json_info.items():
+            if prj_name == project.project_name:
+                project.platform_name = temp_info["platform_name"]
+                log.debug("get the platform in project_info.json")
+                return True
+
+        log.error("Get the platform failed")
         return False
 
     def after_new_project(self, project):

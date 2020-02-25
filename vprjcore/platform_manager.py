@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-25 21:11:51
+@LastEditTime: 2020-02-25 22:24:47
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: /vprojects/vprjcore/platform_manager.py
@@ -15,10 +15,8 @@ import shutil
 import json
 import datetime
 
-from vprjcore.common import log, get_full_path, load_module, dependency, VPRJCORE_VERSION, list_file_path, func_cprofile
-
-PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "custom")
-PLATFORM_ROOT_PATH = os.path.dirname(get_full_path())
+# import vprjcore.common
+from vprjcore.common import log, get_full_path, load_module, dependency, VPRJCORE_VERSION, list_file_path, func_cprofile, PLATFORM_PLUGIN_PATH, PLATFORM_ROOT_PATH
 
 
 class PlatformManager(object):
@@ -115,15 +113,14 @@ class PlatformManager(object):
         platform_info["file_list"] = file_list
         platform_info["link_list"] = link_list
         if os.path.exists(json_file_path):
-            with open(json_file_path,"r") as f_read:
+            with open(json_file_path, "r") as f_read:
                 json_info = json.load(f_read)
         json_info[platform_name] = platform_info
         with open(json_file_path, "w+") as f_write:
             json.dump(json_info, f_write, indent=4, sort_keys=True)
         return True
 
-    @dependency(["project_manager"])
-    def before_new_project(self, project):
+    def _before_all_command(self, project):
         platform_name = project.platform_name
         log.debug("platform name = %s" % platform_name)
 
@@ -137,8 +134,17 @@ class PlatformManager(object):
         log.debug("fail to compatible platform...")
         return False
 
-    def before_compile_project(self):
-        pass
+    @dependency(["project_manager"])
+    def before_new_project(self, project):
+        return self._before_all_command(project)
+
+    @dependency(["project_manager"])
+    def before_del_board(self, project):
+        return self._before_all_command(project)
+
+    @dependency(["project_manager"])
+    def before_compile_project(self, project):
+        return self._before_all_command(project)
 
 
 def get_module():

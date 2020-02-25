@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-25 21:46:54
+@LastEditTime: 2020-02-25 22:37:14
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: /vprojects/vprjcore/custom/platform_common.py
@@ -14,10 +14,8 @@ import json
 import shutil
 import fnmatch
 
-from vprjcore.common import log, get_full_path, list_file_path
-
-NEW_PROJECT_DIR = get_full_path("new_project_base")
-DEFAULT_KEYWORD = "demo"
+# import vprjcore.common
+from vprjcore.common import log, get_full_path, list_file_path, NEW_PROJECT_DIR, DEFAULT_KEYWORD, BOARD_INFO_PATH
 
 
 class PlatformCommon(object):
@@ -56,7 +54,7 @@ class PlatformCommon(object):
                     platform_json_info_path = get_full_path(
                         "new_project_base", "new_project_base.json")
                     log.debug("platform json info path = %s" %
-                            platform_json_info_path)
+                              platform_json_info_path)
                     with open(platform_json_info_path, "r") as f_read:
                         platform_json_info = json.load(f_read)
                         if hasattr(platform_json_info[base_name], "keyword"):
@@ -93,11 +91,32 @@ class PlatformCommon(object):
         return False
 
     @staticmethod
-    def del_project(*args, **kwargs):
+    def del_board(project):
         log.debug("In!")
 
+        json_info = {}
+        project_path = get_full_path(project.project_name)
+        log.debug("project path = %s" % project_path)
+
+        if os.path.exists(project_path):
+            shutil.rmtree(project_path)
+        else:
+            log.warning("The '%s' path is already delete" %
+                        project.project_name)
+        try:
+            with open(BOARD_INFO_PATH, "r") as f_read:
+                json_info = json.load(f_read)
+                json_info[project.project_name]["is_delete"] = True
+            with open(BOARD_INFO_PATH, "w+") as f_write:
+                json.dump(json_info, f_write, indent=4)
+        except:
+            log.exception("Can not find board info file")
+            return False
+
+        return True
+
     @staticmethod
-    def compile_project(*args, **kwargs):
+    def compile_project(project):
         log.debug("In!")
 
 
