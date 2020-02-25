@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-24 23:52:16
+@LastEditTime: 2020-02-25 21:35:19
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: /vprojects/vprjcore/project.py
@@ -24,7 +24,7 @@ class Project(object):
 
         :type args_dict: dict
         """
-        log.debug("os.getcwd() = %s"% os.getcwd())
+        log.debug("os.getcwd() = %s" % os.getcwd())
         self.plugin_list = load_module(VPRJCORE_PLUGIN_PATH, 1)
         log.debug("plugin list = %s" % self.plugin_list)
 
@@ -35,7 +35,8 @@ class Project(object):
                   (self.project_name, self.operate))
 
         if auto_dispatch:
-            log.info("%s '%s' down! Result = %s"%(self.operate,self.project_name,self._dispatch()))
+            log.info("%s '%s' down! Result = %s" %
+                     (self.operate, self.project_name, self.dispatch()))
 
     @func_cprofile
     def dispatch(self):
@@ -45,11 +46,21 @@ class Project(object):
         @return: None
         """
         try:
-            self._before_operate()
-            ret = self.platform_handler[self.operate](self)
-            if ret:
-                ret = self._after_operate()
-            return ret
+            if self._before_operate():
+                log.debug("before operate down...")
+                if self.platform_handler[self.operate](self):
+                    log.debug("platform handler down...")
+                    if self._after_operate():
+                        log.debug("after operate down...")
+                        return True
+                    else:
+                        log.debug("after operate failed!")
+                else:
+                    log.debug("platform handler failed!")
+            else:
+                log.debug("before operate failed!")
+
+            return False
         except:
             log.exception("Error occurred!")
             return False
@@ -64,8 +75,16 @@ class Project(object):
         for plugin in self.plugin_list:
             if self.operate in plugin.operate_list:
                 if exec_pos in plugin.operate_list[self.operate]:
-                    plugin.operate_list[self.operate][exec_pos](self)
+                    ret = plugin.operate_list[self.operate][exec_pos](self)
                     del plugin.operate_list[self.operate][exec_pos]
+                    if ret:
+                        continue
+                    else:
+                        log.debug("plugin '%s' operate failed!" %
+                                  plugin.module_name)
+                        return False
+
+        return True
 
     def _before_operate(self):
         """
@@ -73,7 +92,7 @@ class Project(object):
         @param {type} None
         @return: None
         """
-        self._polling_plugin_list_and_execute("before")
+        return self._polling_plugin_list_and_execute("before")
 
     def _after_operate(self):
         """
@@ -81,7 +100,7 @@ class Project(object):
         @param {type} None
         @return: None
         """
-        self._polling_plugin_list_and_execute("after")
+        return self._polling_plugin_list_and_execute("after")
 
 
 def parse_cmd():

@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-23 15:48:55
+@LastEditTime: 2020-02-25 21:28:10
 @LastEditors: WangGuanran
 @Description: Project manager py file
-@FilePath: \vprojects\vprjcore\project_manager.py
+@FilePath: /vprojects/vprjcore/project_manager.py
 '''
 import os
 import sys
@@ -39,7 +39,7 @@ class ProjectManager(object):
         base_name = project.args_dict.pop("base", None)
         if base_name is None:
             log.error("You need to use '--base' to specify platform information")
-            sys.exit(-1)
+            return False
         else:
             project.base_name = base_name
         log.debug("base name = %s" % base_name)
@@ -53,30 +53,30 @@ class ProjectManager(object):
             if os.path.basename(dir_name).upper() == base_name.upper():
                 project.platform_name = base_name.upper()
                 project.by_new_project_base = True
-
-                platform_path = get_full_path(
-                    "new_project_base", project.platform_name)
-                log.debug("platform path = %s" % platform_path)
-                if os.path.exists(self.info_path):
-                    json_info = json.load(open(self.info_path, "r"))
-                    if project.platform_name in json_info.keys():
-                        if "ignore_list" in json_info[project.platform_name]:
-                            ignore_list = json_info[project.platform_name].ignore_list
-                            log.debug("platform '%s' ignore list = %s" %
-                                      (project.platform_name, ignore_list))
-                            ignore_dir = os.path.join(platform_path, "ignore")
-                            if os.path.exists(ignore_list):
-                                os.makedirs(ignore_dir)
-                            for ignore_one in ignore_list:
-                                ignore_path = os.path.join(
-                                    platform_path, ignore_one)
-                                log.debug("move ignore file '%s'" %
-                                          ignore_path)
-                                shutil.move(ignore_path, ignore_dir)
-                    else:
-                        log.warning("the platform info is none")
-                else:
-                    log.warning("board info '%s' is null")
+                log.debug("get the platform in new_project_base")
+                # platform_path = get_full_path(
+                #     "new_project_base", project.platform_name)
+                # log.debug("platform path = %s" % platform_path)
+                # if os.path.exists(self.info_path):
+                #     json_info = json.load(open(self.info_path, "r"))
+                #     if project.platform_name in json_info.keys():
+                #         if "ignore_list" in json_info[project.platform_name]:
+                #             ignore_list = json_info[project.platform_name].ignore_list
+                #             log.debug("platform '%s' ignore list = %s" %
+                #                       (project.platform_name, ignore_list))
+                #             ignore_dir = os.path.join(platform_path, "ignore")
+                #             if os.path.exists(ignore_list):
+                #                 os.makedirs(ignore_dir)
+                #             for ignore_one in ignore_list:
+                #                 ignore_path = os.path.join(
+                #                     platform_path, ignore_one)
+                #                 log.debug("move ignore file '%s'" %
+                #                           ignore_path)
+                #                 shutil.move(ignore_path, ignore_dir)
+                #     else:
+                #         log.warning("the platform info is none")
+                # else:
+                #     log.warning("board info '%s' is null")
 
                 return True
 
@@ -84,9 +84,14 @@ class ProjectManager(object):
         for prj_name, temp_info in json_info.items():
             if prj_name == base_name:
                 project.platform_name = temp_info["platform_name"]
+                log.debug("get the platform in project_info.json")
                 return True
 
+        log.debug("Get the platform failed")
+        return False
+
     def after_new_project(self, project):
+        log.debug("In!")
         # save project info
         prj_info = {}
         temp_json_info = {}
@@ -101,6 +106,7 @@ class ProjectManager(object):
             temp_json_info = json.load(open(self.info_path, "r"))
         except:
             log.debug("%s is null" % self.info_path)
+
         for attr in dir(project):
             var = getattr(project, attr)
             if not (callable(var) or attr.startswith("_") or attr in except_list):
@@ -110,6 +116,8 @@ class ProjectManager(object):
         for info in prj_list:
             json_info[info] = temp_json_info[info]
         json.dump(json_info, open(self.info_path, "w+"), indent=4)
+
+        return True
 
     def before_compile_project(self, project_name):
         """

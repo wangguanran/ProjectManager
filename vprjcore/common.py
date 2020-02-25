@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-23 15:35:47
+@LastEditTime: 2020-02-25 20:39:25
 @LastEditors: WangGuanran
 @Description: common py file
-@FilePath: \vprojects\vprjcore\common.py
+@FilePath: /vprojects/vprjcore/common.py
 '''
 import cProfile
 import logging
@@ -18,7 +18,7 @@ from functools import partial, wraps
 
 if os.path.basename(os.getcwd()) == "vprojects":
     get_full_path = partial(os.path.join, os.getcwd())
-elif os.path.basename(os.getcwd()) in ["vprjcore","scripts"]:
+elif os.path.basename(os.getcwd()) in ["vprjcore", "scripts"]:
     get_full_path = partial(os.path.join, os.path.dirname(os.getcwd()))
 else:
     get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
@@ -33,20 +33,18 @@ def dependency(depend_list):
     def decorate(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # log.debug("depend list = %s"%(depend_list))
+            log.debug("depend list = %s" % (depend_list))
             project = args[1]
             for depend_one in depend_list:
-                # print(depend_list)
                 for plugin in project.plugin_list:
-                    # print(plugin.module_name)
+                    log.debug("module name = %s" % plugin.module_name)
                     if plugin.module_name == depend_one:
-                        # depend_func = getattr(plugin,func.__name__)
-                        # depend_func(project)
                         index, operate = func.__name__.split(
                             sep="_", maxsplit=1)
                         if operate in plugin.operate_list:
                             if index in plugin.operate_list[operate]:
-                                plugin.operate_list[operate][index](project)
+                                if plugin.operate_list[operate][index](project) == False:
+                                    return False
                                 del plugin.operate_list[operate][index]
                             else:
                                 log.warning(

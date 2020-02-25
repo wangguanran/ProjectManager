@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-24 23:50:02
+@LastEditTime: 2020-02-25 21:11:51
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: /vprojects/vprjcore/platform_manager.py
@@ -54,7 +54,7 @@ class PlatformManager(object):
         else:
             return func_attr()
 
-    def _add_new_platform(self):
+    def _new_platform(self):
         log.debug("In")
         log.debug("platform root path = %s" % PLATFORM_ROOT_PATH)
         except_list = [
@@ -79,8 +79,12 @@ class PlatformManager(object):
         platform_dir_path = get_full_path("new_project_base", platform_name)
         if not os.path.exists(platform_dir_path):
             os.makedirs(platform_dir_path)
-        json_file_path = os.path.join(
-            platform_dir_path, platform_name+"_config_info.json")
+        else:
+            log.warning("The platform is already exists!")
+            return False
+
+        json_file_path = get_full_path(
+            "new_project_base", "new_project_base.json")
 
         for dirname in list_file_path(PLATFORM_ROOT_PATH, max_depth=1, only_dir=True):
             if os.path.basename(dirname) not in except_list:
@@ -110,6 +114,9 @@ class PlatformManager(object):
 
         platform_info["file_list"] = file_list
         platform_info["link_list"] = link_list
+        if os.path.exists(json_file_path):
+            with open(json_file_path,"r") as f_read:
+                json_info = json.load(f_read)
         json_info[platform_name] = platform_info
         with open(json_file_path, "w+") as f_write:
             json.dump(json_info, f_write, indent=4, sort_keys=True)
@@ -124,8 +131,10 @@ class PlatformManager(object):
             for name in platform.support_list:
                 if platform_name.upper() == name.upper():
                     project.platform_handler = platform.operate_list
+                    log.debug("compatible platform successful!")
                     return True
 
+        log.debug("fail to compatible platform...")
         return False
 
     def before_compile_project(self):
