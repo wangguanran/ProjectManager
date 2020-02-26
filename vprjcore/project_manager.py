@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-26 09:00:47
+@LastEditTime: 2020-02-26 16:35:17
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: /vprojects/vprjcore/project_manager.py
@@ -47,18 +47,21 @@ class ProjectManager(object):
             project.info_path = PROJECT_INFO_PATH
         log.debug("info path = '%s'" % project.info_path)
 
-        json_info = json.load(open(project.info_path, "r"))
-        for prj_name, temp_info in json_info.items():
-            if prj_name == project.project_name:
-                log.warning(
-                    "The project has been created,cannot create repeatedly")
-                if temp_info.pop("is_delete",False):
-                    log.warning("Although this project has been deleted")
-                return False
-            if prj_name == base_name:
-                project.platform_name = temp_info["platform_name"]
-                log.debug("get the platform in project_info.json")
-                return True
+        try:
+            json_info = json.load(open(project.info_path, "r"))
+            for prj_name, temp_info in json_info.items():
+                if prj_name == project.project_name:
+                    log.warning(
+                        "The project has been created,cannot create repeatedly")
+                    if temp_info.pop("is_delete", False):
+                        log.warning("Although this project has been deleted")
+                    return False
+                if prj_name == base_name:
+                    project.platform_name = temp_info["platform_name"]
+                    log.debug("get the platform in project_info.json")
+                    return True
+        except FileNotFoundError:
+            log.debug("can not find '%s'" % project.info_path)
 
         for dir_name in list_file_path("new_project_base", max_depth=1, only_dir=True):
             if os.path.basename(dir_name).upper() == base_name.upper():
