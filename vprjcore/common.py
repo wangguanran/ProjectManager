@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-25 22:19:09
+@LastEditTime: 2020-02-26 08:34:10
 @LastEditors: WangGuanran
 @Description: common py file
 @FilePath: /vprojects/vprjcore/common.py
@@ -55,9 +55,12 @@ def dependency(depend_list):
                             sep="_", maxsplit=1)
                         if operate in plugin.operate_list:
                             if index in plugin.operate_list[operate]:
-                                if plugin.operate_list[operate][index](project) == False:
+                                if plugin.operate_list[operate][index](project):
+                                    del plugin.operate_list[operate][index]
+                                else:
+                                    log.debug("'%s' operate failed" %
+                                              depend_one)
                                     return False
-                                del plugin.operate_list[operate][index]
                             else:
                                 log.warning(
                                     "The plugin does not have the attr:'%s'" % func.__name__)

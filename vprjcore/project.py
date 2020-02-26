@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-25 22:24:21
+@LastEditTime: 2020-02-26 08:33:04
 @LastEditors: WangGuanran
 @Description: project_manager py file
 @FilePath: /vprojects/vprjcore/project.py
@@ -74,10 +74,8 @@ class Project(object):
         for plugin in self.plugin_list:
             if self.operate in plugin.operate_list:
                 if exec_pos in plugin.operate_list[self.operate]:
-                    ret = plugin.operate_list[self.operate][exec_pos](self)
-                    del plugin.operate_list[self.operate][exec_pos]
-                    if ret:
-                        continue
+                    if plugin.operate_list[self.operate][exec_pos](self):
+                        del plugin.operate_list[self.operate][exec_pos]
                     else:
                         log.debug("plugin '%s' operate failed!" %
                                   plugin.module_name)

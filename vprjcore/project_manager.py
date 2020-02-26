@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-26 08:30:58
+@LastEditTime: 2020-02-26 09:00:47
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: /vprojects/vprjcore/project_manager.py
@@ -42,10 +42,23 @@ class ProjectManager(object):
             project.base_name = base_name
         log.debug("base name = %s" % base_name)
         if project.args_dict["is_board"]:
-            self.info_path = BOARD_INFO_PATH
+            project.info_path = BOARD_INFO_PATH
         else:
-            self.info_path = PROJECT_INFO_PATH
-        log.debug("info path = '%s'" % self.info_path)
+            project.info_path = PROJECT_INFO_PATH
+        log.debug("info path = '%s'" % project.info_path)
+
+        json_info = json.load(open(project.info_path, "r"))
+        for prj_name, temp_info in json_info.items():
+            if prj_name == project.project_name:
+                log.warning(
+                    "The project has been created,cannot create repeatedly")
+                if temp_info.pop("is_delete",False):
+                    log.warning("Although this project has been deleted")
+                return False
+            if prj_name == base_name:
+                project.platform_name = temp_info["platform_name"]
+                log.debug("get the platform in project_info.json")
+                return True
 
         for dir_name in list_file_path("new_project_base", max_depth=1, only_dir=True):
             if os.path.basename(dir_name).upper() == base_name.upper():
@@ -56,8 +69,8 @@ class ProjectManager(object):
                 # platform_path = get_full_path(
                 #     "new_project_base", project.platform_name)
                 # log.debug("platform path = %s" % platform_path)
-                # if os.path.exists(self.info_path):
-                #     json_info = json.load(open(self.info_path, "r"))
+                # if os.path.exists(project.info_path):
+                #     json_info = json.load(open(project.info_path, "r"))
                 #     if project.platform_name in json_info.keys():
                 #         if "ignore_list" in json_info[project.platform_name]:
                 #             ignore_list = json_info[project.platform_name].ignore_list
@@ -79,26 +92,17 @@ class ProjectManager(object):
 
                 return True
 
-        json_info = json.load(open(self.info_path, "r"))
-        for prj_name, temp_info in json_info.items():
-            if prj_name == base_name:
-                project.platform_name = temp_info["platform_name"]
-                log.debug("get the platform in project_info.json")
-                return True
-
         log.error("Get the platform failed")
         return False
 
     def before_del_project(self, project):
         log.debug("In!")
-        self.info_path = PROJECT_INFO_PATH
-        pass
+        if project.args_dict["is_board"]:
+            project.info_path = BOARD_INFO_PATH
+        else:
+            project.info_path = PROJECT_INFO_PATH
 
-    def before_del_project(self, project):
-        log.debug("In!")
-        self.info_path = BOARD_INFO_PATH
-
-        json_info = json.load(open(self.info_path, "r"))
+        json_info = json.load(open(project.info_path, "r"))
         for prj_name, temp_info in json_info.items():
             if prj_name == project.project_name:
                 project.platform_name = temp_info["platform_name"]
@@ -121,9 +125,9 @@ class ProjectManager(object):
             "operate",
         ]
         try:
-            temp_json_info = json.load(open(self.info_path, "r"))
+            temp_json_info = json.load(open(project.info_path, "r"))
         except:
-            log.debug("%s is null" % self.info_path)
+            log.debug("%s is null" % project.info_path)
 
         for attr in dir(project):
             var = getattr(project, attr)
@@ -133,7 +137,7 @@ class ProjectManager(object):
         prj_list = sorted(temp_json_info.keys())
         for info in prj_list:
             json_info[info] = temp_json_info[info]
-        json.dump(json_info, open(self.info_path, "w+"), indent=4)
+        json.dump(json_info, open(project.info_path, "w+"), indent=4)
 
         return True
 

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-26 08:31:21
+@LastEditTime: 2020-02-26 08:44:22
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: /vprojects/vprjcore/custom/platform_common.py
@@ -104,13 +104,13 @@ class PlatformCommon(object):
             log.warning("The '%s' path is already delete" %
                         project.project_name)
         try:
-            with open(BOARD_INFO_PATH, "r") as f_read:
+            with open(project.info_path, "r") as f_read:
                 json_info = json.load(f_read)
                 json_info[project.project_name]["is_delete"] = True
-            with open(BOARD_INFO_PATH, "w+") as f_write:
+            with open(project.info_path, "w+") as f_write:
                 json.dump(json_info, f_write, indent=4)
         except:
-            log.exception("Can not find board info file")
+            log.exception("Can not find info file")
             return False
 
         return True
