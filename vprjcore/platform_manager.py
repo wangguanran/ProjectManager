@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-25 22:24:47
+@LastEditTime: 2020-02-26 08:31:12
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: /vprojects/vprjcore/platform_manager.py
@@ -139,7 +139,7 @@ class PlatformManager(object):
         return self._before_all_command(project)
 
     @dependency(["project_manager"])
-    def before_del_board(self, project):
+    def before_del_project(self, project):
         return self._before_all_command(project)
 
     @dependency(["project_manager"])

@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-25 22:37:14
+@LastEditTime: 2020-02-26 08:31:21
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: /vprojects/vprjcore/custom/platform_common.py
@@ -91,7 +91,7 @@ class PlatformCommon(object):
         return False
 
     @staticmethod
-    def del_board(project):
+    def del_project(project):
         log.debug("In!")
 
         json_info = {}

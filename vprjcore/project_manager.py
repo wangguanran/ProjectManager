@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-25 22:21:46
+@LastEditTime: 2020-02-26 08:30:58
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: /vprojects/vprjcore/project_manager.py
@@ -94,7 +94,7 @@ class ProjectManager(object):
         self.info_path = PROJECT_INFO_PATH
         pass
 
-    def before_del_board(self, project):
+    def before_del_project(self, project):
         log.debug("In!")
         self.info_path = BOARD_INFO_PATH
 

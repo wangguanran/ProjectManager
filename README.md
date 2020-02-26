@@ -2,7 +2,7 @@
  * @Author: WangGuanran
  * @Email: wangguanran@vanzotec.com
  * @Date: 2020-02-14 16:09:19
- * @LastEditTime: 2020-02-25 23:43:19
+ * @LastEditTime: 2020-02-26 08:31:31
  * @LastEditors: WangGuanran
  * @Description: vprojects README.md
  * @FilePath: /vprojects/README.md
@@ -42,7 +42,7 @@ new_project:
 ```log
 vprojects/.cache/logs/Log_20200225_223744.log
 
-[2020-02-25 22:37:44,542] [DEBUG     ] [project.py          ] [parse_cmd           ] [111  ]	argv = ['/home/dserver/build_projects2/build2/VZ6737M_65_I_N_vtrunk/vprojects/vprjcore/project.py', 'del_board', 'tnz801']
+[2020-02-25 22:37:44,542] [DEBUG     ] [project.py          ] [parse_cmd           ] [111  ]	argv = ['/home/dserver/build_projects2/build2/VZ6737M_65_I_N_vtrunk/vprojects/vprjcore/project.py', 'del_project', 'tnz801']
 ```
 
 * cprofile目录下保存代码的执行时间分析
