@@ -2,7 +2,7 @@
  * @Author: WangGuanran
  * @Email: wangguanran@vanzotec.com
  * @Date: 2020-02-14 16:09:19
- * @LastEditTime: 2020-02-26 08:31:31
+ * @LastEditTime: 2020-02-26 14:10:41
  * @LastEditors: WangGuanran
  * @Description: vprojects README.md
  * @FilePath: /vprojects/README.md
@@ -103,5 +103,10 @@ vprojects/new_project_base/new_project_base.json
 }
 
 ```
+
+# 计划添加
+
+1.po_manager.py add_to_po,new_po --common,del_po,list_po,cmp_po_diff
+2.自动保存patch文件时，添加注释信息，注释信息包括修改时间、修改人、邮件、修改日志。相关信息可以从git中读取
 
 [^keyword]:keyword在创建json文件时并不会主动生成，默认此值为"demo",是指明在以此平台为模板创建主板项目时，脚本会对文件名中出现的哪个字符串左替换操作
