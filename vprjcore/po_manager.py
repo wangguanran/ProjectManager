@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-25 21:42:53
+@LastEditTime: 2020-02-26 18:33:43
 @LastEditors: WangGuanran
 @Description: patch override py file
 @FilePath: /vprojects/vprjcore/po_manager.py
@@ -10,7 +10,7 @@
 import os
 import shutil
 
-from vprjcore.common import log, get_full_path
+from vprjcore.common import log, get_full_path, PLATFORM_ROOT_PATH, list_file_path
 
 
 class PatchOverride(object):
@@ -25,7 +25,7 @@ class PatchOverride(object):
             cls.__instance = super().__new__(cls)
         return cls.__instance
 
-    def __init__(self):
+    def __init__(self, args_dict=None):
         # self.support_list=[
         #     ""
         # ]
@@ -71,11 +71,47 @@ class PatchOverride(object):
 
     def before_compile_project(self, project):
         log.debug("In!")
+        prj_name = project.project_name
+        prj_po_path = get_full_path(prj_name, "po")
+        log.debug("prj_name = %s,prj_path = '%s'" % (prj_name, prj_po_path))
+        # destdir = os.path.join(prj_path, "po", "po_" +
+        #                        prj_name + "_bsp", "overrides")
+        # log.debug("destdir = '%s'" % destdir)
+
+        if os.path.exists(prj_po_path):
+            for po_dir_name in os.listdir(prj_po_path):
+                override_path = os.path.join(
+                    prj_po_path, po_dir_name, "overrides")
+                log.debug("override path = %s" % override_path)
+                destdir = os.path.dirname()
+                for file_name in list_file_path(destdir):
+                    file_path = os.path.dirname(file_name)
+                    abs_path = os.path.join(PLATFORM_ROOT_PATH, file_path)
+                    # if not os.path.exists(abs_path):
+                    #     os.makedirs(abs_path)
+                    log.debug("file name = '%s' abs path = '%s'" %
+                              (file_name, abs_path))
+                    # shutil.copy(file_name, abs_path)
+
+        else:
+            log.warning("There is no po directory in this project")
+
+        return True
 
     def after_compile_project(self, project):
         log.debug("In!")
+        return True
 
 
 # All plugin must contain this interface
 def get_module():
     return PatchOverride()
+
+
+def parse_cmd():
+    return args_dict
+
+
+if __name__ == "__main__":
+    args_dict = parse_cmd()
+    po = PatchOverride(args_dict)

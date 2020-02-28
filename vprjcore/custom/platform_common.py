@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-26 08:44:22
+@LastEditTime: 2020-02-26 16:44:38
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: /vprojects/vprjcore/custom/platform_common.py
@@ -118,6 +118,7 @@ class PlatformCommon(object):
     @staticmethod
     def compile_project(project):
         log.debug("In!")
+        return True
 
 
 # All platform scripts must contain this interface

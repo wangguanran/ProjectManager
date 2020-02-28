@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-21 11:03:15
-@LastEditTime: 2020-02-26 16:35:17
+@LastEditTime: 2020-02-26 16:43:51
 @LastEditors: WangGuanran
 @Description: Project manager py file
 @FilePath: /vprojects/vprjcore/project_manager.py
@@ -144,13 +144,12 @@ class ProjectManager(object):
 
         return True
 
-    def before_compile_project(self, project_name):
-        """
-        @description: get project information from cache file or db
-        @param {type} project_name:project name(str)
-        @return: project info(dict)
-        """
-        prj_info = None
+    def before_compile_project(self, project):
+        if project.args_dict["is_board"]:
+            project.info_path = BOARD_INFO_PATH
+        else:
+            project.info_path = PROJECT_INFO_PATH
+        log.debug("info path = '%s'" % project.info_path)
 
         # TODO Query the database to confirm whether the project data is updated
         # If yes, update the cache file. If no project information is found, an error will be returned
@@ -162,18 +161,20 @@ class ProjectManager(object):
         # END
 
         # Search project info in PROJECT_INFO_PATH first
-        if os.path.exists(PROJECT_INFO_PATH):
-            json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+        if os.path.exists(project.info_path):
+            json_info = json.load(open(project.info_path, "r"))
             for prj_name, temp_info in json_info.items():
-                if prj_name.lower() == project_name.lower():
+                if prj_name.lower() == project.project_name.lower():
                     prj_info = temp_info
+                    break
 
         if prj_info is None:
             log.warning("The project('%s') info is None" % project_name)
+            return False
         else:
-            prj_info["name"] = project_name.lower()
-            log.info("prj_info = %s" % prj_info)
-        return prj_info
+            log.debug("prj_info = %s" % prj_info)
+            project.platform_name = prj_info["platform_name"]
+            return True
 
 
 def get_module():
