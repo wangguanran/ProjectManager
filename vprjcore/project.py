@@ -2,40 +2,36 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-02-26 08:33:04
+@LastEditTime: 2020-02-29 10:32:09
 @LastEditors: WangGuanran
 @Description: project_manager py file
-@FilePath: /vprojects/vprjcore/project.py
+@File_Path: /vprojects/vprjcore/project.py
 '''
 
-import argparse
 import os
 import sys
+import json
+import argparse
 
-# import vprjcore.common
-from vprjcore.common import load_module, func_cprofile, log, get_full_path, VPRJCORE_VERSION, VPRJCORE_PLUGIN_PATH
+from vprjcore.project_manager import ProjectManager
+from vprjcore.platform_manager import PlatformManager
+from vprjcore.common import func_cprofile, log, get_full_path,PROJECT_INFO_PATH, VPRJCORE_VERSION, list_file_path
 
 
 class Project(object):
 
     def __init__(self, args_dict: dict, auto_dispatch=True):
-        """
-
-        :type args_dict: dict
-        """
-        log.debug("os.getcwd() = %s" % os.getcwd())
-        self.plugin_list = load_module(VPRJCORE_PLUGIN_PATH, 1)
-        log.debug("plugin list = %s" % self.plugin_list)
-
-        self.args_dict = args_dict
         self.operate = args_dict.pop("operate").lower()
-        self.project_name = args_dict.pop("project_name").lower()
-        log.debug("project_name = %s,operate = %s" %
-                  (self.project_name, self.operate))
+        self.name = args_dict.pop("project_name").lower()
+        self.is_board = args_dict.pop("is_board", False)
+        self.base = args_dict.pop("base", None)
 
-        if auto_dispatch:
-            log.info("%s '%s' down! Result = %s" %
-                     (self.operate, self.project_name, self.dispatch()))
+        self.platform = get_platform_name(self)
+        self.platform_handler = get_platform_handler(self)
+
+        # if auto_dispatch:
+        #     log.info("%s '%s' down! Result = %s" %
+        #              (self.operate, self.project_name, self.dispatch()))
 
     @func_cprofile
     def dispatch(self):
@@ -100,6 +96,82 @@ class Project(object):
         return self._polling_plugin_list_and_execute("after")
 
 
+def get_platform_name(p: Project):
+    platform = None
+
+    try:
+        json_info = json.load(open(PROJECT_INFO_PATH, "r"))
+        if p.name in json_info.keys():
+            platform = json_info[p.name].platform
+        elif p.base in json_info.keys():
+            platform = json_info[p.base].platform
+        else:
+            log.debug("Can not find the project's platform")
+    except FileNotFoundError:
+        log.exception("This file '%s' does not exists" % PROJECT_INFO_PATH)
+
+    return platform
+
+
+def update_platform_json_file(m: dict):
+    pass
+
+
+def get_platform_handler(p: Project):
+    platform_handler = None
+
+    if p.platform is None:
+        log.error("The platform is None,please check the project's name")
+        return None
+
+    try:
+        with open(PLATFORM_INFO_PATH, "r") as f_read:
+            pl_info = json.load(f_read)
+            for support_list in pl_info.keys():
+                if p.platform in support_list:
+                    name = pl_info[support_list].name
+                    package = pl_info[support_list].package
+                    import_module = __import__(package, fromlist=name)
+                    module = import_module.get_full_path()
+                    for attr in module.__dir__:
+                        funcattrs = getattr(module, attr)
+                        if callable(funcattrs):
+                            platform_handler[attr] = funcattrs
+                return platform_handler
+    except:
+        log.debug("Can not find file : '%s'" % PLATFORM_INFO_PATH)
+
+    # Scan module info
+    for dir_path in list_file_path(VPROJECTS_PATH, only_dir=True):
+        for file_path in list_file_path(dir_path):
+            module["name"] = os.path.basename(file_path).split()[0]
+            start_index = file_path.find("vprjcore")
+            end_index = file_path.find(".py")
+            module["package"] = file_path[start_index:end_index].replace(
+                os.sep, ".")
+
+            import_module = __import__(
+                module["package"], fromlist=[module["name"]])
+            if hasattr(import_module, "get_platform"):
+                module = import_module.get_platform()
+                if hasattr(module, "support_list"):
+                    if pl in module.support_list:
+                        for attr in module.__dir__:
+                            funcattrs = getattr(module, attr)
+                            if callable(funcattrs):
+                                platform_handler[attr] = funcattrs
+                    update_platform_json_file(module)
+                    return platform_handler
+                else:
+                    log.warning(
+                        "This platform plug-in does not have the 'support_list' attribute")
+            else:
+                log.warning(
+                    "This platform plug-in does not have the 'get_platform' attribute")
+
+    return None
+
+
 def parse_cmd():
     """
     @description: Parsing command line parameters
@@ -110,13 +182,13 @@ def parse_cmd():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', action="version",
                         version=VPRJCORE_VERSION)
+
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")
 
-    group = parser.add_argument_group("new_project")
-    group.add_argument('-b', action="store_true", dest="is_board",
-                       help="specify the new project as the board project")
-    group.add_argument(
+    parser.add_argument('-b', action="store_true", dest="is_board",
+                        help="specify the new project as the board project")
+    parser.add_argument(
         "--base", help="specify a new project to be created based on this")
 
     args = parser.parse_args()
