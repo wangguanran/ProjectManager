@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 18:41:42
-@LastEditTime: 2020-02-26 08:31:12
+@LastEditTime: 2020-02-29 11:04:55
 @LastEditors: WangGuanran
 @Description: platform manager py ile
 @FilePath: /vprojects/vprjcore/platform_manager.py
@@ -14,6 +14,7 @@ import git
 import shutil
 import json
 import datetime
+from collections import OrderedDict
 
 # import vprjcore.common
 from vprjcore.common import log, get_full_path, load_module, dependency, VPRJCORE_VERSION, list_file_path, func_cprofile, PLATFORM_PLUGIN_PATH, PLATFORM_ROOT_PATH
@@ -53,36 +54,33 @@ class PlatformManager(object):
             return func_attr()
 
     def _new_platform(self):
-        log.debug("In")
         log.debug("platform root path = %s" % PLATFORM_ROOT_PATH)
         except_list = [
-            "out", ".repo", "vprojects", "zprojects", "build"
+            "vprojects", "zprojects"
         ]
-        json_info = {}
         file_list = []
         link_list = {}
-        platform_info = {}
+        platform_info = OrderedDict()
 
         if os.path.basename(os.getcwd()) in ["vprojects", "vprjcore"]:
             log.error("This command cannot be executed in the current directory")
             return False
 
-        platform_name = input("Please input the platform name:")
-        log.debug("platform name = %s" % platform_name)
+        platform = input("Please input the platform's name:").lower()
+        platform_dir_path = get_full_path(platform)
+        if not os.path.exists(platform_dir_path):
+            os.makedirs(platform_dir_path)
+            log.debug("platform = %s" % platform)
+        else:
+            log.warning("The platform is already exists!")
+            return False
+        platform_info["platform"] = platform.upper()
 
         create_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log.debug("create time = %s" % create_time)
         platform_info["create_time"] = create_time
 
-        platform_dir_path = get_full_path("new_project_base", platform_name)
-        if not os.path.exists(platform_dir_path):
-            os.makedirs(platform_dir_path)
-        else:
-            log.warning("The platform is already exists!")
-            return False
-
-        json_file_path = get_full_path(
-            "new_project_base", "new_project_base.json")
+        json_file_path = get_full_path(platform, platform+".json")
 
         for dirname in list_file_path(PLATFORM_ROOT_PATH, max_depth=1, only_dir=True):
             if os.path.basename(dirname) not in except_list:
@@ -110,23 +108,21 @@ class PlatformManager(object):
                 except git.exc.InvalidGitRepositoryError:
                     continue
 
-        platform_info["file_list"] = file_list
         platform_info["link_list"] = link_list
-        if os.path.exists(json_file_path):
-            with open(json_file_path, "r") as f_read:
-                json_info = json.load(f_read)
-        json_info[platform_name] = platform_info
+        platform_info["file_list"] = file_list
         with open(json_file_path, "w+") as f_write:
-            json.dump(json_info, f_write, indent=4, sort_keys=True)
+            json.dump(platform_info, f_write, indent=4)
+
+        
         return True
 
     def _before_all_command(self, project):
-        platform_name = project.platform_name
-        log.debug("platform name = %s" % platform_name)
+        platform = project.platform
+        log.debug("platform name = %s" % platform)
 
         for platform in self.platform_list:
             for name in platform.support_list:
-                if platform_name.upper() == name.upper():
+                if platform.upper() == name.upper():
                     project.platform_handler = platform.operate_list
                     log.debug("compatible platform successful!")
                     return True
@@ -171,30 +167,3 @@ def parse_cmd():
 if __name__ == "__main__":
     args_dict = parse_cmd()
     platform = PlatformManager(args_dict)
-
-'''
-from vprjcore.log import log
-
-class Platform(object):
-
-    def __init__(self):
-        self.support_list = [
-            "MT6735",
-            "MT6739",
-        ]
-
-    def new_project(self, *args, **kwargs):
-        log.debug("In!")
-        log.debug(args[0])
-
-    def del_project(self, *args, **kwargs):
-        log.debug("In!")
-
-    def compile_project(self, *args, **kwargs):
-        log.debug("In!")
-
-
-# All platform scripts must contain this interface
-def get_platform():
-    return Platform()
-'''
