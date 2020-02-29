@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-26 16:44:38
+@LastEditTime: 2020-02-28 23:27:31
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
-@FilePath: /vprojects/vprjcore/custom/platform_common.py
+@FilePath: /vprojects/vprjcore/MTK/mtk_common.py
 '''
 
 import os
@@ -122,5 +122,5 @@ class PlatformCommon(object):
 
 
 # All platform scripts must contain this interface
-def get_module():
+def get_platform():
     return PlatformCommon()
