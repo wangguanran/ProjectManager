@@ -2,7 +2,7 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 22:36:07
-@LastEditTime: 2020-02-28 23:27:31
+@LastEditTime: 2020-02-29 17:10:56
 @LastEditors: WangGuanran
 @Description: Mtk Common Operate py file
 @FilePath: /vprojects/vprjcore/MTK/mtk_common.py
@@ -14,8 +14,9 @@ import json
 import shutil
 import fnmatch
 
-# import vprjcore.common
-from vprjcore.common import log, get_full_path, list_file_path, NEW_PROJECT_DIR, DEFAULT_KEYWORD, BOARD_INFO_PATH
+from vprjcore.common import log, get_full_path, list_file_path
+from vprjcore.common import PROJECT_INFO_PATH, NEW_PROJECT_DIR, DEFAULT_KEYWORD, BOARD_INFO_PATH
+from vprjcore.project import Project
 
 
 class PlatformCommon(object):
@@ -27,22 +28,10 @@ class PlatformCommon(object):
         ]
 
     @staticmethod
-    def new_project(project):
-        log.debug("In!")
-
-        platform_json_info = {}
+    def new_project(p: Project):
         keyword = DEFAULT_KEYWORD
-        project_name = project.project_name
-        base_name = project.base_name
-        is_board = project.args_dict.pop("is_board", False)
-        log.debug("project_name = %s,is_board = %s,base_name = %s" %
-                  (project_name, is_board, base_name))
-
-        if project.by_new_project_base:
-            basedir = get_full_path("new_project_base", base_name.lower())
-        else:
-            basedir = get_full_path(".", base_name.lower())
-        destdir = get_full_path(project_name)
+        basedir = get_full_path(p.base)
+        destdir = get_full_path(p.name)
         log.debug("basedir = '%s' destdir = '%s'" % (basedir, destdir))
 
         if os.path.exists(basedir):
@@ -50,40 +39,40 @@ class PlatformCommon(object):
                 log.error(
                     "The project has been created and cannot be created repeatedly")
             else:
-                if project.by_new_project_base:
-                    platform_json_info_path = get_full_path(
-                        "new_project_base", "new_project_base.json")
-                    log.debug("platform json info path = %s" %
-                              platform_json_info_path)
-                    with open(platform_json_info_path, "r") as f_read:
-                        platform_json_info = json.load(f_read)
-                        if hasattr(platform_json_info[base_name], "keyword"):
-                            keyword = platform_json_info[base_name]["keyword"]
-                else:
-                    keyword = base_name
+                with open(PROJECT_INFO_PATH, "r") as f_read:
+                    platform_json_info = {}
+                    platform_json_info = json.load(f_read)
+                    if hasattr(platform_json_info[p.base], "keyword"):
+                        keyword = platform_json_info[p.base]["keyword"]
+                    else:
+                        if p.base.upper() == p.platform.upper():
+                            keyword = DEFAULT_KEYWORD
+                        else:
+                            keyword = p.base
+                log.debug("keyword='%s'" % keyword)
 
-                shutil.copytree(basedir, destdir, symlinks="True")
-                for p in list_file_path(destdir, list_dir=True):
-                    if (not os.path.isdir(p)) and (fnmatch.fnmatch(os.path.basename(p), "env*.ini") or p.endswith(".patch")):
+                shutil.copytree(basedir, destdir, symlinks=True)
+                for file_path in list_file_path(destdir, list_dir=True):
+                    if (fnmatch.fnmatch(os.path.basename(file_path), "env*.ini")
+                            or file_path.endswith(".patch")):
                         try:
-                            log.debug("modify file content '%s'" % p)
-                            with open(p, "r+") as f_rw:
+                            log.debug("modify file content '%s'" % file_path)
+                            with open(file_path, "r+") as f_rw:
                                 content = f_rw.readlines()
                                 f_rw.seek(0)
                                 f_rw.truncate()
                                 for line in content:
-                                    line = line.replace(
-                                        keyword, project_name)
+                                    line = line.replace(keyword, p.name)
                                     f_rw.write(line)
                         except:
-                            log.error("Can not read file '%s'" % p)
+                            log.error("Can not read file '%s'" % file_path)
                             return False
-                    if keyword in os.path.basename(p):
+                    if keyword in os.path.basename(file_path):
                         p_dest = os.path.join(os.path.dirname(
-                            p), os.path.basename(p).replace(keyword, project_name))
+                            file_path), os.path.basename(file_path).replace(keyword, p.name))
                         log.debug(
-                            "rename src file = '%s' dest file = '%s'" % (p, p_dest))
-                        os.rename(p, p_dest)
+                            "rename src file = '%s' dest file = '%s'" % (file_path, p_dest))
+                        os.rename(file_path, p_dest)
                 return True
         else:
             log.error("No platform file, unable to create new project")
@@ -91,23 +80,22 @@ class PlatformCommon(object):
         return False
 
     @staticmethod
-    def del_project(project):
+    def del_project(p: Project):
         log.debug("In!")
 
         json_info = {}
-        project_path = get_full_path(project.project_name)
+        project_path = get_full_path(p.name)
         log.debug("project path = %s" % project_path)
 
         if os.path.exists(project_path):
             shutil.rmtree(project_path)
         else:
-            log.warning("The '%s' path is already delete" %
-                        project.project_name)
+            log.warning("The '%s' path is already delete" % p.name)
         try:
-            with open(project.info_path, "r") as f_read:
+            with open(p.info_path, "r") as f_read:
                 json_info = json.load(f_read)
-                json_info[project.project_name]["is_delete"] = True
-            with open(project.info_path, "w+") as f_write:
+                json_info[p.name]["is_delete"] = True
+            with open(p.info_path, "w+") as f_write:
                 json.dump(json_info, f_write, indent=4)
         except:
             log.exception("Can not find info file")

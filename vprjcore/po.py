@@ -2,10 +2,10 @@
 @Author: WangGuanran
 @Email: wangguanran@vanzotec.com
 @Date: 2020-02-16 17:18:01
-@LastEditTime: 2020-02-26 18:33:43
+@LastEditTime: 2020-02-29 17:18:50
 @LastEditors: WangGuanran
 @Description: patch override py file
-@FilePath: /vprojects/vprjcore/po_manager.py
+@FilePath: /vprojects/vprjcore/po.py
 '''
 import os
 import shutil
