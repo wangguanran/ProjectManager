@@ -1,13 +1,3 @@
-'''
-@Author: WangGuanran
-@Email: wangguanran@vanzotec.com
-@Date: 2020-02-14 20:01:07
-@LastEditTime: 2020-03-04 21:25:50
-@LastEditors: WangGuanran
-@Description: project_manager py file
-@File_Path: /vprojects/vprjcore/project.py
-'''
-
 import os
 import sys
 import git

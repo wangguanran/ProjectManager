@@ -1,12 +1,3 @@
-<!--
- * @Author: WangGuanran
- * @Email: wangguanran@vanzotec.com
- * @Date: 2020-02-14 16:09:19
- * @LastEditTime: 2020-02-26 14:10:41
- * @LastEditors: WangGuanran
- * @Description: vprojects README.md
- * @FilePath: /vprojects/README.md
- -->
 
 # vprojects
 

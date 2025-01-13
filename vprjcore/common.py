@@ -1,12 +1,3 @@
-'''
-@Author: WangGuanran
-@Email: wangguanran@vanzotec.com
-@Date: 2020-02-16 00:35:02
-@LastEditTime: 2020-02-26 08:34:10
-@LastEditors: WangGuanran
-@Description: common py file
-@FilePath: /vprojects/vprjcore/common.py
-'''
 import cProfile
 import logging
 import logging.config
