@@ -6,10 +6,11 @@ import shutil
 import datetime
 import argparse
 import threading
+import fnmatch
 from collections import OrderedDict
 
-from vprjcore.common import func_cprofile, log, get_full_path, list_file_path
-from vprjcore.common import PLATFORM_ROOT_PATH, PROJECT_INFO_PATH, VPRJCORE_VERSION, VPRJCORE_PLUGIN_PATH
+from .common import func_cprofile, log, get_full_path, list_file_path
+from .common import PLATFORM_ROOT_PATH, PROJECT_INFO_PATH, VPRJCORE_VERSION, VPRJCORE_PLUGIN_PATH
 
 DEFAULT_KEYWORD = "demo"
 
@@ -197,7 +198,8 @@ class Project(object):
             log.debug("%s is null" % PROJECT_INFO_PATH)
 
         if self.name in json_info.keys():
-            if json[self.name]["status"] == status:
+            if json_info[self.name]["status"] == status:
+                return True
 
         prj_info["platform"] = self.platform.upper()
         prj_info["create_time"] = datetime.datetime.now().strftime(
@@ -274,12 +276,15 @@ def parse_cmd():
     parser.add_argument(
         "--base", help="specify a new project to be created based on this", default="None")
 
+    args = parser.parse_args()
+    # log.info(args.__dict__)
+    return args.__dict__
 
-args = parser.parse_args()
-# log.info(args.__dict__)
-return args.__dict__
+
+def main():
+    args_dict = parse_cmd()
+    project = Project(args_dict)
 
 
 if __name__ == "__main__":
-    args_dict = parse_cmd()
-    project = Project(args_dict)
+    main()
