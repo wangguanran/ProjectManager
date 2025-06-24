@@ -5,11 +5,27 @@ set -e
 
 echo "--- Checking if vprjcore is installed ---"
 
-# Check if the package is installed before trying to uninstall
-if pip3 show vprjcore > /dev/null 2>&1; then
-  echo "--> vprjcore is installed. Uninstalling..."
-  pip3 uninstall -y vprjcore
-  echo "--- Uninstallation complete ---"
-else
-  echo "--> vprjcore is not installed. Skipping uninstallation."
-fi 
+# Uninstall from system environment (pip)
+if command -v pip3 &> /dev/null; then
+    echo "Uninstalling vprjcore from system environment (pip)..."
+    pip3 uninstall -y vprjcore || true
+fi
+
+# Remove standalone binary from ~/.local/bin
+TARGET_BIN="$HOME/.local/bin/vprj"
+if [ -f "$TARGET_BIN" ]; then
+    echo "Removing standalone binary: $TARGET_BIN"
+    rm -f "$TARGET_BIN"
+fi
+
+# Remove venv directory and run_vprj.sh script
+if [ -d "venv" ]; then
+    echo "Removing venv directory..."
+    rm -rf venv
+fi
+if [ -f "run_vprj.sh" ]; then
+    echo "Removing run_vprj.sh script..."
+    rm -f run_vprj.sh
+fi
+
+echo "Uninstallation complete." 

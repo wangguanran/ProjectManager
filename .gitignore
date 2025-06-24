@@ -130,3 +130,5 @@ dmypy.json
 
 # Visual studio code file
 .vscode
+vprj
+run_vprj.sh
