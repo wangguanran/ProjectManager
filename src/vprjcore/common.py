@@ -30,8 +30,7 @@ LOG_PATH = get_full_path(".cache", "logs")
 CPROFILE_PATH = get_full_path(".cache", "cprofile")
 PROFILE_DUMP_NAME = "profile_dump"
 
-BOARD_INFO_PATH = get_full_path("board_info.json")
-PROJECT_INFO_PATH = get_full_path("project_info.json")
+VPRJ_CONFIG_PATH = get_full_path("vprj_config.json")
 
 PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "custom")
 PLATFORM_ROOT_PATH = os.path.dirname(get_full_path())

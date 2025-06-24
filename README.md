@@ -1,7 +1,6 @@
-
 # vprojects
 
-Android项目管理
+通用项目管理工具
 
 ## 已完成
 
