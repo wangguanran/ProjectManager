@@ -7,6 +7,6 @@ echo "--- Cleaning up old builds ---"
 rm -rf build dist vprjcore.egg-info
 
 echo "--- Building package ---"
-python3 setup.py sdist bdist_wheel
+python3 -m build
 
 echo "--- Build complete. Find the artifacts in the 'dist' directory. ---" 

@@ -1,3 +1,33 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta" 
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vprjcore"
+version = "0.0.1"
+authors = [
+  { name="wangguanran", email="elvans.wang@gmail.com" },
+]
+description = "A project manager for V-Projects."
+readme = "README.md"
+requires-python = ">=3.6"
+license = { file = "LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "GitPython",
+    'importlib-metadata; python_version < "3.8"',
+]
+
+[project.urls]
+"Homepage" = "https://github.com/wangguanran/ProjectManager"
+"Bug Tracker" = "https://github.com/wangguanran/ProjectManager/issues"
+
+[project.scripts]
+vprj = "vprjcore.project:main"
+
+[tool.setuptools.packages.find]
+where = ["src"] 
