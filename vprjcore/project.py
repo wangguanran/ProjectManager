@@ -9,8 +9,8 @@ import threading
 import fnmatch
 from collections import OrderedDict
 
-from .common import func_cprofile, log, get_full_path, list_file_path
-from .common import PLATFORM_ROOT_PATH, PROJECT_INFO_PATH, VPRJCORE_VERSION, VPRJCORE_PLUGIN_PATH
+from .common import func_cprofile, log, get_full_path, list_file_path, get_version
+from .common import PLATFORM_ROOT_PATH, PROJECT_INFO_PATH, VPRJCORE_PLUGIN_PATH
 
 DEFAULT_KEYWORD = "demo"
 
@@ -264,7 +264,7 @@ def parse_cmd():
     log.debug("argv = %s" % sys.argv)
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', action="version",
-                        version=VPRJCORE_VERSION)
+                        version=get_version())
 
     parser.add_argument("operate", help="supported operations")
     parser.add_argument("project_name", help="project name")

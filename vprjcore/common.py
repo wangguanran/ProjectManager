@@ -6,6 +6,11 @@ import pstats
 import shutil
 import time
 from functools import partial, wraps
+try:
+    from importlib import metadata
+except ImportError:
+    # Python < 3.8
+    import importlib_metadata as metadata
 
 if os.path.basename(os.getcwd()) == "vprojects":
     get_full_path = partial(os.path.join, os.getcwd())
@@ -14,7 +19,12 @@ elif os.path.basename(os.getcwd()) in ["vprjcore", "scripts"]:
 else:
     get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
 
-VPRJCORE_VERSION = "0.0.1"
+def get_version():
+    try:
+        return metadata.version("vprjcore")
+    except metadata.PackageNotFoundError:
+        # package is not installed
+        return "0.0.0-dev"
 
 LOG_PATH = get_full_path(".cache", "logs")
 CPROFILE_PATH = get_full_path(".cache", "cprofile")

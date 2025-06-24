@@ -21,6 +21,7 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=[
         'GitPython',
+        'importlib-metadata; python_version < "3.8"',
     ],
     entry_points={
         'console_scripts': [
