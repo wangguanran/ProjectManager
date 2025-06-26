@@ -1,6 +1,5 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../vprjcore')))
 import shutil
 
 from common import log, get_full_path, PLATFORM_ROOT_PATH, list_file_path

@@ -14,14 +14,14 @@ except ImportError:
 
 if os.path.basename(os.getcwd()) == "vprojects":
     get_full_path = partial(os.path.join, os.getcwd())
-elif os.path.basename(os.getcwd()) in ["vprjcore", "scripts"]:
+elif os.path.basename(os.getcwd()) in ["scripts"]:
     get_full_path = partial(os.path.join, os.path.dirname(os.getcwd()))
 else:
     get_full_path = partial(os.path.join, os.getcwd(), "vprojects")
 
 def get_version():
     try:
-        return metadata.version("vprjcore")
+        return metadata.version("projectmanager")
     except metadata.PackageNotFoundError:
         # package is not installed
         return "0.0.0-dev"
@@ -32,13 +32,13 @@ PROFILE_DUMP_NAME = "profile_dump"
 
 VPRJ_CONFIG_PATH = get_full_path("vprj_config.json")
 
-PLATFORM_PLUGIN_PATH = get_full_path("vprjcore", "custom")
+PLATFORM_PLUGIN_PATH = get_full_path("custom")
 PLATFORM_ROOT_PATH = os.path.dirname(get_full_path())
 
 NEW_PROJECT_DIR = get_full_path("new_project_base")
 DEFAULT_KEYWORD = "demo"
 
-VPRJCORE_PLUGIN_PATH = get_full_path("vprjcore")
+VPRJCORE_PLUGIN_PATH = get_full_path()
 
 
 def dependency(depend_list):

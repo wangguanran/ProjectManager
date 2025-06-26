@@ -11,8 +11,8 @@ import threading
 import fnmatch
 from collections import OrderedDict
 
-from vprjcore.common import func_cprofile, log, get_full_path, list_file_path, get_version
-from vprjcore.common import PLATFORM_ROOT_PATH, VPRJ_CONFIG_PATH, VPRJCORE_PLUGIN_PATH
+from common import func_cprofile, log, get_full_path, list_file_path, get_version
+from common import PLATFORM_ROOT_PATH, VPRJ_CONFIG_PATH, VPRJCORE_PLUGIN_PATH
 
 DEFAULT_KEYWORD = "demo"
 

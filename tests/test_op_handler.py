@@ -3,7 +3,7 @@ import os
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
-from vprjcore.project_manager import ProjectManager
+from project_manager import ProjectManager
 
 class DummyArgs(dict):
     def pop(self, k, default=None):

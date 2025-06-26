@@ -16,9 +16,9 @@ if [ "$choice" == "1" ]; then
         echo "pip3 not found. Please install pip3 first."
         exit 1
     fi
-    WHEEL_FILE=$(ls dist/*.whl | head -n 1)
+    WHEEL_FILE=$(ls out/*.whl | head -n 1)
     if [ -z "$WHEEL_FILE" ]; then
-        echo "No .whl package found in dist directory. Please build first."
+        echo "No .whl package found in out directory. Please build first."
         exit 1
     fi
     pip3 install --upgrade pip
@@ -27,13 +27,13 @@ if [ "$choice" == "1" ]; then
 
 elif [ "$choice" == "2" ]; then
     echo "--- Installing standalone binary ---"
-    if [ ! -f dist/vprj ]; then
-        echo "dist/vprj binary not found. Please build first."
+    if [ ! -f out/vprj ]; then
+        echo "out/vprj binary not found. Please build first."
         exit 1
     fi
     TARGET_BIN="$HOME/.local/bin"
     mkdir -p "$TARGET_BIN"
-    cp dist/vprj "$TARGET_BIN/vprj"
+    cp out/vprj "$TARGET_BIN/vprj"
     chmod +x "$TARGET_BIN/vprj"
     echo "Copied vprj to $TARGET_BIN/vprj"
     echo "Make sure $TARGET_BIN is in your PATH."
@@ -52,9 +52,9 @@ elif [ "$choice" == "3" ]; then
     fi
     source venv/bin/activate
     pip install --upgrade pip
-    WHEEL_FILE=$(ls dist/*.whl | head -n 1)
+    WHEEL_FILE=$(ls out/*.whl | head -n 1)
     if [ -z "$WHEEL_FILE" ]; then
-        echo "No .whl package found in dist directory. Please build first."
+        echo "No .whl package found in out directory. Please build first."
         deactivate
         exit 1
     fi
