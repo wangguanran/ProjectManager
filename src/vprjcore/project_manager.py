@@ -1,5 +1,7 @@
-import os
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 import git
 import json
 import shutil
@@ -15,64 +17,41 @@ from vprjcore.common import PLATFORM_ROOT_PATH, VPRJ_CONFIG_PATH, VPRJCORE_PLUGI
 DEFAULT_KEYWORD = "demo"
 
 
-class Project(object):
+class ProjectManager(object):
     """
-    Project management class. Handles project creation, deletion, and dynamic plugin operation dispatch.
+    Project utility class. Provides project management and plugin operation features.
     """
 
-    def __init__(self, args_dict: dict):
+    def new_project(self, name, type_, base=None):
         """
-        Initialize Project instance and execute the specified operation.
+        Create a new project.
         Args:
-            args_dict (dict): Command line arguments as a dictionary.
-        """
-        operate = args_dict.pop("operate").lower()
-        self.name = args_dict.pop("name").lower()
-        self.type = args_dict.pop("type", None)
-        if operate == "new":
-            if self.type not in ["board", "projects"]:
-                log.error("When operate is 'new', --type must be 'board' or 'projects'.")
-                sys.exit(1)
-        op_handler = self._get_op_handler()
-        self.executed(operate, op_handler)
-
-    @func_cprofile
-    def executed(self, operate, op_handler):
-        """
-        Execute the operation if it exists in the operation handler.
-        Args:
-            operate (str): Operation name.
-            op_handler (dict): Operation name to function mapping.
-        """
-        if operate in op_handler.keys():
-            if op_handler[operate](self):
-                log.info("Operation succeeded!")
-            else:
-                log.info("Operation failed!")
-        else:
-            log.warning("Operation not supported.")
-
-    def new_project(self):
-        """
-        Create a new project by copying from a base project directory, replacing keywords, and renaming files as needed.
+            name (str): New project name.
+            type_ (str): Type, 'board' or 'projects'.
+            base (str): Base project name.
         Returns:
-            bool: True if successful, False otherwise.
+            bool: True if success, otherwise False.
         """
         keyword = DEFAULT_KEYWORD
-        basedir = get_full_path(self.base)
-        destdir = get_full_path(self.name)
+        base = base or name
+        basedir = get_full_path(base)
+        destdir = get_full_path(name)
         log.debug("basedir = '%s' destdir = '%s'" % (basedir, destdir))
+
+        if type_ not in ["board", "projects"]:
+            log.error("--type must be 'board' or 'projects'")
+            return False
 
         if os.path.exists(basedir):
             if os.path.exists(destdir):
-                log.error("The project has already been created and cannot be created repeatedly.")
+                log.error("Project already exists, cannot create repeatedly.")
             else:
                 with open(VPRJ_CONFIG_PATH, "r") as f_read:
                     platform_json_info = json.load(f_read)
-                    if hasattr(platform_json_info[self.base], "keyword"):
-                        keyword = platform_json_info[self.base]["keyword"]
+                    if hasattr(platform_json_info[base], "keyword"):
+                        keyword = platform_json_info[base]["keyword"]
                     else:
-                        keyword = DEFAULT_KEYWORD if self.base == self.name else self.base
+                        keyword = DEFAULT_KEYWORD if base == name else base
                 log.debug("keyword='%s'" % keyword)
 
                 shutil.copytree(basedir, destdir, symlinks=True)
@@ -86,47 +65,75 @@ class Project(object):
                                 f_rw.seek(0)
                                 f_rw.truncate()
                                 for line in content:
-                                    line = line.replace(keyword, self.name)
+                                    line = line.replace(keyword, name)
                                     f_rw.write(line)
-                        except:
-                            log.error("Cannot read file '%s'" % file_path)
+                        except Exception as e:
+                            log.error(f"Cannot read file '{file_path}': {e}")
                             return False
                     if keyword in os.path.basename(file_path):
-                        p_dest = os.path.join(os.path.dirname(file_path), os.path.basename(file_path).replace(keyword, self.name))
+                        p_dest = os.path.join(os.path.dirname(file_path), os.path.basename(file_path).replace(keyword, name))
                         log.debug("Renaming src file = '%s' dest file = '%s'" % (file_path, p_dest))
                         os.rename(file_path, p_dest)
                 return True
         else:
             log.error("Base project directory does not exist, unable to create new project.")
-
         return False
 
-    def del_project(self):
+    def del_project(self, name, info_path=None):
         """
-        Delete the specified project directory and update its status in the config file if possible.
+        Delete the specified project directory and update its status in the config file.
+        Args:
+            name (str): Project name.
+            info_path (str): Config file path.
         Returns:
-            bool: True if successful, False otherwise.
+            bool: True if success, otherwise False.
         """
         log.debug("In del_project!")
         json_info = {}
-        project_path = get_full_path(self.name)
+        project_path = get_full_path(name)
         log.debug("project path = %s" % project_path)
 
         if os.path.exists(project_path):
             shutil.rmtree(project_path)
         else:
-            log.warning("The '%s' path is already deleted." % self.name)
+            log.warning("'%s' path already deleted." % name)
+        if not info_path:
+            info_path = getattr(self, 'info_path', None)
         try:
-            with open(self.info_path, "r") as f_read:
+            with open(info_path, "r") as f_read:
                 json_info = json.load(f_read)
-                json_info[self.name]["status"] = "deleted"
-            with open(self.info_path, "w+") as f_write:
+                json_info[name]["status"] = "deleted"
+            with open(info_path, "w+") as f_write:
                 json.dump(json_info, f_write, indent=4)
-        except:
-            log.exception("Cannot find info file.")
+        except Exception as e:
+            log.error(f"Cannot find info file: {e}")
             return False
-
         return True
+
+    def get_supported_operations(self):
+        """
+        Get all supported operation names from plugins.
+        Returns:
+            list: List of operation name strings.
+        """
+        op_handler = self._get_op_handler()
+        return list(op_handler.keys())
+
+    def execute_operation(self, operate, *args, **kwargs):
+        """
+        Execute the specified operation.
+        Args:
+            operate (str): Operation name.
+            *args, **kwargs: Arguments for the operation.
+        Returns:
+            Operation return value.
+        """
+        op_handler = self._get_op_handler()
+        if operate in op_handler:
+            return op_handler[operate](*args, **kwargs)
+        else:
+            log.warning("Unsupported operation: %s" % operate)
+            return None
 
     def _get_op_handler(self):
         """
@@ -149,7 +156,6 @@ class Project(object):
                 spec = importlib.util.spec_from_file_location(module_name, script_path)
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
-                # Collect all callable functions
                 for attr in dir(mod):
                     if attr.startswith("_"):
                         continue
@@ -174,6 +180,7 @@ def parse_cmd():
     parser.add_argument("operate", choices=["build", "new", "delete"], help="supported operations: build/new/delete")
     parser.add_argument("name", help="project or board name")
     parser.add_argument("--type", help="type for new operation: board or projects", choices=["board", "projects"], default=None)
+    parser.add_argument("--base", help="base project name for new operation")
     args = parser.parse_args()
     return args.__dict__
 
@@ -183,7 +190,20 @@ def main():
     Main entry point for the project manager CLI.
     """
     args_dict = parse_cmd()
-    project = Project(args_dict)
+    manager = ProjectManager()
+    operate = args_dict["operate"]
+    name = args_dict["name"]
+    type_ = args_dict.get("type")
+    base = args_dict.get("base")
+    if operate == "new":
+        manager.new_project(name=name, type_=type_, base=base)
+    elif operate == "delete":
+        manager.del_project(name=name)
+    else:
+        # Try to execute as plugin operation
+        result = manager.execute_operation(operate, name)
+        if result is None:
+            log.error(f"Operation '{operate}' is not supported.")
 
 
 if __name__ == "__main__":
