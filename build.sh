@@ -19,8 +19,8 @@ echo "--- Build complete. Find the artifacts in the 'out' directory. ---"
 # 生成独立二进制（需已安装 pyinstaller）
 if command -v pyinstaller &> /dev/null; then
     echo "--- Building standalone binary with pyinstaller ---"
-    pyinstaller --onefile -n vprj src/project_manager.py --distpath $OUT_DIR --workpath $OUT_DIR/build --specpath $OUT_DIR
-    echo "Binary generated at out/vprj"
+    pyinstaller --onefile -n pm src/project_manager.py --distpath $OUT_DIR --workpath $OUT_DIR/build --specpath $OUT_DIR
+    echo "Binary generated at out/pm"
 else
     echo "pyinstaller 未安装，跳过二进制打包。可用 pip install pyinstaller 安装。"
 fi

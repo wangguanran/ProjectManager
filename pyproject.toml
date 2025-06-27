@@ -26,7 +26,7 @@ dependencies = [
 "Bug Tracker" = "https://github.com/wangguanran/ProjectManager/issues"
 
 [project.scripts]
-vprj = "vprjcore.project:main"
+pm = "project_manager:main"
 
 [tool.setuptools.packages.find]
 where = ["src"] 

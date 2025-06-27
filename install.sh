@@ -27,19 +27,19 @@ if [ "$choice" == "1" ]; then
 
 elif [ "$choice" == "2" ]; then
     echo "--- Installing standalone binary ---"
-    if [ ! -f out/vprj ]; then
-        echo "out/vprj binary not found. Please build first."
+    if [ ! -f out/pm ]; then
+        echo "out/pm binary not found. Please build first."
         exit 1
     fi
     TARGET_BIN="$HOME/.local/bin"
     mkdir -p "$TARGET_BIN"
-    cp out/vprj "$TARGET_BIN/vprj"
-    chmod +x "$TARGET_BIN/vprj"
-    echo "Copied vprj to $TARGET_BIN/vprj"
+    cp out/pm "$TARGET_BIN/pm"
+    chmod +x "$TARGET_BIN/pm"
+    echo "Copied pm to $TARGET_BIN/pm"
     echo "Make sure $TARGET_BIN is in your PATH."
     echo "You can temporarily add it with:"
     echo "  export PATH=\"$TARGET_BIN:\$PATH\""
-    echo "Then you can use the vprj command in any terminal."
+    echo "Then you can use the pm command in any terminal."
 
 elif [ "$choice" == "3" ]; then
     echo "--- venv isolated installation ---"
@@ -60,13 +60,13 @@ elif [ "$choice" == "3" ]; then
     fi
     pip install "$WHEEL_FILE"
     deactivate
-    cat > run_vprj.sh << EOF
+    cat > run_pm.sh << EOF
 #!/bin/bash
 source "$(dirname "$0")/venv/bin/activate"
-vprj "\$@"
+pm "\$@"
 EOF
-    chmod +x run_vprj.sh
-    echo "Installed in venv environment. Use ./run_vprj.sh to start the tool."
+    chmod +x run_pm.sh
+    echo "Installed in venv environment. Use ./run_pm.sh to start the tool."
 else
     echo "Invalid option. Exiting."
     exit 1

@@ -12,20 +12,20 @@ if command -v pip3 &> /dev/null; then
 fi
 
 # Remove standalone binary from ~/.local/bin
-TARGET_BIN="$HOME/.local/bin/vprj"
+TARGET_BIN="$HOME/.local/bin/pm"
 if [ -f "$TARGET_BIN" ]; then
     echo "Removing standalone binary: $TARGET_BIN"
     rm -f "$TARGET_BIN"
 fi
 
-# Remove venv directory and run_vprj.sh script
+# Remove venv directory and run_pm.sh script
 if [ -d "venv" ]; then
     echo "Removing venv directory..."
     rm -rf venv
 fi
-if [ -f "run_vprj.sh" ]; then
-    echo "Removing run_vprj.sh script..."
-    rm -f run_vprj.sh
+if [ -f "run_pm.sh" ]; then
+    echo "Removing run_pm.sh script..."
+    rm -f run_pm.sh
 fi
 
 echo "Uninstallation complete." 
