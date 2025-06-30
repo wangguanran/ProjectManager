@@ -3,12 +3,12 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-echo "--- Checking if vprjcore is installed ---"
+echo "--- Checking if project-manager is installed ---"
 
 # Uninstall from system environment (pip)
 if command -v pip3 &> /dev/null; then
-    echo "Uninstalling vprjcore from system environment (pip)..."
-    pip3 uninstall -y vprjcore || true
+    echo "Uninstalling project-manager from system environment (pip)..."
+    pip3 uninstall -y project-manager || true
 fi
 
 # Remove standalone binary from ~/.local/bin
