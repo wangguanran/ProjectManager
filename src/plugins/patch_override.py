@@ -1,9 +1,8 @@
-import sys
 import os
 import shutil
 
-from common import log, get_full_path, PLATFORM_ROOT_PATH, list_file_path
-
+from log_manager import log
+from utils import path_from_root, list_file_path
 
 class PatchOverride(object):
 
@@ -29,7 +28,7 @@ class PatchOverride(object):
     def after_new_project(self, project):
         log.debug("In!")
         project_name = project.project_name
-        prj_path = get_full_path(project_name)
+        prj_path = path_from_root(project_name)
         log.debug("project_name = %s,prj_path = '%s'" %
                   (project_name, prj_path))
         destdir = os.path.join(prj_path, "po", "po_" +
@@ -64,7 +63,7 @@ class PatchOverride(object):
     def before_compile_project(self, project):
         log.debug("In!")
         prj_name = project.project_name
-        prj_po_path = get_full_path(prj_name, "po")
+        prj_po_path = path_from_root(prj_name, "po")
         log.debug("prj_name = %s,prj_path = '%s'" % (prj_name, prj_po_path))
         # destdir = os.path.join(prj_path, "po", "po_" +
         #                        prj_name + "_bsp", "overrides")
@@ -78,11 +77,10 @@ class PatchOverride(object):
                 destdir = os.path.dirname()
                 for file_name in list_file_path(destdir):
                     file_path = os.path.dirname(file_name)
-                    abs_path = os.path.join(PLATFORM_ROOT_PATH, file_path)
                     # if not os.path.exists(abs_path):
                     #     os.makedirs(abs_path)
                     log.debug("file name = '%s' abs path = '%s'" %
-                              (file_name, abs_path))
+                              (file_name, file_path))
                     # shutil.copy(file_name, abs_path)
 
         else:

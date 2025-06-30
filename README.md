@@ -24,8 +24,7 @@ new_project:
   --base BASE    specify a new project to be created based on this
 ```
 
-1.脚本可以同时在代码根目录，vprojects目录，vprjcore目录下运行  
-2.代码执行时会在vprojects下创建.cache/logs和.cache/cprofile目录，保存名会包含当前时间
+1.代码执行时会在vprojects下创建.cache/logs和.cache/cprofile目录，保存名会包含当前时间
 
 * logs目录下保存脚本的运行log
 
