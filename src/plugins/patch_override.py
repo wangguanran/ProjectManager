@@ -1,8 +1,8 @@
 import os
 import shutil
 
-from log_manager import log
-from utils import path_from_root, list_file_path
+from src.log_manager import log
+from src.utils import path_from_root, list_file_path
 
 class PatchOverride(object):
 
@@ -74,7 +74,7 @@ class PatchOverride(object):
                 override_path = os.path.join(
                     prj_po_path, po_dir_name, "overrides")
                 log.debug("override path = %s" % override_path)
-                destdir = os.path.dirname()
+                destdir = os.path.dirname(override_path)
                 for file_name in list_file_path(destdir):
                     file_path = os.path.dirname(file_name)
                     # if not os.path.exists(abs_path):
@@ -99,7 +99,7 @@ def get_module():
 
 
 def parse_cmd():
-    return args_dict
+    return {}
 
 
 if __name__ == "__main__":

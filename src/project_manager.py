@@ -8,9 +8,9 @@ import json
 import argparse
 import fnmatch
 import importlib.util
-from .log_manager import log
-from .profiler import func_time, func_cprofile
-from .utils import path_from_root, get_version, list_file_path
+from src.log_manager import log
+from src.profiler import func_time, func_cprofile
+from src.utils import path_from_root, get_version, list_file_path
 
 PM_CONFIG_PATH = path_from_root("pm_config.json")
 DEFAULT_KEYWORD = "demo"

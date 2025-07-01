@@ -6,8 +6,8 @@ import cProfile
 import pstats
 import os
 from functools import wraps
-from .log_manager import log
-from .utils import path_from_root, get_filename, organize_files
+from src.log_manager import log
+from src.utils import path_from_root, get_filename, organize_files
 
 CPROFILE_PATH = path_from_root(".cache", "cprofile")
 PROFILE_DUMP_NAME = "profile_dump"
