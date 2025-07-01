@@ -8,34 +8,178 @@ import json
 import argparse
 import fnmatch
 import importlib.util
+import configparser
 from src.log_manager import log
-from src.profiler import func_time, func_cprofile
+from src.profiler import auto_profile
 from src.utils import path_from_root, get_version, list_file_path
 
 PM_CONFIG_PATH = path_from_root("pm_config.json")
 DEFAULT_KEYWORD = "demo"
 
+@auto_profile
 class ProjectManager:
     """
     Project utility class. Provides project management and plugin operation features.
     """
+    def __init__(self):
+        self.vprojects_path = path_from_root("vprojects")
+        self.all_projects_info = {}
+        self.platform_operations = []
+        self.__load_all_projects()
+        self.__load_script_plugins()
+        # Print all loaded project info
+        log.debug("Loaded projects info:\n%s", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
+        log.debug("Platform operations: %s", self.platform_operations)
+        log.info("Loaded %d projects.", len(self.all_projects_info))
+        log.info("Loaded %d script plugins.", len(self.platform_operations))
 
-    @func_time
-    @func_cprofile
-    def new_project(self, name, type_, base=None):
+    def __load_all_projects(self):
+        """
+        Scan all board projects under vprojects, parse ini files, and save all project info.
+        Build parent-child inheritance: child inherits all parent configs, child overrides same keys except PROJECT_PO_CONFIG, which is concatenated (parent first, then child).
+        """
+        exclude_dirs = {"scripts", "common", "template", ".cache"}
+        if not os.path.exists(self.vprojects_path):
+            log.warning("vprojects directory does not exist: %s", self.vprojects_path)
+            return
+        all_sections = {}
+        section_to_board = {}
+        invalid_sections = set()
+        for item in os.listdir(self.vprojects_path):
+            item_path = os.path.join(self.vprojects_path, item)
+            if not os.path.isdir(item_path) or item in exclude_dirs:
+                continue
+            # Find ini file in this board directory
+            ini_file = None
+            for f in os.listdir(item_path):
+                if f.endswith(".ini"):
+                    ini_file = os.path.join(item_path, f)
+                    break
+            if not ini_file:
+                log.warning("No ini file found in board directory: %s", item_path)
+                continue
+            # First pass: check for duplicate keys in the whole ini file
+            has_duplicate = False
+            with open(ini_file, 'r', encoding='utf-8') as f:
+                current_project = None
+                keys_in_project = set()
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith(';') or line.startswith('#'):
+                        continue
+                    if line.startswith('[') and line.endswith(']'):
+                        current_project = line[1:-1].strip()
+                        keys_in_project = set()
+                        continue
+                    if '=' in line and current_project:
+                        key = line.split('=', 1)[0].strip()
+                        if key in keys_in_project:
+                            log.error("Duplicate key '%s' found in project '%s' of file '%s'", key, current_project, ini_file)
+                            has_duplicate = True
+                        else:
+                            keys_in_project.add(key)
+            if has_duplicate:
+                continue  # skip this ini file entirely
+            # No duplicate, safe to parse
+            config = configparser.ConfigParser()
+            config.optionxform = str  # preserve case
+            config.read(ini_file, encoding="utf-8")
+            for project in config.sections():
+                project_dict = dict(config.items(project))
+                all_sections[project] = project_dict
+                section_to_board[project] = item  # record which board this project belongs to
+        # Build parent-child relationship and merge configs
+        def find_parent(project):
+            # The parent project name is the project name with the last '-' and following part removed
+            if '-' in project:
+                return project.rsplit('-', 1)[0]
+            return None
+        merged_projects = {}
+        def merge_config(project):
+            if project in merged_projects:
+                return merged_projects[project]
+            if project in invalid_sections:
+                return {}
+            parent = find_parent(project)
+            merged = {}
+            if parent and parent in all_sections:
+                parent_cfg = merge_config(parent)
+                # Copy parent config first
+                for k, v in parent_cfg.items():
+                    if k == 'PROJECT_PO_CONFIG':
+                        merged[k] = v  # Use parent's first, will handle concatenation later
+                    else:
+                        merged[k] = v
+            # Then add/override with child's own config
+            for k, v in all_sections[project].items():
+                if k == 'PROJECT_PO_CONFIG' and k in merged:
+                    # Concatenate parent and child, parent first, child after
+                    merged[k] = merged[k].strip() + ' ' + v.strip()
+                else:
+                    merged[k] = v
+            merged_projects[project] = merged
+            return merged
+        for project in all_sections:
+            if project in invalid_sections:
+                continue
+            merged_cfg = merge_config(project)
+            self.all_projects_info[project] = merged_cfg
+
+    def __load_script_plugins(self):
+        """
+        Load all script plugins under the scripts directory of each board in vprojects (excluding scripts, common, template, .cache).
+        Collect all callable function names from each script into self.platform_operations.
+        """
+        exclude_dirs = {"scripts", "common", "template", ".cache"}
+        platform_operations = set()
+        if not os.path.exists(self.vprojects_path):
+            log.warning("vprojects directory does not exist: %s", self.vprojects_path)
+            self.platform_operations = list(platform_operations)
+            return
+        for item in os.listdir(self.vprojects_path):
+            item_path = os.path.join(self.vprojects_path, item)
+            if not os.path.isdir(item_path) or item in exclude_dirs:
+                continue
+            scripts_dir = os.path.join(item_path, "scripts")
+            if not os.path.exists(scripts_dir):
+                continue
+            for file_name in os.listdir(scripts_dir):
+                if not file_name.endswith(".py") or file_name.startswith("_"):
+                    continue
+                script_path = os.path.join(scripts_dir, file_name)
+                module_name = f"{item}_scripts_{os.path.splitext(file_name)[0]}"
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, script_path)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    for attr in dir(mod):
+                        if attr.startswith("_"):
+                            continue
+                        func = getattr(mod, attr)
+                        if callable(func):
+                            platform_operations.add(attr)
+                except OSError as e:
+                    log.error(
+                        "Failed to load script: %s, error: %s",
+                        script_path, e
+                    )
+                    continue
+        self.platform_operations = list(platform_operations)
+
+    def new_project(self, project_name, type_, base=None):
         """
         Create a new project.
         Args:
-            name (str): New project name.
+            project_name (str): New project name.
             type_ (str): Type, 'board' or 'projects'.
             base (str): Base project name.
         Returns:
             bool: True if success, otherwise False.
         """
         keyword = DEFAULT_KEYWORD
-        base = base or name
+        base = base or project_name
         basedir = path_from_root(base)
-        destdir = path_from_root(name)
+        destdir = path_from_root(project_name)
         log.debug("basedir = '%s' destdir = '%s'", basedir, destdir)
 
         if type_ not in ["board", "projects"]:
@@ -51,7 +195,7 @@ class ProjectManager:
                     if hasattr(platform_json_info[base], "keyword"):
                         keyword = platform_json_info[base]["keyword"]
                     else:
-                        keyword = DEFAULT_KEYWORD if base == name else base
+                        keyword = DEFAULT_KEYWORD if base == project_name else base
                 log.debug("keyword='%s'", keyword)
                 shutil.copytree(basedir, destdir, symlinks=True)
                 for file_path in list_file_path(destdir, list_dir=True):
@@ -64,7 +208,7 @@ class ProjectManager:
                                 f_rw.seek(0)
                                 f_rw.truncate()
                                 for line in content:
-                                    line = line.replace(keyword, name)
+                                    line = line.replace(keyword, project_name)
                                     f_rw.write(line)
                         except OSError as e:
                             log.error("Cannot read file '%s': %s", file_path, e)
@@ -72,7 +216,7 @@ class ProjectManager:
                     if keyword in os.path.basename(file_path):
                         p_dest = os.path.join(
                             os.path.dirname(file_path),
-                            os.path.basename(file_path).replace(keyword, name))
+                            os.path.basename(file_path).replace(keyword, project_name))
                         log.debug(
                             "Renaming src file = '%s' dest file = '%s'",
                             file_path, p_dest
@@ -83,32 +227,30 @@ class ProjectManager:
             log.error("Base project directory does not exist, unable to create new project.")
         return False
 
-    @func_time
-    @func_cprofile
-    def del_project(self, name, info_path=None):
+    def del_project(self, project_name, info_path=None):
         """
         Delete the specified project directory and update its status in the config file.
         Args:
-            name (str): Project name.
+            project_name (str): Project name.
             info_path (str): Config file path.
         Returns:
             bool: True if success, otherwise False.
         """
         log.debug("In del_project!")
         json_info = {}
-        project_path = path_from_root(name)
+        project_path = path_from_root(project_name)
         log.debug("project path = %s", project_path)
 
         if os.path.exists(project_path):
             shutil.rmtree(project_path)
         else:
-            log.warning("'%s' path already deleted.", name)
+            log.warning("'%s' path already deleted.", project_name)
         if not info_path:
             info_path = getattr(self, 'info_path', None)
         try:
             with open(info_path, "r", encoding="utf-8") as f_read:
                 json_info = json.load(f_read)
-                json_info[name]["status"] = "deleted"
+                json_info[project_name]["status"] = "deleted"
             with open(info_path, "w+", encoding="utf-8") as f_write:
                 json.dump(json_info, f_write, indent=4)
         except OSError as e:
@@ -116,67 +258,18 @@ class ProjectManager:
             return False
         return True
 
-    @func_time
-    def get_supported_operations(self):
+    def po_apply(self, project_name):
         """
-        Get all supported operation names from plugins.
-        Returns:
-            list: List of operation name strings.
-        """
-        op_handler = self._get_op_handler()
-        return list(op_handler.keys())
-
-    @func_time
-    @func_cprofile
-    def execute_operation(self, operate, *args, **kwargs):
-        """
-        Execute the specified operation.
+        Apply PO operation for the specified project.
         Args:
-            operate (str): Operation name.
-            *args, **kwargs: Arguments for the operation.
+            project_name (str): Project or board name.
         Returns:
-            Operation return value.
+            bool: True if success, otherwise False.
         """
-        op_handler = self._get_op_handler()
-        if operate in op_handler:
-            return op_handler[operate](*args, **kwargs)
-        log.warning("Unsupported operation: %s", operate)
-        return None
-
-    def _get_op_handler(self):
-        """
-        Dynamically load all callable functions from scripts in scripts as operation handlers.
-        Returns:
-            dict: Mapping from operation name to function.
-        """
-        op_handler = {}
-        scripts_dir = path_from_root("scripts")
-        if not os.path.exists(scripts_dir):
-            log.warning("scripts directory does not exist: %s", scripts_dir)
-            return op_handler
-        for file_name in os.listdir(scripts_dir):
-            if not file_name.endswith(".py") or file_name.startswith("_"):
-                continue
-            script_path = os.path.join(scripts_dir, file_name)
-            module_name = os.path.splitext(file_name)[0]
-            try:
-                spec = importlib.util.spec_from_file_location(module_name, script_path)
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                for attr in dir(mod):
-                    if attr.startswith("_"):
-                        continue
-                    func = getattr(mod, attr)
-                    if callable(func):
-                        op_handler[attr] = func
-            except OSError as e:
-                log.error(
-                    "Failed to load script: %s, error: %s",
-                    script_path, e
-                )
-                continue
-        return op_handler
-
+        log.debug("In po_apply! project_name = %s", project_name)
+        # TODO: Implement the actual po_apply logic here
+        # Placeholder: just log and return True
+        return True
 
 def parse_cmd():
     """
@@ -188,17 +281,18 @@ def parse_cmd():
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', action="version", version=get_version())
     help_text = (
-        "supported operations: build/new/delete"
+        "supported operations: build/new_project/del_project/po_apply"
     )
     parser.add_argument(
         "operate",
-        choices=["build", "new", "delete"],
+        choices=["build", "new_project", "del_project", "po_apply"],
         help=help_text,
     )
     parser.add_argument("name", help="project or board name")
     parser.add_argument("--type", help="type for new operation: board or projects",
                         choices=["board", "projects"], default=None)
     parser.add_argument("--base", help="base project name for new operation")
+    parser.add_argument('--perf-analyze', action='store_true', help='Enable cProfile performance analysis')
     args = parser.parse_args()
     return args.__dict__
 
@@ -208,20 +302,23 @@ def main():
     Main entry point for the project manager CLI.
     """
     args_dict = parse_cmd()
+    import builtins
+    builtins.ENABLE_CPROFILE = args_dict.get('perf_analyze', False)
     manager = ProjectManager()
+
     operate = args_dict["operate"]
     name = args_dict["name"]
     type_ = args_dict.get("type")
     base = args_dict.get("base")
-    if operate == "new":
-        manager.new_project(name=name, type_=type_, base=base)
-    elif operate == "delete":
-        manager.del_project(name=name)
+
+    if operate == "new_project":
+        manager.new_project(project_name=name, type_=type_, base=base)
+    elif operate == "del_project":
+        manager.del_project(project_name=name)
+    elif operate == "po_apply":
+        manager.po_apply(project_name=name)
     else:
-        # Try to execute as plugin operation
-        result = manager.execute_operation(operate, name)
-        if result is None:
-            log.error("Operation '%s' is not supported.", operate)
+        log.error("Operation '%s' is not supported.", operate)
 
 
 if __name__ == '__main__':

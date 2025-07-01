@@ -19,12 +19,12 @@ def func_time(func):
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
-        print(func.__name__, 'took', end - start, 'seconds')
+        log.debug("%s took %f seconds", func.__name__, end - start)
         return result
     return wrapper
 
 def func_cprofile(func):
-    """Decorator to profile a function using cProfile and dump stats."""
+    """Decorator to profile a function using cProfile and log stats."""
     @wraps(func)
     def wrapper(*args, **kwargs):
         profile = cProfile.Profile()
@@ -35,17 +35,31 @@ def func_cprofile(func):
             return result
         finally:
             try:
-                organize_files(CPROFILE_PATH, "CPROFILE_")
-                profile.dump_stats(PROFILE_DUMP_NAME)
-                stats_path = get_filename(
-                    "Stats_", ".cprofile", CPROFILE_PATH)
-                with open(stats_path, "w", encoding="utf-8") as file_steam:
-                    ps = pstats.Stats(PROFILE_DUMP_NAME, stream=file_steam)
-                    ps.sort_stats("time").print_stats()
-                    if os.path.exists(PROFILE_DUMP_NAME):
-                        os.remove(PROFILE_DUMP_NAME)
-            except OSError:
-                if os.path.exists(PROFILE_DUMP_NAME):
-                    os.remove(PROFILE_DUMP_NAME)
-                log.exception("fail to dump profile")
+                import io
+                s = io.StringIO()
+                ps = pstats.Stats(profile, stream=s)
+                ps.sort_stats("time").print_stats()  # print all
+                log.debug("cProfile stats for %s:\n%s", func.__name__, s.getvalue())
+            except Exception:
+                log.exception("fail to print cProfile stats")
     return wrapper
+
+def auto_profile(cls):
+    """
+    Class decorator: automatically decorate all public instance methods with func_time and (optionally) func_cprofile, dynamically at call time.
+    """
+    import builtins
+    from functools import wraps
+    for attr_name, attr_value in cls.__dict__.items():
+        if callable(attr_value) and not attr_name.startswith("__"):
+            def make_wrapper(func):
+                @wraps(func)
+                def wrapper(*args, **kwargs):
+                    enable_cprofile = getattr(builtins, 'ENABLE_CPROFILE', False)
+                    if enable_cprofile:
+                        return func_time(func_cprofile(func))(*args, **kwargs)
+                    else:
+                        return func_time(func)(*args, **kwargs)
+                return wrapper
+            setattr(cls, attr_name, make_wrapper(attr_value))
+    return cls
