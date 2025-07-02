@@ -15,6 +15,7 @@ import builtins
 from src.log_manager import log
 from src.profiler import auto_profile
 from src.utils import path_from_root, get_version, list_file_path
+import importlib
 
 PM_CONFIG_PATH = path_from_root("pm_config.json")
 DEFAULT_KEYWORD = "demo"
@@ -24,18 +25,30 @@ class ProjectManager:
     """
     Project utility class. Provides project management and plugin operation features.
     """
+    _instance = None
+    _initialized = False
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
     def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
         self.vprojects_path = path_from_root("vprojects")
         self.all_projects_info = {}
         self.platform_operations = []
         self.project_to_board = {}
+        self.plugin_operations = {}
+        self.plugin_operation_desc = {}
         self.__load_all_projects()
         self.__load_script_plugins()
-        # Print all loaded project info
+        self.__load_plugin_operations()
         log.debug("Loaded projects info:\n%s", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
         log.debug("Platform operations: %s", self.platform_operations)
         log.info("Loaded %d projects.", len(self.all_projects_info))
         log.info("Loaded %d script plugins.", len(self.platform_operations))
+        log.info("Loaded %d plugin operations.", len(self.plugin_operations))
 
     def __load_all_projects(self):
         """
@@ -171,306 +184,117 @@ class ProjectManager:
                     continue
         self.platform_operations = list(platform_operations)
 
-    def new_project(self, project_name, type_, base=None):
+    def __load_plugin_operations(self):
+        """
+        动态加载插件目录下的operation，只加载插件类的可调用方法。
+        并收集每个operation的docstring到self.plugin_operations。
+        """
+        self.plugin_operations = {}
+        plugins_dir = os.path.join(os.path.dirname(__file__), "plugins")
+        if not os.path.exists(plugins_dir):
+            return
+        for fname in os.listdir(plugins_dir):
+            if not fname.endswith(".py") or fname.startswith("_"):
+                continue
+            module_name = f"src.plugins.{fname[:-3]}"
+            try:
+                mod = importlib.import_module(module_name)
+                for attr in dir(mod):
+                    obj = getattr(mod, attr)
+                    if isinstance(obj, type):
+                        instance = obj(self.vprojects_path, self.all_projects_info, self.project_to_board)
+                        for method in dir(instance):
+                            if method.startswith("_"):
+                                continue
+                            m = getattr(instance, method)
+                            if callable(m):
+                                desc = getattr(m, '__doc__', None)
+                                if desc:
+                                    desc = desc.strip().splitlines()[0]
+                                else:
+                                    desc = "plugin operation"
+                                self.plugin_operations[method] = {"func": m, "desc": desc}
+            except Exception as e:
+                log.error("Failed to load plugin %s: %s", module_name, e)
+
+    def new_project(self, project_name):
         """
         Create a new project.
-        Args:
-            project_name (str): New project name.
-            type_ (str): Type, 'board' or 'projects'.
-            base (str): Base project name.
-        Returns:
-            bool: True if success, otherwise False.
+        TODO: implement new_project
         """
-        log.info("Creating new project: name='%s', type='%s', base='%s'", project_name, type_, base)
-        keyword = DEFAULT_KEYWORD
-        base = base or project_name
-        basedir = path_from_root(base)
-        destdir = path_from_root(project_name)
-        log.debug("basedir = '%s' destdir = '%s'", basedir, destdir)
+        pass
 
-        if type_ not in ["board", "projects"]:
-            log.error("--type must be 'board' or 'projects'")
-            return False
-
-        if not os.path.exists(basedir):
-            log.error("Base project directory does not exist, unable to create new project.")
-            return False
-        if os.path.exists(destdir):
-            log.error("Project already exists, cannot create repeatedly.")
-            return False
-        with open(PM_CONFIG_PATH, "r", encoding="utf-8") as f_read:
-            platform_json_info = json.load(f_read)
-            if hasattr(platform_json_info[base], "keyword"):
-                keyword = platform_json_info[base]["keyword"]
-            else:
-                keyword = DEFAULT_KEYWORD if base == project_name else base
-        log.debug("keyword='%s'", keyword)
-        shutil.copytree(basedir, destdir, symlinks=True)
-        self.__replace_keyword_in_files(destdir, keyword, project_name)
-        self.__rename_files_with_keyword(destdir, keyword, project_name)
-        return True
-
-    def __replace_keyword_in_files(self, destdir, keyword, project_name):
-        for file_path in list_file_path(destdir, list_dir=True):
-            if (fnmatch.fnmatch(os.path.basename(file_path), "env*.ini")
-                    or file_path.endswith(".patch")):
-                try:
-                    log.debug("Modifying file content '%s'", file_path)
-                    with open(file_path, "r+", encoding="utf-8") as f_rw:
-                        content = f_rw.readlines()
-                        f_rw.seek(0)
-                        f_rw.truncate()
-                        for line in content:
-                            line = line.replace(keyword, project_name)
-                            f_rw.write(line)
-                except OSError as e:
-                    log.error("Cannot read file '%s': %s", file_path, e)
-                    return False
-        return True
-
-    def __rename_files_with_keyword(self, destdir, keyword, project_name):
-        for file_path in list_file_path(destdir, list_dir=True):
-            if keyword in os.path.basename(file_path):
-                p_dest = os.path.join(
-                    os.path.dirname(file_path),
-                    os.path.basename(file_path).replace(keyword, project_name))
-                log.debug(
-                    "Renaming src file = '%s' dest file = '%s'",
-                    file_path, p_dest
-                )
-                os.rename(file_path, p_dest)
-        return True
-
-    def del_project(self, project_name, info_path=None):
+    def del_project(self, project_name):
         """
         Delete the specified project directory and update its status in the config file.
-        Args:
-            project_name (str): Project name.
-            info_path (str): Config file path.
-        Returns:
-            bool: True if success, otherwise False.
+        TODO: implement del_project
         """
-        log.info("Start to delete project: %s", project_name)
-        json_info = {}
-        project_path = path_from_root(project_name)
-        log.debug("project path = %s", project_path)
+        pass
 
-        if os.path.exists(project_path):
-            shutil.rmtree(project_path)
-        else:
-            log.warning("'%s' path already deleted.", project_name)
-        if not info_path:
-            info_path = getattr(self, 'info_path', None)
-        try:
-            with open(info_path, "r", encoding="utf-8") as f_read:
-                json_info = json.load(f_read)
-                json_info[project_name]["status"] = "deleted"
-            with open(info_path, "w+", encoding="utf-8") as f_write:
-                json.dump(json_info, f_write, indent=4)
-        except OSError as e:
-            log.error("Cannot find info file: %s", e)
-            return False
-        return True
-
-    def po_apply(self, project_name):
+    def build(self, project_name):
         """
-        Apply PO operation for the specified project.
-        Args:
-            project_name (str): Project or board name.
-        Returns:
-            bool: True if success, otherwise False.
+        Build the specified project.
+        TODO: implement build
         """
-        log.info("start po_apply for project: %s", project_name)
-        board = self.project_to_board.get(project_name)
-        if not board:
-            log.error("Cannot find board for project: %s", project_name)
-            return False
-        board_path = os.path.join(self.vprojects_path, board)
-        po_dir = os.path.join(board_path, "po")
-        project_cfg = self.all_projects_info.get(project_name, {})
-        po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
-        if not po_config:
-            log.warning("No PROJECT_PO_CONFIG found for %s", project_name)
-            return True
-        apply_pos, exclude_pos, exclude_files = self.__parse_po_config(po_config)
-        apply_pos = [po for po in apply_pos if po not in exclude_pos]
-        log.debug("project_to_board: %s", str(self.project_to_board))
-        log.debug("all_projects_info: %s", str(self.all_projects_info.get(project_name, {})))
-        log.debug("po_dir: %s", po_dir)
-        if apply_pos:
-            log.debug("apply_pos: %s", str(apply_pos))
-        if exclude_pos:
-            log.debug("exclude_pos: %s", str(exclude_pos))
-        if exclude_files:
-            log.debug("exclude_files: %s", str(exclude_files))
-        for po in apply_pos:
-            po_patch_dir = os.path.join(po_dir, po, "patches")
-            if not self.__apply_patch(po, po_patch_dir, exclude_files):
-                log.error("PO apply aborted due to patch error in PO: %s", po)
-                return False
-            po_override_dir = os.path.join(po_dir, po, "overrides")
-            if not self.__apply_override(po, po_override_dir, exclude_files):
-                log.error("PO apply aborted due to override error in PO: %s", po)
-                return False
-            log.info("po %s has been processed", po)
-        log.info("po apply finished for project: %s", project_name)
-        return True
+        pass
 
-    def __parse_po_config(self, po_config):
-        apply_pos = []
-        exclude_pos = set()
-        exclude_files = {}
-        tokens = re.findall(r'-?\w+(?:\[[^\]]+\])?', po_config)
-        for token in tokens:
-            if token.startswith('-'):
-                if '[' in token:
-                    po, files = re.match(r'-(\w+)\[([^\]]+)\]', token).groups()
-                    file_list = set(f.strip() for f in files.split())
-                    exclude_files.setdefault(po, set()).update(file_list)
-                else:
-                    po = token[1:]
-                    exclude_pos.add(po)
-            else:
-                po = token
-                apply_pos.append(po)
-        return apply_pos, exclude_pos, exclude_files
+    def new_board(self, board_name):
+        """
+        Create a new board.
+        TODO: implement new_board
+        """
+        pass
 
-    def __apply_patch(self, po, po_patch_dir, exclude_files):
-        patch_applied_dirs = set()
-        log.debug("_apply_patch: po=%s, po_patch_dir=%s", po, po_patch_dir)
-        if not os.path.isdir(po_patch_dir):
-            log.debug("No patches dir for PO: %s", po)
-            return True
-        log.debug("applying patches for po: %s", po)
-        for root, _, files in os.walk(po_patch_dir):
-            for fname in files:
-                if fname == ".gitkeep":
-                    log.debug("ignore .gitkeep file in %s", root)
-                    continue
-                rel_path = os.path.relpath(os.path.join(root, fname), po_patch_dir)
-                log.debug("patch rel_path: %s", rel_path)
-                if po in exclude_files and rel_path in exclude_files[po]:
-                    log.debug("patch file %s in po %s is excluded by config", rel_path, po)
-                    continue
-                top_dir = rel_path.split(os.sep)[0]
-                patch_flag = os.path.join(top_dir, ".patch_applied")
-                log.debug("patch top_dir: %s, patch_flag: %s", top_dir, patch_flag)
-                if top_dir in patch_applied_dirs:
-                    log.debug("patch flag already set for dir: %s, skipping", top_dir)
-                    continue
-                if os.path.exists(patch_flag):
-                    log.info("patch already applied for dir: %s, skipping", top_dir)
-                    patch_applied_dirs.add(top_dir)
-                    continue
-                patch_file = os.path.join(root, fname)
-                log.info("applying patch: %s to dir: %s", patch_file, top_dir)
-                try:
-                    result = subprocess.run([
-                        "git", "apply", patch_file
-                    ], cwd=".", capture_output=True, text=True, check=False)
-                    log.debug("git apply result: returncode=%s, stdout=%s, stderr=%s", result.returncode, result.stdout, result.stderr)
-                    if result.returncode != 0:
-                        log.error("Failed to apply patch %s: %s", patch_file, result.stderr)
-                        return False
-                    with open(patch_flag, 'w', encoding='utf-8') as f:
-                        f.write('patch applied')
-                    patch_applied_dirs.add(top_dir)
-                    log.info("patch applied and flag set for dir: %s", top_dir)
-                except subprocess.SubprocessError as e:
-                    log.error("Subprocess error applying patch %s: %s", patch_file, e)
-                    return False
-                except OSError as e:
-                    log.error("OS error applying patch %s: %s", patch_file, e)
-                    return False
-        return True
-
-    def __apply_override(self, po, po_override_dir, exclude_files):
-        override_applied_dirs = set()
-        log.debug("_apply_override: po=%s, po_override_dir=%s", po, po_override_dir)
-        if not os.path.isdir(po_override_dir):
-            log.debug("No overrides dir for PO: %s", po)
-            return True
-        log.debug("applying overrides for po: %s", po)
-        for root, _, files in os.walk(po_override_dir):
-            for fname in files:
-                if fname == ".gitkeep":
-                    log.debug("ignore .gitkeep file in %s", root)
-                    continue
-                rel_path = os.path.relpath(os.path.join(root, fname), po_override_dir)
-                log.debug("override rel_path: %s", rel_path)
-                if po in exclude_files and rel_path in exclude_files[po]:
-                    log.debug("override file %s in po %s is excluded by config", rel_path, po)
-                    continue
-                top_dir = rel_path.split(os.sep)[0]
-                override_flag = os.path.join(top_dir, ".override_applied")
-                log.debug("override top_dir: %s, override_flag: %s", top_dir, override_flag)
-                if top_dir in override_applied_dirs:
-                    log.debug("override flag already set for dir: %s, skipping", top_dir)
-                    continue
-                if os.path.exists(override_flag):
-                    log.info("override already applied for dir: %s, skipping", top_dir)
-                    override_applied_dirs.add(top_dir)
-                    continue
-                src_file = os.path.join(root, fname)
-                dest_file = os.path.join(top_dir, *rel_path.split(os.sep)[1:]) if len(rel_path.split(os.sep)) > 1 else os.path.join(top_dir, fname)
-                log.debug("override src_file: %s, dest_file: %s", src_file, dest_file)
-                os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-                try:
-                    shutil.copy2(src_file, dest_file)
-                    with open(override_flag, 'w', encoding='utf-8') as f:
-                        f.write('override applied')
-                    override_applied_dirs.add(top_dir)
-                    log.info("override applied and flag set for dir: %s, file: %s", top_dir, dest_file)
-                except OSError as e:
-                    log.error("Failed to copy override file %s to %s: %s", src_file, dest_file, e)
-                    return False
-        return True
-
-def parse_cmd():
-    """
-    Parse command line arguments for the project manager.
-    Returns:
-        dict: Parsed arguments as a dictionary.
-    """
-    log.debug("argv = %s", sys.argv)
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--version', action="version", version=get_version())
-    help_text = (
-        "supported operations: build/new_project/del_project/po_apply"
-    )
-    parser.add_argument(
-        "operate",
-        choices=["build", "new_project", "del_project", "po_apply"],
-        help=help_text,
-    )
-    parser.add_argument("name", help="project or board name")
-    parser.add_argument("--type", help="type for new operation: board or projects",
-                        choices=["board", "projects"], default=None)
-    parser.add_argument("--base", help="base project name for new operation")
-    parser.add_argument('--perf-analyze', action='store_true', help='Enable cProfile performance analysis')
-    args = parser.parse_args()
-    return args.__dict__
-
+    def del_board(self, board_name):
+        """
+        Delete the specified board.
+        TODO: implement del_board
+        """
+        pass
 
 def main():
     """
     Main entry point for the project manager CLI.
     """
-    args_dict = parse_cmd()
-    builtins.ENABLE_CPROFILE = args_dict.get('perf_analyze', False)
     manager = ProjectManager()
-
+    plugin_help_lines = [f"  {op}     {info['desc']}" for op, info in manager.plugin_operations.items()]
+    help_text = (
+        "supported operations:\n"
+        "  build         build the specified project\n"
+        "  new_project   create a new project\n"
+        "  del_project   delete a project\n"
+        "  new_board     create a new board\n"
+        "  del_board     delete a board\n"
+        "plugin operations:\n"
+        + "\n".join(plugin_help_lines)
+    )
+    choices = ["build", "new_project", "del_project", "new_board", "del_board"] + list(manager.plugin_operations.keys())
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('--version', action="version", version=get_version())
+    parser.add_argument(
+        "operate",
+        choices=choices,
+        help=help_text,
+    )
+    parser.add_argument("name", help="project or board name")
+    parser.add_argument('--perf-analyze', action='store_true', help='Enable cProfile performance analysis')
+    args = parser.parse_args()
+    args_dict = vars(args)
+    builtins.ENABLE_CPROFILE = args_dict.get('perf_analyze', False)
     operate = args_dict["operate"]
     name = args_dict["name"]
-    type_ = args_dict.get("type")
-    base = args_dict.get("base")
-
-    if operate == "new_project":
-        manager.new_project(project_name=name, type_=type_, base=base)
+    if operate == "build":
+        manager.build(project_name=name)
+    elif operate == "new_project":
+        manager.new_project(project_name=name)
     elif operate == "del_project":
         manager.del_project(project_name=name)
-    elif operate == "po_apply":
-        manager.po_apply(project_name=name)
+    elif operate == "new_board":
+        manager.new_board(board_name=name)
+    elif operate == "del_board":
+        manager.del_board(board_name=name)
+    elif operate in manager.plugin_operations:
+        manager.plugin_operations[operate]["func"](name)
     else:
         log.error("Operation '%s' is not supported.", operate)
 

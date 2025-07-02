@@ -46,12 +46,12 @@ class LogManager:
             'formatters': {
                 'console_formatter': {
                     '()': ColoredFormatter,
-                    'format': '[%(asctime)s] [%(levelname)-10s]\t%(message)s',
+                    'format': '[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] [%(funcName)-16s] [%(lineno)-4d] %(message)s',
                 },
                 'file_formatter': {
                     'format': (
-                        '[%(asctime)s] [%(levelname)-10s] [%(filename)-20s] '
-                        '[%(funcName)-20s] [%(lineno)-5d]\t%(message)s'
+                        '[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] '
+                        '[%(funcName)-16s] [%(lineno)-4d] %(message)s'
                     ),
                 },
             },
