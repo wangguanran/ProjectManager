@@ -3,11 +3,12 @@ Profiling decorators for performance analysis.
 """
 import time
 import cProfile
+import io
 import pstats
-import os
+import builtins
 from functools import wraps
 from src.log_manager import log
-from src.utils import path_from_root, get_filename, organize_files
+from src.utils import path_from_root
 
 CPROFILE_PATH = path_from_root(".cache", "cprofile")
 PROFILE_DUMP_NAME = "profile_dump"
@@ -35,21 +36,18 @@ def func_cprofile(func):
             return result
         finally:
             try:
-                import io
                 s = io.StringIO()
                 ps = pstats.Stats(profile, stream=s)
                 ps.sort_stats("time").print_stats()  # print all
                 log.debug("cProfile stats for %s:\n%s", func.__name__, s.getvalue())
-            except Exception:
-                log.exception("fail to print cProfile stats")
+            except Exception as exc:
+                log.exception("fail to print cProfile stats: %s", exc)
     return wrapper
 
 def auto_profile(cls):
     """
     Class decorator: automatically decorate all public instance methods with func_time and (optionally) func_cprofile, dynamically at call time.
     """
-    import builtins
-    from functools import wraps
     for attr_name, attr_value in cls.__dict__.items():
         if callable(attr_value) and not attr_name.startswith("__"):
             def make_wrapper(func):
@@ -58,8 +56,7 @@ def auto_profile(cls):
                     enable_cprofile = getattr(builtins, 'ENABLE_CPROFILE', False)
                     if enable_cprofile:
                         return func_time(func_cprofile(func))(*args, **kwargs)
-                    else:
-                        return func_time(func)(*args, **kwargs)
+                    return func_time(func)(*args, **kwargs)
                 return wrapper
             setattr(cls, attr_name, make_wrapper(attr_value))
     return cls

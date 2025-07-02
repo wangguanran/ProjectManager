@@ -52,14 +52,14 @@ class PatchOverride:
         # return self._modify_filename(destdir, project_name)
         return True
 
-    def _modify_filename(self, path, project_name):
+    def __modify_filename(self, path, project_name):
         """
         Recursively rename files containing project_name by appending '.override.base'.
         """
         for p in os.listdir(path):
             p_path = os.path.join(path, p)
             if os.path.isdir(p_path):
-                self._modify_filename(p_path, project_name)
+                self.__modify_filename(p_path, project_name)
             if project_name in os.path.basename(p_path):
                 if "override" not in os.path.basename(p_path):
                     p_dest = os.path.join(path, os.path.basename(p_path) + ".override.base")

@@ -4,7 +4,6 @@ Log manager module.
 import logging
 import logging.config
 import os
-import sys
 from src.utils import organize_files, get_filename
 
 LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
@@ -20,6 +19,7 @@ LOG_COLORS = {
 RESET_COLOR = '\033[0m'
 
 class ColoredFormatter(logging.Formatter):
+    """Formatter with ANSI color codes for log levels."""
     def format(self, record):
         levelname = record.levelname
         color = LOG_COLORS.get(levelname, '')

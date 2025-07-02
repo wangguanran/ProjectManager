@@ -9,6 +9,9 @@ import argparse
 import fnmatch
 import importlib.util
 import configparser
+import subprocess
+import re
+import builtins
 from src.log_manager import log
 from src.profiler import auto_profile
 from src.utils import path_from_root, get_version, list_file_path
@@ -189,46 +192,54 @@ class ProjectManager:
             log.error("--type must be 'board' or 'projects'")
             return False
 
-        if os.path.exists(basedir):
-            if os.path.exists(destdir):
-                log.error("Project already exists, cannot create repeatedly.")
-            else:
-                with open(PM_CONFIG_PATH, "r", encoding="utf-8") as f_read:
-                    platform_json_info = json.load(f_read)
-                    if hasattr(platform_json_info[base], "keyword"):
-                        keyword = platform_json_info[base]["keyword"]
-                    else:
-                        keyword = DEFAULT_KEYWORD if base == project_name else base
-                log.debug("keyword='%s'", keyword)
-                shutil.copytree(basedir, destdir, symlinks=True)
-                for file_path in list_file_path(destdir, list_dir=True):
-                    if (fnmatch.fnmatch(os.path.basename(file_path), "env*.ini")
-                            or file_path.endswith(".patch")):
-                        try:
-                            log.debug("Modifying file content '%s'", file_path)
-                            with open(file_path, "r+", encoding="utf-8") as f_rw:
-                                content = f_rw.readlines()
-                                f_rw.seek(0)
-                                f_rw.truncate()
-                                for line in content:
-                                    line = line.replace(keyword, project_name)
-                                    f_rw.write(line)
-                        except OSError as e:
-                            log.error("Cannot read file '%s': %s", file_path, e)
-                            return False
-                    if keyword in os.path.basename(file_path):
-                        p_dest = os.path.join(
-                            os.path.dirname(file_path),
-                            os.path.basename(file_path).replace(keyword, project_name))
-                        log.debug(
-                            "Renaming src file = '%s' dest file = '%s'",
-                            file_path, p_dest
-                        )
-                        os.rename(file_path, p_dest)
-                return True
-        else:
+        if not os.path.exists(basedir):
             log.error("Base project directory does not exist, unable to create new project.")
-        return False
+            return False
+        if os.path.exists(destdir):
+            log.error("Project already exists, cannot create repeatedly.")
+            return False
+        with open(PM_CONFIG_PATH, "r", encoding="utf-8") as f_read:
+            platform_json_info = json.load(f_read)
+            if hasattr(platform_json_info[base], "keyword"):
+                keyword = platform_json_info[base]["keyword"]
+            else:
+                keyword = DEFAULT_KEYWORD if base == project_name else base
+        log.debug("keyword='%s'", keyword)
+        shutil.copytree(basedir, destdir, symlinks=True)
+        self.__replace_keyword_in_files(destdir, keyword, project_name)
+        self.__rename_files_with_keyword(destdir, keyword, project_name)
+        return True
+
+    def __replace_keyword_in_files(self, destdir, keyword, project_name):
+        for file_path in list_file_path(destdir, list_dir=True):
+            if (fnmatch.fnmatch(os.path.basename(file_path), "env*.ini")
+                    or file_path.endswith(".patch")):
+                try:
+                    log.debug("Modifying file content '%s'", file_path)
+                    with open(file_path, "r+", encoding="utf-8") as f_rw:
+                        content = f_rw.readlines()
+                        f_rw.seek(0)
+                        f_rw.truncate()
+                        for line in content:
+                            line = line.replace(keyword, project_name)
+                            f_rw.write(line)
+                except OSError as e:
+                    log.error("Cannot read file '%s': %s", file_path, e)
+                    return False
+        return True
+
+    def __rename_files_with_keyword(self, destdir, keyword, project_name):
+        for file_path in list_file_path(destdir, list_dir=True):
+            if keyword in os.path.basename(file_path):
+                p_dest = os.path.join(
+                    os.path.dirname(file_path),
+                    os.path.basename(file_path).replace(keyword, project_name))
+                log.debug(
+                    "Renaming src file = '%s' dest file = '%s'",
+                    file_path, p_dest
+                )
+                os.rename(file_path, p_dest)
+        return True
 
     def del_project(self, project_name, info_path=None):
         """
@@ -270,41 +281,19 @@ class ProjectManager:
             bool: True if success, otherwise False.
         """
         log.info("start po_apply for project: %s", project_name)
-        # 1. Get board name and path
         board = self.project_to_board.get(project_name)
         if not board:
             log.error("Cannot find board for project: %s", project_name)
             return False
         board_path = os.path.join(self.vprojects_path, board)
         po_dir = os.path.join(board_path, "po")
-        # 2. Get project config
         project_cfg = self.all_projects_info.get(project_name, {})
         po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
         if not po_config:
             log.warning("No PROJECT_PO_CONFIG found for %s", project_name)
             return True
-        # 3. Parse po config
-        import re
-        apply_pos = []  # po packages to apply
-        exclude_pos = set()  # po packages to exclude
-        exclude_files = {}  # po package -> set(files)
-        tokens = re.findall(r'-?\w+(?:\[[^\]]+\])?', po_config)
-        for token in tokens:
-            if token.startswith('-'):
-                if '[' in token:
-                    # -po_test04[testfile.c src/testfile.c]
-                    po, files = re.match(r'-(\w+)\[([^\]]+)\]', token).groups()
-                    file_list = set(f.strip() for f in files.split())
-                    exclude_files.setdefault(po, set()).update(file_list)
-                else:
-                    po = token[1:]
-                    exclude_pos.add(po)
-            else:
-                po = token
-                apply_pos.append(po)
-        # Remove duplicates and exclude po packages that should be excluded
+        apply_pos, exclude_pos, exclude_files = self.__parse_po_config(po_config)
         apply_pos = [po for po in apply_pos if po not in exclude_pos]
-
         log.debug("project_to_board: %s", str(self.project_to_board))
         log.debug("all_projects_info: %s", str(self.all_projects_info.get(project_name, {})))
         log.debug("po_dir: %s", po_dir)
@@ -314,108 +303,127 @@ class ProjectManager:
             log.debug("exclude_pos: %s", str(exclude_pos))
         if exclude_files:
             log.debug("exclude_files: %s", str(exclude_files))
-        def _apply_patch(po, po_patch_dir, exclude_files):
-            patch_applied_dirs = set()
-            log.debug("_apply_patch: po=%s, po_patch_dir=%s", po, po_patch_dir)
-            if not os.path.isdir(po_patch_dir):
-                log.debug("No patches dir for PO: %s", po)
-                return True
-            log.debug("applying patches for po: %s", po)
-            for root, _, files in os.walk(po_patch_dir):
-                for fname in files:
-                    if fname == ".gitkeep":
-                        log.debug("ignore .gitkeep file in %s", root)
-                        continue
-                    rel_path = os.path.relpath(os.path.join(root, fname), po_patch_dir)
-                    log.debug("patch rel_path: %s", rel_path)
-                    if po in exclude_files and rel_path in exclude_files[po]:
-                        log.debug("patch file %s in po %s is excluded by config", rel_path, po)
-                        continue
-                    top_dir = rel_path.split(os.sep)[0]
-                    patch_flag = os.path.join(top_dir, ".patch_applied")
-                    log.debug("patch top_dir: %s, patch_flag: %s", top_dir, patch_flag)
-                    if top_dir in patch_applied_dirs:
-                        log.debug("patch flag already set for dir: %s, skipping", top_dir)
-                        continue
-                    if os.path.exists(patch_flag):
-                        log.info("patch already applied for dir: %s, skipping", top_dir)
-                        patch_applied_dirs.add(top_dir)
-                        continue
-                    patch_file = os.path.join(root, fname)
-                    log.info("applying patch: %s to dir: %s", patch_file, top_dir)
-                    import subprocess
-                    try:
-                        result = subprocess.run([
-                            "git", "apply", patch_file
-                        ], cwd=".", capture_output=True, text=True)
-                        log.debug("git apply result: returncode=%s, stdout=%s, stderr=%s", result.returncode, result.stdout, result.stderr)
-                        if result.returncode != 0:
-                            log.error("Failed to apply patch %s: %s", patch_file, result.stderr)
-                            return False
-                        else:
-                            with open(patch_flag, 'w') as f:
-                                f.write('patch applied')
-                            patch_applied_dirs.add(top_dir)
-                            log.info("patch applied and flag set for dir: %s", top_dir)
-                    except Exception as e:
-                        log.error("Exception applying patch %s: %s", patch_file, e)
-                        return False
-            return True
-
-        def _apply_override(po, po_override_dir, exclude_files):
-            override_applied_dirs = set()
-            log.debug("_apply_override: po=%s, po_override_dir=%s", po, po_override_dir)
-            if not os.path.isdir(po_override_dir):
-                log.debug("No overrides dir for PO: %s", po)
-                return True
-            log.debug("applying overrides for po: %s", po)
-            for root, _, files in os.walk(po_override_dir):
-                for fname in files:
-                    if fname == ".gitkeep":
-                        log.debug("ignore .gitkeep file in %s", root)
-                        continue
-                    rel_path = os.path.relpath(os.path.join(root, fname), po_override_dir)
-                    log.debug("override rel_path: %s", rel_path)
-                    if po in exclude_files and rel_path in exclude_files[po]:
-                        log.debug("override file %s in po %s is excluded by config", rel_path, po)
-                        continue
-                    top_dir = rel_path.split(os.sep)[0]
-                    override_flag = os.path.join(top_dir, ".override_applied")
-                    log.debug("override top_dir: %s, override_flag: %s", top_dir, override_flag)
-                    if top_dir in override_applied_dirs:
-                        log.debug("override flag already set for dir: %s, skipping", top_dir)
-                        continue
-                    if os.path.exists(override_flag):
-                        log.info("override already applied for dir: %s, skipping", top_dir)
-                        override_applied_dirs.add(top_dir)
-                        continue
-                    src_file = os.path.join(root, fname)
-                    dest_file = os.path.join(top_dir, *rel_path.split(os.sep)[1:]) if len(rel_path.split(os.sep)) > 1 else os.path.join(top_dir, fname)
-                    log.debug("override src_file: %s, dest_file: %s", src_file, dest_file)
-                    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-                    try:
-                        shutil.copy2(src_file, dest_file)
-                        with open(override_flag, 'w') as f:
-                            f.write('override applied')
-                        override_applied_dirs.add(top_dir)
-                        log.info("override applied and flag set for dir: %s, file: %s", top_dir, dest_file)
-                    except Exception as e:
-                        log.error("Failed to copy override file %s to %s: %s", src_file, dest_file, e)
-                        return False
-            return True
-
-        # 4. Process patch and override in po order
         for po in apply_pos:
             po_patch_dir = os.path.join(po_dir, po, "patches")
-            if not _apply_patch(po, po_patch_dir, exclude_files):
+            if not self.__apply_patch(po, po_patch_dir, exclude_files):
                 log.error("PO apply aborted due to patch error in PO: %s", po)
                 return False
             po_override_dir = os.path.join(po_dir, po, "overrides")
-            if not _apply_override(po, po_override_dir, exclude_files):
+            if not self.__apply_override(po, po_override_dir, exclude_files):
                 log.error("PO apply aborted due to override error in PO: %s", po)
                 return False
             log.info("po %s has been processed", po)
         log.info("po apply finished for project: %s", project_name)
+        return True
+
+    def __parse_po_config(self, po_config):
+        apply_pos = []
+        exclude_pos = set()
+        exclude_files = {}
+        tokens = re.findall(r'-?\w+(?:\[[^\]]+\])?', po_config)
+        for token in tokens:
+            if token.startswith('-'):
+                if '[' in token:
+                    po, files = re.match(r'-(\w+)\[([^\]]+)\]', token).groups()
+                    file_list = set(f.strip() for f in files.split())
+                    exclude_files.setdefault(po, set()).update(file_list)
+                else:
+                    po = token[1:]
+                    exclude_pos.add(po)
+            else:
+                po = token
+                apply_pos.append(po)
+        return apply_pos, exclude_pos, exclude_files
+
+    def __apply_patch(self, po, po_patch_dir, exclude_files):
+        patch_applied_dirs = set()
+        log.debug("_apply_patch: po=%s, po_patch_dir=%s", po, po_patch_dir)
+        if not os.path.isdir(po_patch_dir):
+            log.debug("No patches dir for PO: %s", po)
+            return True
+        log.debug("applying patches for po: %s", po)
+        for root, _, files in os.walk(po_patch_dir):
+            for fname in files:
+                if fname == ".gitkeep":
+                    log.debug("ignore .gitkeep file in %s", root)
+                    continue
+                rel_path = os.path.relpath(os.path.join(root, fname), po_patch_dir)
+                log.debug("patch rel_path: %s", rel_path)
+                if po in exclude_files and rel_path in exclude_files[po]:
+                    log.debug("patch file %s in po %s is excluded by config", rel_path, po)
+                    continue
+                top_dir = rel_path.split(os.sep)[0]
+                patch_flag = os.path.join(top_dir, ".patch_applied")
+                log.debug("patch top_dir: %s, patch_flag: %s", top_dir, patch_flag)
+                if top_dir in patch_applied_dirs:
+                    log.debug("patch flag already set for dir: %s, skipping", top_dir)
+                    continue
+                if os.path.exists(patch_flag):
+                    log.info("patch already applied for dir: %s, skipping", top_dir)
+                    patch_applied_dirs.add(top_dir)
+                    continue
+                patch_file = os.path.join(root, fname)
+                log.info("applying patch: %s to dir: %s", patch_file, top_dir)
+                try:
+                    result = subprocess.run([
+                        "git", "apply", patch_file
+                    ], cwd=".", capture_output=True, text=True, check=False)
+                    log.debug("git apply result: returncode=%s, stdout=%s, stderr=%s", result.returncode, result.stdout, result.stderr)
+                    if result.returncode != 0:
+                        log.error("Failed to apply patch %s: %s", patch_file, result.stderr)
+                        return False
+                    with open(patch_flag, 'w', encoding='utf-8') as f:
+                        f.write('patch applied')
+                    patch_applied_dirs.add(top_dir)
+                    log.info("patch applied and flag set for dir: %s", top_dir)
+                except subprocess.SubprocessError as e:
+                    log.error("Subprocess error applying patch %s: %s", patch_file, e)
+                    return False
+                except OSError as e:
+                    log.error("OS error applying patch %s: %s", patch_file, e)
+                    return False
+        return True
+
+    def __apply_override(self, po, po_override_dir, exclude_files):
+        override_applied_dirs = set()
+        log.debug("_apply_override: po=%s, po_override_dir=%s", po, po_override_dir)
+        if not os.path.isdir(po_override_dir):
+            log.debug("No overrides dir for PO: %s", po)
+            return True
+        log.debug("applying overrides for po: %s", po)
+        for root, _, files in os.walk(po_override_dir):
+            for fname in files:
+                if fname == ".gitkeep":
+                    log.debug("ignore .gitkeep file in %s", root)
+                    continue
+                rel_path = os.path.relpath(os.path.join(root, fname), po_override_dir)
+                log.debug("override rel_path: %s", rel_path)
+                if po in exclude_files and rel_path in exclude_files[po]:
+                    log.debug("override file %s in po %s is excluded by config", rel_path, po)
+                    continue
+                top_dir = rel_path.split(os.sep)[0]
+                override_flag = os.path.join(top_dir, ".override_applied")
+                log.debug("override top_dir: %s, override_flag: %s", top_dir, override_flag)
+                if top_dir in override_applied_dirs:
+                    log.debug("override flag already set for dir: %s, skipping", top_dir)
+                    continue
+                if os.path.exists(override_flag):
+                    log.info("override already applied for dir: %s, skipping", top_dir)
+                    override_applied_dirs.add(top_dir)
+                    continue
+                src_file = os.path.join(root, fname)
+                dest_file = os.path.join(top_dir, *rel_path.split(os.sep)[1:]) if len(rel_path.split(os.sep)) > 1 else os.path.join(top_dir, fname)
+                log.debug("override src_file: %s, dest_file: %s", src_file, dest_file)
+                os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                try:
+                    shutil.copy2(src_file, dest_file)
+                    with open(override_flag, 'w', encoding='utf-8') as f:
+                        f.write('override applied')
+                    override_applied_dirs.add(top_dir)
+                    log.info("override applied and flag set for dir: %s, file: %s", top_dir, dest_file)
+                except OSError as e:
+                    log.error("Failed to copy override file %s to %s: %s", src_file, dest_file, e)
+                    return False
         return True
 
 def parse_cmd():
@@ -449,7 +457,6 @@ def main():
     Main entry point for the project manager CLI.
     """
     args_dict = parse_cmd()
-    import builtins
     builtins.ENABLE_CPROFILE = args_dict.get('perf_analyze', False)
     manager = ProjectManager()
 
