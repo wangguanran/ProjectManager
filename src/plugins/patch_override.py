@@ -10,34 +10,32 @@ class PatchOverride:
     """
     Patch and override operations for PO.
     """
-    def __init__(self, vprojects_path, all_projects_info, project_to_board):
+    def __init__(self, vprojects_path, all_projects_info):
         self.vprojects_path = vprojects_path
         self.all_projects_info = all_projects_info
-        self.project_to_board = project_to_board
 
     def po_apply(self, project_name):
         """
-        Apply PO operation for the specified project.
+        Apply patch and override for the specified project.
         Args:
             project_name (str): Project or board name.
         Returns:
             bool: True if success, otherwise False.
         """
         log.info("start po_apply for project: %s", project_name)
-        board = self.project_to_board.get(project_name)
-        if not board:
-            log.error("Cannot find board for project: %s", project_name)
-            return False
-        board_path = os.path.join(self.vprojects_path, board)
-        po_dir = os.path.join(board_path, "po")
         project_cfg = self.all_projects_info.get(project_name, {})
+        board_name = project_cfg.get('board_name')
+        if not board_name:
+            log.error("Cannot find board name for project: %s", project_name)
+            return False
+        board_path = os.path.join(self.vprojects_path, board_name)
+        po_dir = os.path.join(board_path, "po")
         po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
         if not po_config:
             log.warning("No PROJECT_PO_CONFIG found for %s", project_name)
             return True
         apply_pos, exclude_pos, exclude_files = self.__parse_po_config(po_config)
         apply_pos = [po for po in apply_pos if po not in exclude_pos]
-        log.debug("project_to_board: %s", str(self.project_to_board))
         log.debug("all_projects_info: %s", str(self.all_projects_info.get(project_name, {})))
         log.debug("po_dir: %s", po_dir)
         if apply_pos:

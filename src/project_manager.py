@@ -16,6 +16,7 @@ from src.log_manager import log
 from src.profiler import auto_profile
 from src.utils import path_from_root, get_version, list_file_path
 import importlib
+from src.plugins.patch_override import PatchOverride
 
 PM_CONFIG_PATH = path_from_root("pm_config.json")
 DEFAULT_KEYWORD = "demo"
@@ -35,35 +36,34 @@ class ProjectManager:
         if self._initialized:
             return
         self._initialized = True
-        self.vprojects_path = path_from_root("vprojects")
-        self.all_projects_info = {}
-        self.platform_operations = []
-        self.project_to_board = {}
-        self.plugin_operations = {}
-        self.plugin_operation_desc = {}
-        self.__load_all_projects()
-        self.__load_script_plugins()
-        self.__load_plugin_operations()
-        log.debug("Loaded projects info:\n%s", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
-        log.debug("Platform operations: %s", self.platform_operations)
-        log.info("Loaded %d projects.", len(self.all_projects_info))
-        log.info("Loaded %d script plugins.", len(self.platform_operations))
-        log.info("Loaded %d plugin operations.", len(self.plugin_operations))
 
-    def __load_all_projects(self):
+        self.vprojects_path = path_from_root("vprojects")
+        log.debug("vprojects path: %s", self.vprojects_path)
+
+        self.all_projects_info = self.__load_all_projects(self.vprojects_path)
+        log.info("Loaded %d projects.", len(self.all_projects_info))
+        log.debug("Loaded projects info:\n%s", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
+
+        self.platform_operations = self.__load_platform_plugin_operations(self.vprojects_path)
+        log.info("Loaded %d platform operations.", len(self.platform_operations))
+
+        self.builtin_operations = self.__load_builtin_plugin_operations(self.vprojects_path, self.all_projects_info)
+        log.info("Loaded %d builtin  operations.", len(self.builtin_operations))
+
+    def __load_all_projects(self, vprojects_path):
         """
         Scan all board projects under vprojects, parse ini files, and save all project info.
         Build parent-child inheritance: child inherits all parent configs, child overrides same keys except PROJECT_PO_CONFIG, which is concatenated (parent first, then child).
+        Board info is saved in each project's dict as key 'board_name'.
         """
         exclude_dirs = {"scripts", "common", "template", ".cache"}
-        if not os.path.exists(self.vprojects_path):
-            log.warning("vprojects directory does not exist: %s", self.vprojects_path)
-            return
+        if not os.path.exists(vprojects_path):
+            log.warning("vprojects directory does not exist: %s", vprojects_path)
+            return {}
         all_projects = {}
-        project_to_board = {}
         invalid_projects = set()
-        for item in os.listdir(self.vprojects_path):
-            item_path = os.path.join(self.vprojects_path, item)
+        for item in os.listdir(vprojects_path):
+            item_path = os.path.join(vprojects_path, item)
             if not os.path.isdir(item_path) or item in exclude_dirs:
                 continue
             # Find ini file in this board directory
@@ -103,8 +103,8 @@ class ProjectManager:
             config.read(ini_file, encoding="utf-8")
             for project in config.sections():
                 project_dict = dict(config.items(project))
+                project_dict['board_name'] = item  # Save board info in project dict
                 all_projects[project] = project_dict
-                project_to_board[project] = item  # record which board this project belongs to
         # Build parent-child relationship and merge configs
         def find_parent(project):
             # The parent project name is the project name with the last '-' and following part removed
@@ -136,26 +136,26 @@ class ProjectManager:
                     merged[k] = v
             merged_projects[project] = merged
             return merged
+        all_projects_info = {}
         for project in all_projects:
             if project in invalid_projects:
                 continue
             merged_cfg = merge_config(project)
-            self.all_projects_info[project] = merged_cfg
-        self.project_to_board = project_to_board  # Save project to board mapping
+            all_projects_info[project] = merged_cfg
+        return all_projects_info
 
-    def __load_script_plugins(self):
+    def __load_platform_plugin_operations(self, vprojects_path):
         """
-        Load all script plugins under the scripts directory of each board in vprojects (excluding scripts, common, template, .cache).
-        Collect all callable function names from each script into self.platform_operations.
+        Load all platform-related script plugins under the scripts directory of each board in vprojects (excluding scripts, common, template, .cache).
+        Collect all callable function names from each script into a list and return it.
         """
         exclude_dirs = {"scripts", "common", "template", ".cache"}
         platform_operations = set()
-        if not os.path.exists(self.vprojects_path):
-            log.warning("vprojects directory does not exist: %s", self.vprojects_path)
-            self.platform_operations = list(platform_operations)
-            return
-        for item in os.listdir(self.vprojects_path):
-            item_path = os.path.join(self.vprojects_path, item)
+        if not os.path.exists(vprojects_path):
+            log.warning("vprojects directory does not exist: %s", vprojects_path)
+            return list(platform_operations)
+        for item in os.listdir(vprojects_path):
+            item_path = os.path.join(vprojects_path, item)
             if not os.path.isdir(item_path) or item in exclude_dirs:
                 continue
             scripts_dir = os.path.join(item_path, "scripts")
@@ -182,40 +182,32 @@ class ProjectManager:
                         script_path, e
                     )
                     continue
-        self.platform_operations = list(platform_operations)
+        return list(platform_operations)
 
-    def __load_plugin_operations(self):
+    def __load_builtin_plugin_operations(self, vprojects_path, all_projects_info):
         """
-        动态加载插件目录下的operation，只加载插件类的可调用方法。
-        并收集每个operation的docstring到self.plugin_operations。
+        Load builtin plugin operations by explicit import and registration.
         """
-        self.plugin_operations = {}
-        plugins_dir = os.path.join(os.path.dirname(__file__), "plugins")
-        if not os.path.exists(plugins_dir):
-            return
-        for fname in os.listdir(plugins_dir):
-            if not fname.endswith(".py") or fname.startswith("_"):
-                continue
-            module_name = f"src.plugins.{fname[:-3]}"
+        builtin_operations = {}
+        # Explicitly register all builtin plugin classes here
+        builtin_plugin_classes = [PatchOverride]
+        for plugin_cls in builtin_plugin_classes:
             try:
-                mod = importlib.import_module(module_name)
-                for attr in dir(mod):
-                    obj = getattr(mod, attr)
-                    if isinstance(obj, type):
-                        instance = obj(self.vprojects_path, self.all_projects_info, self.project_to_board)
-                        for method in dir(instance):
-                            if method.startswith("_"):
-                                continue
-                            m = getattr(instance, method)
-                            if callable(m):
-                                desc = getattr(m, '__doc__', None)
-                                if desc:
-                                    desc = desc.strip().splitlines()[0]
-                                else:
-                                    desc = "plugin operation"
-                                self.plugin_operations[method] = {"func": m, "desc": desc}
+                instance = plugin_cls(vprojects_path, all_projects_info)
+                for method in dir(instance):
+                    if method.startswith("_"):
+                        continue
+                    m = getattr(instance, method)
+                    if callable(m):
+                        desc = getattr(m, '__doc__', None)
+                        if desc:
+                            desc = desc.strip().splitlines()[0]
+                        else:
+                            desc = "plugin operation"
+                        builtin_operations[method] = {"func": m, "desc": desc}
             except Exception as e:
-                log.error("Failed to load plugin %s: %s", module_name, e)
+                log.error("Failed to load builtin plugin %s: %s", plugin_cls.__name__, e)
+        return builtin_operations
 
     def new_project(self, project_name):
         """
@@ -257,7 +249,7 @@ def main():
     Main entry point for the project manager CLI.
     """
     manager = ProjectManager()
-    plugin_help_lines = [f"  {op}     {info['desc']}" for op, info in manager.plugin_operations.items()]
+    builtin_help_lines = [f"  {op}     {info['desc']}" for op, info in manager.builtin_operations.items()]
     help_text = (
         "supported operations:\n"
         "  build         build the specified project\n"
@@ -265,10 +257,10 @@ def main():
         "  del_project   delete a project\n"
         "  new_board     create a new board\n"
         "  del_board     delete a board\n"
-        "plugin operations:\n"
-        + "\n".join(plugin_help_lines)
+        "builtin operations:\n"
+        + "\n".join(builtin_help_lines)
     )
-    choices = ["build", "new_project", "del_project", "new_board", "del_board"] + list(manager.plugin_operations.keys())
+    choices = ["build", "new_project", "del_project", "new_board", "del_board"] + list(manager.builtin_operations.keys())
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--version', action="version", version=get_version())
     parser.add_argument(
@@ -293,8 +285,8 @@ def main():
         manager.new_board(board_name=name)
     elif operate == "del_board":
         manager.del_board(board_name=name)
-    elif operate in manager.plugin_operations:
-        manager.plugin_operations[operate]["func"](name)
+    elif operate in manager.builtin_operations:
+        manager.builtin_operations[operate]["func"](name)
     else:
         log.error("Operation '%s' is not supported.", operate)
 
