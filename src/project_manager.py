@@ -38,11 +38,11 @@ class ProjectManager:
         self._initialized = True
 
         self.vprojects_path = path_from_root("vprojects")
-        log.debug("vprojects path: %s", self.vprojects_path)
+        log.debug("vprojects path: '%s'", self.vprojects_path)
 
         self.all_projects_info = self.__load_all_projects(self.vprojects_path)
         log.info("Loaded %d projects.", len(self.all_projects_info))
-        log.debug("Loaded projects info:\n%s", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
+        log.debug("Loaded projects info:\n'%s'", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
 
         self.platform_operations = self.__load_platform_plugin_operations(self.vprojects_path)
         log.info("Loaded %d platform operations.", len(self.platform_operations))
@@ -58,7 +58,7 @@ class ProjectManager:
         """
         exclude_dirs = {"scripts", "common", "template", ".cache"}
         if not os.path.exists(vprojects_path):
-            log.warning("vprojects directory does not exist: %s", vprojects_path)
+            log.warning("vprojects directory does not exist: '%s'", vprojects_path)
             return {}
         all_projects = {}
         invalid_projects = set()
@@ -73,7 +73,7 @@ class ProjectManager:
                     ini_file = os.path.join(item_path, f)
                     break
             if not ini_file:
-                log.warning("No ini file found in board directory: %s", item_path)
+                log.warning("No ini file found in board directory: '%s'", item_path)
                 continue
             # First pass: check for duplicate keys in the whole ini file
             has_duplicate = False
@@ -152,7 +152,7 @@ class ProjectManager:
         exclude_dirs = {"scripts", "common", "template", ".cache"}
         platform_operations = set()
         if not os.path.exists(vprojects_path):
-            log.warning("vprojects directory does not exist: %s", vprojects_path)
+            log.warning("vprojects directory does not exist: '%s'", vprojects_path)
             return list(platform_operations)
         for item in os.listdir(vprojects_path):
             item_path = os.path.join(vprojects_path, item)
@@ -178,7 +178,7 @@ class ProjectManager:
                             platform_operations.add(attr)
                 except OSError as e:
                     log.error(
-                        "Failed to load script: %s, error: %s",
+                        "Failed to load script: '%s', error: '%s'",
                         script_path, e
                     )
                     continue
@@ -206,7 +206,7 @@ class ProjectManager:
                             desc = "plugin operation"
                         builtin_operations[method] = {"func": m, "desc": desc}
             except Exception as e:
-                log.error("Failed to load builtin plugin %s: %s", plugin_cls.__name__, e)
+                log.error("Failed to load builtin plugin '%s': '%s'", plugin_cls.__name__, e)
         return builtin_operations
 
     def new_project(self, project_name):
