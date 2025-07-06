@@ -50,7 +50,11 @@ fi
 
 # Run pylint on all Python files in the project
 print_status "Running pylint..."
-PY_FILES=$(find . -type f -name '*.py' ! -path './.venv/*')
+# Get the git repository root directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+# Change to repository root to ensure correct path resolution
+cd "$REPO_ROOT"
+PY_FILES=$(find . -type f -name '*.py' ! -path './.venv/*' ! -path './out/*')
 if pylint $PY_FILES --rcfile=.pylintrc --output-format=text; then
     print_status "Pylint passed ✓"
 else
@@ -61,7 +65,7 @@ fi
 
 # Run pytest tests
 print_status "Running pytest..."
-if pytest tests/ -v; then
+if pytest "$REPO_ROOT/tests/" -v; then
     print_status "Pytest passed ✓"
 else
     print_error "Pytest failed ✗"
