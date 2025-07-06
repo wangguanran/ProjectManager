@@ -441,6 +441,11 @@ disable=raw-checker-failed,
         use-implicit-booleaness-not-comparison-to-zero,
         use-symbolic-message-instead,
         C0301 # Ignore 'Line too long' warning
+        ,R0914 # Too many local variables
+        ,R0912 # Too many branches
+        ,R0915 # Too many statements
+        ,R0903 # Too few public methods
+        ,W0511  # TODO/FIXME/XXX comments
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

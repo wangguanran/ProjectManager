@@ -1,21 +1,16 @@
 """
 Main module for project management.
 """
-import os
-import shutil
-import sys
-import json
 import argparse
-import fnmatch
-import importlib.util
-import configparser
-import subprocess
-import re
 import builtins
+import configparser
+import importlib
+import importlib.util
+import json
+import os
 from src.log_manager import log
 from src.profiler import auto_profile
-from src.utils import path_from_root, get_version, list_file_path
-import importlib
+from src.utils import path_from_root, get_version
 from src.plugins.patch_override import PatchOverride
 
 PM_CONFIG_PATH = path_from_root("pm_config.json")
@@ -205,7 +200,7 @@ class ProjectManager:
                         else:
                             desc = "plugin operation"
                         builtin_operations[method] = {"func": m, "desc": desc}
-            except Exception as e:
+            except (OSError, ImportError, AttributeError) as e:
                 log.error("Failed to load builtin plugin '%s': '%s'", plugin_cls.__name__, e)
         return builtin_operations
 
@@ -214,35 +209,35 @@ class ProjectManager:
         Create a new project.
         TODO: implement new_project
         """
-        pass
+        # TODO: implement new_project
 
     def del_project(self, project_name):
         """
         Delete the specified project directory and update its status in the config file.
         TODO: implement del_project
         """
-        pass
+        # TODO: implement del_project
 
     def build(self, project_name):
         """
         Build the specified project.
         TODO: implement build
         """
-        pass
+        # TODO: implement build
 
     def new_board(self, board_name):
         """
         Create a new board.
         TODO: implement new_board
         """
-        pass
+        # TODO: implement new_board
 
     def del_board(self, board_name):
         """
         Delete the specified board.
         TODO: implement del_board
         """
-        pass
+        # TODO: implement del_board
 
 def main():
     """

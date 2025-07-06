@@ -40,7 +40,7 @@ def func_cprofile(func):
                 ps = pstats.Stats(profile, stream=s)
                 ps.sort_stats("time").print_stats()  # print all
                 log.debug("cProfile stats for %s:\n%s", func.__name__, s.getvalue())
-            except Exception as exc:
+            except (OSError, IOError) as exc:
                 log.exception("fail to print cProfile stats: %s", exc)
     return wrapper
 

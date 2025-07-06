@@ -1,3 +1,6 @@
+"""
+Patch and override operations for project management.
+"""
 import os
 import shutil
 import subprocess
@@ -183,4 +186,4 @@ class PatchOverride:
                 except OSError as e:
                     log.error("Failed to copy override file '%s' to '%s': '%s'", src_file, dest_file, e)
                     return False
-        return True 
+        return True
