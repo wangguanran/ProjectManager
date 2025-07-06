@@ -2,4 +2,5 @@ build
 pytest
 gitpython
 pyinstaller
-toml 
+toml
+pylint 
