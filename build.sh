@@ -25,7 +25,7 @@ echo "--- Build complete. Find the artifacts in the 'out' directory. ---"
 # Generate standalone binary (requires pyinstaller)
 if command -v pyinstaller &> /dev/null; then
     echo "--- Building standalone binary with pyinstaller ---"
-    
+
     # Use more compatible configuration options
     pyinstaller \
         --onefile \
@@ -42,9 +42,9 @@ if command -v pyinstaller &> /dev/null; then
         --specpath out \
         -n pm \
         src/project_manager.py
-    
+
     echo "Binary generated at out/pm"
-    
+
     # Apply static linking for better compatibility
     echo "--- Applying static linking for better compatibility ---"
     # Check if staticx is installed, install if not
@@ -57,19 +57,28 @@ if command -v pyinstaller &> /dev/null; then
         echo "patchelf not found. Installing..."
         sudo apt-get update && sudo apt-get install -y patchelf
     fi
+
     echo "--- Cleaning RPATH/RUNPATH tags before static linking ---"
+    # More thorough RPATH/RUNPATH cleaning
     find out/ -name "*.so*" -type f -exec patchelf --remove-rpath {} \; 2>/dev/null || true
+    find out/ -name "*.so*" -type f -exec patchelf --set-rpath "" {} \; 2>/dev/null || true
     patchelf --remove-rpath out/pm 2>/dev/null || true
+    patchelf --set-rpath "" out/pm 2>/dev/null || true
+
+    # Also clean any extracted files in build directory
+    find out/build/ -name "*.so*" -type f -exec patchelf --remove-rpath {} \; 2>/dev/null || true
+    find out/build/ -name "*.so*" -type f -exec patchelf --set-rpath "" {} \; 2>/dev/null || true
+
     echo "RPATH/RUNPATH tags cleaned"
     staticx out/pm out/pm-static
     mv out/pm-static out/pm
     echo "Static linking applied successfully"
-    
+
     # Remove debug info to reduce file size
     echo "--- Final debug info removal ---"
     strip out/pm
-    
-    echo "Final binary generated at out/pm with static linking"
+
+    echo "Final binary generated at out/pm"
 else
     echo "pyinstaller not installed, skipping binary packaging. Use 'pip install pyinstaller' to install."
 fi
