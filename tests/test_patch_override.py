@@ -1,12 +1,13 @@
 """
 Tests for patch and override operations.
 """
-# pylint: disable=attribute-defined-outside-init, import-outside-toplevel, too-many-public-methods
+# pylint: disable=attribute-defined-outside-init, import-outside-toplevel, too-many-public-methods, protected-access
 import os
 import sys
 import tempfile
 import shutil
 import subprocess
+import configparser
 import pytest
 
 class TestPatchOverride:
@@ -38,6 +39,20 @@ class TestPatchOverride:
 
         # Create test project structure
         self._create_test_project_structure()
+
+        # Mock all_projects_info
+        self.all_projects_info = {
+            "test_project": {
+                "board_name": "test_board",
+                "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03"
+            },
+            "test_project_child": {
+                "board_name": "test_board",
+                "PROJECT_PO_CONFIG": "-po_test01"
+            }
+        }
+
+        self.patch_override = self.patch_override_cls(self.vprojects_path, self.all_projects_info)
 
     def teardown_method(self):
         """Clean up test environment after each test."""
@@ -717,6 +732,134 @@ index 1234567..abcdefg 100644
             board_path = os.path.join(self.vprojects_path, "test_board")
             po_path = os.path.join(board_path, "po", po_name)
             assert os.path.exists(po_path), f"Directory not created for: {po_name}"
+
+    def test_po_del_invalid_po_name(self):
+        """Test po_del with invalid PO name."""
+        result = self.patch_override.po_del("test_project", "invalid_po", force=True)
+        assert result is False
+
+    def test_po_del_nonexistent_po(self):
+        """Test po_del with non-existent PO."""
+        result = self.patch_override.po_del("test_project", "po_nonexistent", force=True)
+        assert result is False
+
+    def test_po_del_success(self):
+        """Test successful po_del operation."""
+        # Remove existing po_test01 if it exists
+        test_po_name = "po_test01"
+        test_po_path = os.path.join(self.vprojects_path, "test_board", "po", test_po_name)
+        if os.path.exists(test_po_path):
+            shutil.rmtree(test_po_path)
+
+        # Create a fresh test PO directory
+        os.makedirs(test_po_path)
+        os.makedirs(os.path.join(test_po_path, "patches"))
+        os.makedirs(os.path.join(test_po_path, "overrides"))
+
+        # Create a test file in the PO
+        test_file = os.path.join(test_po_path, "test.txt")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("test content")
+
+        # Verify PO exists
+        assert os.path.exists(test_po_path)
+
+        # Execute po_del with force=True to skip confirmation
+        result = self.patch_override.po_del("test_project", test_po_name, force=True)
+
+        # Verify PO was deleted
+        assert result is True
+        assert not os.path.exists(test_po_path)
+
+        # Verify PO was removed from config
+        config = configparser.ConfigParser()
+        config.optionxform = str
+        config.read(os.path.join(self.vprojects_path, "test_board", "board.ini"), encoding="utf-8")
+
+        # Check that po_test01 was removed from test_project config
+        updated_config = config.get("test_project", "PROJECT_PO_CONFIG")
+        assert "po_test01" not in updated_config
+        assert "po_test02" in updated_config  # Other POs should remain
+        assert "-po_test03" in updated_config
+
+    def test_po_del_with_file_exclusions(self):
+        """Test po_del with PO that has file exclusions."""
+        # Remove existing po_test03 if it exists
+        test_po_name = "po_test03"
+        test_po_path = os.path.join(self.vprojects_path, "test_board", "po", test_po_name)
+        if os.path.exists(test_po_path):
+            shutil.rmtree(test_po_path)
+
+        # Create a fresh test PO directory
+        os.makedirs(test_po_path)
+
+        # Execute po_del
+        result = self.patch_override.po_del("test_project", test_po_name, force=True)
+
+        # Verify PO was deleted
+        assert result is True
+        assert not os.path.exists(test_po_path)
+
+        # Verify PO was removed from config (including the exclusion)
+        config = configparser.ConfigParser()
+        config.optionxform = str
+        config.read(os.path.join(self.vprojects_path, "test_board", "board.ini"), encoding="utf-8")
+
+        updated_config = config.get("test_project", "PROJECT_PO_CONFIG")
+        assert "-po_test03" not in updated_config
+        assert "po_test01" in updated_config
+        assert "po_test02" in updated_config
+
+    def test_po_del_removes_empty_po_directory(self):
+        """Test that po_del removes the po directory if it becomes empty."""
+        # Remove all existing POs to make po directory empty
+        po_dir = os.path.join(self.vprojects_path, "test_board", "po")
+        for item in os.listdir(po_dir):
+            item_path = os.path.join(po_dir, item)
+            if os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+
+        # Create only one PO
+        test_po_name = "po_test01"
+        test_po_path = os.path.join(po_dir, test_po_name)
+        os.makedirs(test_po_path)
+
+        # Verify po directory exists
+        assert os.path.exists(po_dir)
+
+        # Execute po_del
+        result = self.patch_override.po_del("test_project", test_po_name, force=True)
+
+        # Verify PO was deleted and po directory was removed
+        assert result is True
+        assert not os.path.exists(test_po_path)
+        assert not os.path.exists(po_dir)
+
+    def test_remove_po_from_config_string(self):
+        """Test the helper method for removing PO from config string."""
+        # Test removing a simple PO
+        config = "po_test01 po_test02"
+        result = self.patch_override._PatchOverride__remove_po_from_config_string(config, "po_test01")
+        assert result == "po_test02"
+
+        # Test removing an excluded PO
+        config = "po_test01 -po_test02"
+        result = self.patch_override._PatchOverride__remove_po_from_config_string(config, "po_test02")
+        assert result == "po_test01"
+
+        # Test removing PO with file exclusions
+        config = "po_test01 -po_test02[file1.c file2.c]"
+        result = self.patch_override._PatchOverride__remove_po_from_config_string(config, "po_test02")
+        assert result == "po_test01"
+
+        # Test removing non-existent PO
+        config = "po_test01 po_test02"
+        result = self.patch_override._PatchOverride__remove_po_from_config_string(config, "po_test03")
+        assert result == "po_test01 po_test02"
+
+        # Test empty config
+        result = self.patch_override._PatchOverride__remove_po_from_config_string("", "po_test01")
+        assert result == ""
 
 if __name__ == "__main__":
     # Run tests if script is executed directly

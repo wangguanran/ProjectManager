@@ -167,6 +167,284 @@ class PatchOverride:
             log.error("Failed to create po directory structure for '%s': '%s'", po_name, e)
             return False
 
+    def po_del(self, project_name, po_name, force=False):
+        """
+        Delete the specified PO directory and remove it from all project configurations.
+        Args:
+            project_name (str): Project or board name.
+            po_name (str): Name of the PO to delete.
+            force (bool): If True, skip confirmation prompt.
+        Returns:
+            bool: True if success, otherwise False.
+        """
+        log.info("start po_del for project: '%s', po_name: '%s'", project_name, po_name)
+
+        # Validate po_name format
+        if not re.match(r"^po[a-z0-9_]*$", po_name):
+            log.error("po_name '%s' is invalid. It must start with 'po' and only contain lowercase letters, digits, and underscores.", po_name)
+            return False
+
+        project_cfg = self.all_projects_info.get(project_name, {})
+        board_name = project_cfg.get('board_name')
+        if not board_name:
+            log.error("Cannot find board name for project: '%s'", project_name)
+            return False
+
+        board_path = os.path.join(self.vprojects_path, board_name)
+        po_dir = os.path.join(board_path, "po")
+        po_path = os.path.join(po_dir, po_name)
+
+        # Check if PO directory exists
+        if not os.path.exists(po_path):
+            log.error("PO directory '%s' does not exist", po_path)
+            return False
+
+        # Show what will be deleted and ask for confirmation
+        if not force:
+            if not self.__confirm_deletion(po_name, po_path):
+                log.info("po_del cancelled by user")
+                return False
+
+        # First, remove the PO from all project configurations
+        if not self.__remove_po_from_configs(po_name):
+            log.error("Failed to remove PO '%s' from project configurations", po_name)
+            return False
+
+        # Then delete the PO directory
+        try:
+            shutil.rmtree(po_path)
+            log.info("Deleted PO directory: '%s'", po_path)
+
+            # Check if po directory is now empty and remove it if so
+            if os.path.exists(po_dir) and not os.listdir(po_dir):
+                os.rmdir(po_dir)
+                log.info("Removed empty po directory: '%s'", po_dir)
+
+        except OSError as e:
+            log.error("Failed to delete PO directory '%s': '%s'", po_path, e)
+            return False
+
+        log.info("po_del finished for project: '%s', po_name: '%s'", project_name, po_name)
+        return True
+
+    def __confirm_deletion(self, po_name, po_path):
+        """
+        Show deletion information and ask for user confirmation.
+        Args:
+            po_name (str): Name of the PO to delete.
+            po_path (str): Path to the PO directory.
+        Returns:
+            bool: True if user confirms, False otherwise.
+        """
+        print("\n=== PO Deletion Confirmation ===")
+        print(f"PO Name: {po_name}")
+        print(f"PO Path: {po_path}")
+
+        # Show directory contents
+        if os.path.exists(po_path):
+            print("\nDirectory contents:")
+            self.__print_directory_tree(po_path, prefix="  ")
+
+        # Show which projects use this PO
+        using_projects = self.__find_projects_using_po(po_name)
+        if using_projects:
+            print("\nProjects using this PO:")
+            for project in using_projects:
+                print(f"  - {project}")
+        else:
+            print("\nNo projects are currently using this PO.")
+
+        print("\nWARNING: This action will:")
+        print("  1. Permanently delete the PO directory and all its contents")
+        print("  2. Remove this PO from all project configurations")
+        print("  3. This action cannot be undone!")
+
+        while True:
+            response = input(f"\nAre you sure you want to delete PO '{po_name}'? (yes/no): ").strip().lower()
+            if response in ['yes', 'y']:
+                return True
+            if response in ['no', 'n']:
+                return False
+            print("Please enter 'yes' or 'no'.")
+
+    def __print_directory_tree(self, path, prefix="", max_depth=3, current_depth=0):
+        """
+        Print a tree representation of directory contents.
+        Args:
+            path (str): Directory path to print.
+            prefix (str): Prefix for indentation.
+            max_depth (int): Maximum depth to print.
+            current_depth (int): Current depth level.
+        """
+        if current_depth >= max_depth:
+            print(f"{prefix}... (max depth reached)")
+            return
+
+        try:
+            items = os.listdir(path)
+            for i, item in enumerate(sorted(items)):
+                item_path = os.path.join(path, item)
+                is_last = i == len(items) - 1
+                current_prefix = prefix + ("└── " if is_last else "├── ")
+
+                if os.path.isdir(item_path):
+                    print(f"{current_prefix}{item}/")
+                    next_prefix = prefix + ("    " if is_last else "│   ")
+                    self.__print_directory_tree(item_path, next_prefix, max_depth, current_depth + 1)
+                else:
+                    size = os.path.getsize(item_path)
+                    print(f"{current_prefix}{item} ({size} bytes)")
+        except OSError as e:
+            print(f"{prefix}Error reading directory: {e}")
+
+    def __find_projects_using_po(self, po_name):
+        """
+        Find all projects that use the specified PO.
+        Args:
+            po_name (str): Name of the PO to search for.
+        Returns:
+            list: List of project names that use this PO.
+        """
+        using_projects = []
+        for project_name, project_cfg in self.all_projects_info.items():
+            po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
+            if not po_config:
+                continue
+
+            # Check if this PO is used in the config
+            tokens = re.findall(r'-?\w+(?:\[[^\]]+\])?', po_config)
+            for token in tokens:
+                base = token.lstrip('-')
+                base = base.split('[', 1)[0]
+                if base == po_name:
+                    using_projects.append(project_name)
+                    break
+
+        return using_projects
+
+    def __remove_po_from_configs(self, po_name):
+        """
+        Remove the specified PO from all project configurations.
+        Args:
+            po_name (str): Name of the PO to remove.
+        Returns:
+            bool: True if success, otherwise False.
+        """
+        log.debug("Removing PO '%s' from all project configurations", po_name)
+
+        # Group projects by their board and ini file
+        board_configs = {}
+        for project_name, project_cfg in self.all_projects_info.items():
+            board_name = project_cfg.get('board_name')
+            if not board_name:
+                continue
+
+            if board_name not in board_configs:
+                board_configs[board_name] = {}
+
+            # Find the ini file for this board
+            board_path = os.path.join(self.vprojects_path, board_name)
+            ini_file = None
+            for f in os.listdir(board_path):
+                if f.endswith(".ini"):
+                    ini_file = os.path.join(board_path, f)
+                    break
+
+            if not ini_file:
+                log.error("No ini file found for board: '%s'", board_name)
+                return False
+
+            if ini_file not in board_configs[board_name]:
+                board_configs[board_name][ini_file] = []
+
+            board_configs[board_name][ini_file].append(project_name)
+
+        # Process each ini file
+        for board_name, ini_files in board_configs.items():
+            for ini_file, projects in ini_files.items():
+                if not self.__update_ini_file(ini_file, projects, po_name):
+                    return False
+
+        return True
+
+    def __update_ini_file(self, ini_file, projects, po_name):
+        """
+        Update the ini file to remove the specified PO from all project configurations.
+        Args:
+            ini_file (str): Path to the ini file.
+            projects (list): List of project names in this ini file.
+            po_name (str): Name of the PO to remove.
+        Returns:
+            bool: True if success, otherwise False.
+        """
+        log.debug("Updating ini file: '%s' to remove PO '%s'", ini_file, po_name)
+
+        try:
+            # Read the current ini file
+            with open(ini_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            # Parse the file and update PROJECT_PO_CONFIG lines
+            updated_lines = []
+            current_section = None
+            in_project_section = False
+
+            for line in lines:
+                stripped_line = line.strip()
+
+                # Check if this is a section header
+                if stripped_line.startswith('[') and stripped_line.endswith(']'):
+                    current_section = stripped_line[1:-1].strip()
+                    in_project_section = current_section in projects
+                    updated_lines.append(line)
+                    continue
+
+                # If we're in a project section and this is a PROJECT_PO_CONFIG line
+                if in_project_section and stripped_line.replace(' ', '').startswith('PROJECT_PO_CONFIG='):
+                    # Parse the current config and remove the PO
+                    config_value = line.split('=', 1)[1].strip()
+                    updated_config = self.__remove_po_from_config_string(config_value, po_name)
+                    # Update the line
+                    updated_lines.append(f"PROJECT_PO_CONFIG={updated_config}\n")
+                    log.debug("Updated PROJECT_PO_CONFIG for project '%s': '%s' -> '%s'",
+                             current_section, config_value, updated_config)
+                else:
+                    updated_lines.append(line)
+
+            # Write the updated file
+            with open(ini_file, 'w', encoding='utf-8') as f:
+                f.writelines(updated_lines)
+
+            log.info("Updated ini file: '%s'", ini_file)
+            return True
+
+        except OSError as e:
+            log.error("Failed to update ini file '%s': '%s'", ini_file, e)
+            return False
+
+    def __remove_po_from_config_string(self, config_string, po_name):
+        """
+        Remove the specified PO from a PROJECT_PO_CONFIG string.
+        Args:
+            config_string (str): The PROJECT_PO_CONFIG string.
+            po_name (str): Name of the PO to remove.
+        Returns:
+            str: Updated config string with the PO removed.
+        """
+        if not config_string:
+            return config_string
+        tokens = re.findall(r'-?\w+(?:\[[^\]]+\])?', config_string)
+        updated_tokens = []
+        for token in tokens:
+            # Remove leading '-' and trailing '[...]' for comparison
+            base = token.lstrip('-')
+            base = base.split('[', 1)[0]
+            if base != po_name:
+                updated_tokens.append(token)
+            else:
+                log.debug("Removing PO '%s' from config string token: '%s'", po_name, token)
+        return ' '.join(updated_tokens)
+
     def __parse_po_config(self, po_config):
         apply_pos = []
         exclude_pos = set()
