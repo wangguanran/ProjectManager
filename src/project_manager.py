@@ -51,7 +51,7 @@ class ProjectManager:
         Build parent-child inheritance: child inherits all parent configs, child overrides same keys except PROJECT_PO_CONFIG, which is concatenated (parent first, then child).
         Board info is saved in each project's dict as key 'board_name'.
         """
-        exclude_dirs = {"scripts", "common", "template", ".cache"}
+        exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
         if not os.path.exists(vprojects_path):
             log.warning("vprojects directory does not exist: '%s'", vprojects_path)
             return {}
