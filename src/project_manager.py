@@ -36,14 +36,14 @@ class ProjectManager:
         log.debug("vprojects path: '%s'", self.vprojects_path)
 
         self.all_projects_info = self.__load_all_projects(self.vprojects_path)
-        log.info("Loaded %d projects.", len(self.all_projects_info))
+        log.debug("Loaded %d projects.", len(self.all_projects_info))
         log.debug("Loaded projects info:\n'%s'", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
 
         self.platform_operations = self.__load_platform_plugin_operations(self.vprojects_path)
-        log.info("Loaded %d platform operations.", len(self.platform_operations))
+        log.debug("Loaded %d platform operations.", len(self.platform_operations))
 
         self.builtin_operations = self.__load_builtin_plugin_operations(self.vprojects_path, self.all_projects_info)
-        log.info("Loaded %d builtin  operations.", len(self.builtin_operations))
+        log.debug("Loaded %d builtin  operations.", len(self.builtin_operations))
 
     def __load_all_projects(self, vprojects_path):
         """
@@ -244,7 +244,9 @@ def main():
     Main entry point for the project manager CLI.
     """
     manager = ProjectManager()
-    builtin_help_lines = [f"  {op}     {info['desc']}" for op, info in manager.builtin_operations.items()]
+    # Calculate the maximum length of operation names for proper alignment
+    max_op_length = max(len(op) for op in manager.builtin_operations) if manager.builtin_operations else 0
+    builtin_help_lines = [f"  {op:<{max_op_length}}     {info['desc']}" for op, info in manager.builtin_operations.items()]
     help_text = (
         "supported operations:\n"
         "  build         build the specified project\n"

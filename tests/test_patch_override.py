@@ -309,6 +309,291 @@ index 1234567..abcdefg 100644
         finally:
             os.chdir(original_cwd)
 
+    def test_po_revert_basic(self):
+        """Test basic po_revert functionality."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # First apply po_apply
+            result = patch_override.po_apply("test_project")
+            assert result is True
+
+            # Verify files were applied
+            with open("main.py", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Patched by po_test01" in content
+
+            assert os.path.exists("new_file.txt")
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Overridden by po_test02" in content
+
+            # Now revert
+            result = patch_override.po_revert("test_project")
+            assert result is True
+
+            # Check if patch was reverted
+            with open("main.py", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Patched by po_test01" not in content
+            assert "print('Hello, World!')" in content
+
+            # Check if override files were reverted
+            # new_file.txt should be deleted (untracked file)
+            assert not os.path.exists("new_file.txt")
+
+            # config.txt should be restored to original
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Overridden by po_test02" not in content
+            assert "debug=true" in content
+            assert "port=8080" in content
+
+            # Check if flag files were cleaned up
+            assert not os.path.exists(".patch_applied")
+            assert not os.path.exists(".override_applied")
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_revert_git_tracked_files(self):
+        """Test po_revert with git tracked files."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # Apply po_apply
+            result = patch_override.po_apply("test_project")
+            assert result is True
+
+            # Verify config.txt was overridden (this is a git tracked file)
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Overridden by po_test02" in content
+
+            # Now revert
+            result = patch_override.po_revert("test_project")
+            assert result is True
+
+            # Check if config.txt was restored using git checkout
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Overridden by po_test02" not in content
+            assert "debug=true" in content
+            assert "port=8080" in content
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_revert_untracked_files(self):
+        """Test po_revert with git untracked files."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # Apply po_apply
+            result = patch_override.po_apply("test_project")
+            assert result is True
+
+            # Verify new_file.txt was created (this is an untracked file)
+            assert os.path.exists("new_file.txt")
+            with open("new_file.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "This is a new file from po_test01" in content
+
+            # Now revert
+            result = patch_override.po_revert("test_project")
+            assert result is True
+
+            # Check if new_file.txt was deleted (untracked file)
+            assert not os.path.exists("new_file.txt")
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_revert_idempotent(self):
+        """Test that po_revert can be run multiple times without issues."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # Apply po_apply
+            result = patch_override.po_apply("test_project")
+            assert result is True
+
+            # Revert first time
+            result1 = patch_override.po_revert("test_project")
+            assert result1 is True
+
+            # Revert second time (should still succeed)
+            result2 = patch_override.po_revert("test_project")
+            assert result2 is True
+
+            # Verify files are still in original state
+            with open("main.py", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Patched by po_test01" not in content
+            assert "print('Hello, World!')" in content
+
+            assert not os.path.exists("new_file.txt")
+
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Overridden by po_test02" not in content
+            assert "debug=true" in content
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_revert_invalid_project(self):
+        """Test po_revert with invalid project name."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # Revert with invalid project
+            result = patch_override.po_revert("invalid_project")
+
+            # Should return False for invalid project
+            assert result is False
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_revert_no_config(self):
+        """Test po_revert with project that has no PROJECT_PO_CONFIG."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create project info without PROJECT_PO_CONFIG
+            all_projects_info = {
+                "test_project_no_config": {
+                    "board_name": "test_board"
+                }
+            }
+
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # Revert
+            result = patch_override.po_revert("test_project_no_config")
+
+            # Should return True (no config means success)
+            assert result is True
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_revert_partial_application(self):
+        """Test po_revert when only some po have been applied."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # Apply only po_test01 manually (simulate partial application)
+            po_test01_patch_dir = os.path.join(self.vprojects_path, "test_board", "po", "po_test01", "patches")
+            patch_file = os.path.join(po_test01_patch_dir, "main.py.patch")
+            
+            # Apply patch manually
+            subprocess.run(["git", "apply", patch_file], cwd=self.test_repo_path, check=True)
+            
+            # Create flag file manually
+            with open(".patch_applied", 'w', encoding='utf-8') as f:
+                f.write("po_test01\n")
+
+            # Now revert
+            result = patch_override.po_revert("test_project")
+            assert result is True
+
+            # Check if patch was reverted
+            with open("main.py", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Patched by po_test01" not in content
+            assert "print('Hello, World!')" in content
+
+            # Check if flag file was cleaned up
+            assert not os.path.exists(".patch_applied")
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_apply_revert_cycle(self):
+        """Test complete apply-revert cycle multiple times."""
+        # Change to test repository directory
+        original_cwd = os.getcwd()
+        os.chdir(self.test_repo_path)
+
+        try:
+            # Create PatchOverride instance
+            all_projects_info = self._load_all_projects_info()
+            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+
+            # First cycle: apply -> revert
+            result1 = patch_override.po_apply("test_project")
+            assert result1 is True
+
+            result2 = patch_override.po_revert("test_project")
+            assert result2 is True
+
+            # Second cycle: apply -> revert
+            result3 = patch_override.po_apply("test_project")
+            assert result3 is True
+
+            result4 = patch_override.po_revert("test_project")
+            assert result4 is True
+
+            # Verify final state is clean
+            with open("main.py", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Patched by po_test01" not in content
+            assert "print('Hello, World!')" in content
+
+            assert not os.path.exists("new_file.txt")
+
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "Overridden by po_test02" not in content
+            assert "debug=true" in content
+
+            # Check no flag files remain
+            assert not os.path.exists(".patch_applied")
+            assert not os.path.exists(".override_applied")
+
+        finally:
+            os.chdir(original_cwd)
+
 if __name__ == "__main__":
     # Run tests if script is executed directly
     pytest.main([__file__, "-v"])
