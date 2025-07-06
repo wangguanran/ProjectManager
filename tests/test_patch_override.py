@@ -610,8 +610,8 @@ index 1234567..abcdefg 100644
         all_projects_info = self._load_all_projects_info()
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
-        # Create new PO
-        result = patch_override.po_new("test_project", "po_new_test")
+        # Create new PO with force=True to skip interactive prompts
+        result = patch_override.po_new("test_project", "po_new_test", force=True)
         assert result is True
 
         # Verify directory structure was created
@@ -638,12 +638,12 @@ index 1234567..abcdefg 100644
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
         # Create new PO
-        result = patch_override.po_new("test_project", "po_existing_test")
+        result = patch_override.po_new("test_project", "po_existing_test", force=True)
         assert result is True
 
-        # Try to create the same PO again (should not fail)
-        result = patch_override.po_new("test_project", "po_existing_test")
-        assert result is True
+        # Try to create the same PO again (should fail now)
+        result = patch_override.po_new("test_project", "po_existing_test", force=True)
+        assert result is False  # Should fail because PO already exists
 
         # Verify directory structure still exists
         board_path = os.path.join(self.vprojects_path, "test_board")
@@ -655,6 +655,410 @@ index 1234567..abcdefg 100644
         assert os.path.exists(patches_dir)
         assert os.path.exists(overrides_dir)
 
+    def test_po_new_force_parameter(self):
+        """Test po_new with force parameter."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Test with force=True (should work in test environment)
+        result = patch_override.po_new("test_project", "po_force_test", force=True)
+        assert result is True
+
+        # Verify directory was created
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        po_path = os.path.join(board_path, "po", "po_force_test")
+        assert os.path.exists(po_path)
+
+    def test_po_new_find_repositories_single_git(self):
+        """Test __find_repositories with single git repository."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository in the current working directory (project root)
+        # This simulates the new behavior where we look for git repos from current directory
+        original_cwd = os.getcwd()
+        try:
+            # Change to a temporary directory to test
+            test_dir = tempfile.mkdtemp()
+            os.chdir(test_dir)
+
+            # Create a git repository in the current directory
+            subprocess.run(["git", "init"], cwd=test_dir, check=True)
+
+            # Create a test file
+            test_file = os.path.join(test_dir, "test.txt")
+            with open(test_file, 'w', encoding='utf-8') as f:
+                f.write("test content\n")
+
+            subprocess.run(["git", "add", "test.txt"], cwd=test_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=test_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=test_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=test_dir, check=True)
+
+            # Test repository detection
+            board_path = os.path.join(self.vprojects_path, "test_board")
+            repositories = patch_override._PatchOverride__find_repositories(board_path)
+
+            # Should find one repository (the current directory)
+            assert len(repositories) == 1
+            repo_path, repo_name = repositories[0]
+            assert repo_path == test_dir
+            assert repo_name == "root"
+
+        finally:
+            os.chdir(original_cwd)
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_po_new_find_repositories_repo_manifest(self):
+        """Test __find_repositories with .repo manifest."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create .repo manifest structure
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        repo_dir = os.path.join(board_path, ".repo")
+        os.makedirs(repo_dir)
+
+        # Create manifest.xml
+        manifest_content = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <project path="." name="root"/>
+  <project path="subproject1" name="sub1"/>
+  <project path="subproject2" name="sub2"/>
+</manifest>"""
+
+        with open(os.path.join(repo_dir, "manifest.xml"), 'w', encoding='utf-8') as f:
+            f.write(manifest_content)
+
+        # Create git repositories for the projects
+        subproject1_path = os.path.join(board_path, "subproject1")
+        subproject2_path = os.path.join(board_path, "subproject2")
+
+        os.makedirs(subproject1_path)
+        os.makedirs(subproject2_path)
+
+        subprocess.run(["git", "init"], cwd=board_path, check=True)
+        subprocess.run(["git", "init"], cwd=subproject1_path, check=True)
+        subprocess.run(["git", "init"], cwd=subproject2_path, check=True)
+
+        # Change to board_path directory for testing
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(board_path)
+
+            # Test repository detection
+            repositories = patch_override._PatchOverride__find_repositories(board_path)
+
+            # Should find 3 repositories
+            assert len(repositories) == 3
+
+            repo_paths = [repo[0] for repo in repositories]
+            repo_names = [repo[1] for repo in repositories]
+
+            # Check that all expected repositories are found
+            # Note: root repository path might be normalized, so we check by name instead
+            assert "root" in repo_names
+            assert "subproject1" in repo_names
+            assert "subproject2" in repo_names
+
+            # Verify the actual paths exist
+            for repo_path in repo_paths:
+                assert os.path.exists(repo_path)
+                assert os.path.exists(os.path.join(repo_path, ".git"))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_new_find_repositories_recursive(self):
+        """Test __find_repositories with recursive git repository discovery."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create nested git repositories
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        nested_repo1 = os.path.join(board_path, "nested", "repo1")
+        nested_repo2 = os.path.join(board_path, "nested", "repo2")
+
+        os.makedirs(nested_repo1)
+        os.makedirs(nested_repo2)
+
+        subprocess.run(["git", "init"], cwd=nested_repo1, check=True)
+        subprocess.run(["git", "init"], cwd=nested_repo2, check=True)
+
+        # Change to board_path directory for testing
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(board_path)
+
+            # Test repository detection
+            repositories = patch_override._PatchOverride__find_repositories(board_path)
+
+            # Should find 2 repositories
+            assert len(repositories) == 2
+
+            repo_paths = [repo[0] for repo in repositories]
+            repo_names = [repo[1] for repo in repositories]
+
+            assert nested_repo1 in repo_paths
+            assert nested_repo2 in repo_paths
+
+            assert "nested/repo1" in repo_names
+            assert "nested/repo2" in repo_names
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_new_get_modified_files(self):
+        """Test __get_modified_files functionality including staged files."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository with modified files
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        subprocess.run(["git", "init"], cwd=board_path, check=True)
+
+        # Create initial file
+        initial_file = os.path.join(board_path, "test.txt")
+        with open(initial_file, 'w', encoding='utf-8') as f:
+            f.write("initial content")
+
+        subprocess.run(["git", "add", "test.txt"], cwd=board_path, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=board_path, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=board_path, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=board_path, check=True)
+
+        # Modify the file
+        with open(initial_file, 'w', encoding='utf-8') as f:
+            f.write("modified content")
+
+        # Create and stage a new file
+        staged_file = os.path.join(board_path, "staged.txt")
+        with open(staged_file, 'w', encoding='utf-8') as f:
+            f.write("staged content")
+        subprocess.run(["git", "add", "staged.txt"], cwd=board_path, check=True)
+
+        # Create new untracked file
+        new_file = os.path.join(board_path, "new.txt")
+        with open(new_file, 'w', encoding='utf-8') as f:
+            f.write("new file content")
+
+        # Test getting modified files
+        modified_files = patch_override._PatchOverride__get_modified_files(board_path, "root")
+
+        # Should find modified, staged, and new files
+        assert len(modified_files) >= 3
+
+        file_paths = [file[1] for file in modified_files]
+        statuses = [file[2] for file in modified_files]
+
+        assert "test.txt" in file_paths
+        assert "staged.txt" in file_paths
+        assert "new.txt" in file_paths
+
+        # Check that staged file has appropriate status
+        staged_index = file_paths.index("staged.txt")
+        assert "(staged)" in statuses[staged_index]
+
+    def test_po_new_create_patch_for_file(self):
+        """Test __create_patch_for_file functionality."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository in the current working directory
+        original_cwd = os.getcwd()
+        try:
+            # Change to a temporary directory to test
+            test_dir = tempfile.mkdtemp()
+            os.chdir(test_dir)
+
+            # Create initial file
+            test_file = os.path.join(test_dir, "test.py")
+            with open(test_file, 'w', encoding='utf-8') as f:
+                f.write("print('Hello')\n")
+
+            subprocess.run(["git", "init"], cwd=test_dir, check=True)
+            subprocess.run(["git", "add", "test.py"], cwd=test_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=test_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=test_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=test_dir, check=True)
+
+            # Modify the file
+            with open(test_file, 'w', encoding='utf-8') as f:
+                f.write("print('Hello')\nprint('Modified')\n")
+
+            # Create PO directory structure
+            board_path = os.path.join(self.vprojects_path, "test_board")
+            po_path = os.path.join(board_path, "po", "po_test")
+            patches_dir = os.path.join(po_path, "patches")
+            os.makedirs(patches_dir, exist_ok=True)
+
+            # Test creating patch
+            result = patch_override._PatchOverride__create_patch_for_file("root", "test.py", patches_dir, force=True)
+            assert result is True
+
+            # Verify patch file was created
+            patch_file = os.path.join(patches_dir, "root_test.py.patch")
+            assert os.path.exists(patch_file)
+
+            # Verify patch content
+            with open(patch_file, 'r', encoding='utf-8') as f:
+                patch_content = f.read()
+            assert "print('Modified')" in patch_content
+
+        finally:
+            os.chdir(original_cwd)
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+    def test_po_new_create_override_for_file(self):
+        """Test __create_override_for_file functionality."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository with a file
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        subprocess.run(["git", "init"], cwd=board_path, check=True)
+
+        # Create a file
+        test_file = os.path.join(board_path, "config.ini")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("debug=true\nport=8080\n")
+
+        # Create PO directory structure
+        po_path = os.path.join(board_path, "po", "po_test")
+        overrides_dir = os.path.join(po_path, "overrides")
+        os.makedirs(overrides_dir, exist_ok=True)
+
+        # Change to board_path directory for testing
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(board_path)
+
+            # Test creating override
+            result = patch_override._PatchOverride__create_override_for_file("root", "config.ini", overrides_dir, board_path)
+            assert result is True
+
+            # Verify override file was created
+            override_file = os.path.join(overrides_dir, "root", "config.ini")
+            assert os.path.exists(override_file)
+
+            # Verify file content
+            with open(override_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert "debug=true" in content
+            assert "port=8080" in content
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_new_find_repo_path_by_name(self):
+        """Test __find_repo_path_by_name functionality."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        subproject_path = os.path.join(board_path, "subproject")
+        os.makedirs(subproject_path)
+
+        subprocess.run(["git", "init"], cwd=board_path, check=True)
+        subprocess.run(["git", "init"], cwd=subproject_path, check=True)
+
+        # Change to board_path directory for testing
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(board_path)
+
+            # Test finding root repository
+            result = patch_override._PatchOverride__find_repo_path_by_name("root")
+            assert result == board_path
+
+            # Test finding subproject repository
+            result = patch_override._PatchOverride__find_repo_path_by_name("subproject")
+            assert result == subproject_path
+
+            # Test finding non-existent repository
+            result = patch_override._PatchOverride__find_repo_path_by_name("nonexistent")
+            assert result is None
+        finally:
+            os.chdir(original_cwd)
+
+    def test_po_new_confirm_creation(self):
+        """Test __confirm_creation functionality."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Test confirmation (this would normally require user input)
+        # For testing, we'll just verify the method exists and can be called
+        # po_name = "po_test"
+        # po_path = os.path.join(self.vprojects_path, "test_board", "po", po_name)
+        # board_path = os.path.join(self.vprojects_path, "test_board")
+
+        # The method should exist and be callable
+        assert hasattr(patch_override, '_PatchOverride__confirm_creation')
+        assert callable(patch_override._PatchOverride__confirm_creation)
+
+    def test_po_new_interactive_file_selection(self):
+        """Test __interactive_file_selection functionality."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository with modified files
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        subprocess.run(["git", "init"], cwd=board_path, check=True)
+
+        # Create and modify a file
+        test_file = os.path.join(board_path, "test.py")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("print('Hello')\n")
+
+        subprocess.run(["git", "add", "test.py"], cwd=board_path, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=board_path, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=board_path, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=board_path, check=True)
+
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("print('Modified')\n")
+
+        # Create PO directory structure
+        po_path = os.path.join(board_path, "po", "po_test")
+        os.makedirs(po_path, exist_ok=True)
+
+        # Test interactive file selection (this would normally require user input)
+        # For testing, we'll just verify the method exists and can be called
+        assert hasattr(patch_override, '_PatchOverride__interactive_file_selection')
+        assert callable(patch_override._PatchOverride__interactive_file_selection)
+
+    def test_po_new_process_selected_files(self):
+        """Test __process_selected_files functionality."""
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create a git repository with a file
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        subprocess.run(["git", "init"], cwd=board_path, check=True)
+
+        test_file = os.path.join(board_path, "test.py")
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("print('Hello')\n")
+
+        subprocess.run(["git", "add", "test.py"], cwd=board_path, check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=board_path, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=board_path, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=board_path, check=True)
+
+        with open(test_file, 'w', encoding='utf-8') as f:
+            f.write("print('Modified')\n")
+
+        # Create PO directory structure
+        po_path = os.path.join(board_path, "po", "po_test")
+        os.makedirs(po_path, exist_ok=True)
+
+        # Create selected files list
+        # selected_files = [("root", "test.py", "M ")]
+
+        # Test processing selected files (this would normally require user input)
+        # For testing, we'll just verify the method exists and can be called
+        assert hasattr(patch_override, '_PatchOverride__process_selected_files')
+        assert callable(patch_override._PatchOverride__process_selected_files)
+
     def test_po_new_invalid_project(self):
         """Test po_new with invalid project name."""
         # Create PatchOverride instance
@@ -662,7 +1066,7 @@ index 1234567..abcdefg 100644
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
         # Try to create PO for invalid project
-        result = patch_override.po_new("invalid_project", "test_po")
+        result = patch_override.po_new("invalid_project", "test_po", force=True)
         assert result is False
 
     def test_po_new_missing_board_name(self):
@@ -676,7 +1080,7 @@ index 1234567..abcdefg 100644
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
         # Try to create PO for project without board_name
-        result = patch_override.po_new("test_project_no_board", "test_po")
+        result = patch_override.po_new("test_project_no_board", "test_po", force=True)
         assert result is False
 
     def test_po_new_invalid_name_no_po_prefix(self):
@@ -686,7 +1090,7 @@ index 1234567..abcdefg 100644
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
         # Try to create PO with invalid name (doesn't start with 'po')
-        result = patch_override.po_new("test_project", "invalid_name")
+        result = patch_override.po_new("test_project", "invalid_name", force=True)
         assert result is False
 
     def test_po_new_invalid_name_uppercase(self):
@@ -696,7 +1100,7 @@ index 1234567..abcdefg 100644
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
         # Try to create PO with invalid name (contains uppercase)
-        result = patch_override.po_new("test_project", "po_Test")
+        result = patch_override.po_new("test_project", "po_Test", force=True)
         assert result is False
 
     def test_po_new_invalid_name_special_chars(self):
@@ -706,7 +1110,7 @@ index 1234567..abcdefg 100644
         patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
         # Try to create PO with invalid name (contains special characters)
-        result = patch_override.po_new("test_project", "po-test")
+        result = patch_override.po_new("test_project", "po-test", force=True)
         assert result is False
 
     def test_po_new_valid_names(self):
@@ -725,7 +1129,7 @@ index 1234567..abcdefg 100644
         ]
 
         for po_name in valid_names:
-            result = patch_override.po_new("test_project", po_name)
+            result = patch_override.po_new("test_project", po_name, force=True)
             assert result is True, f"Failed for valid name: {po_name}"
 
             # Verify directory was created

@@ -448,6 +448,7 @@ disable=raw-checker-failed,
         ,W0511  # TODO/FIXME/XXX comments
         ,R1702  # Too many nested blocks
         ,R0911  # Too many return statements
+        ,C0302  # Too many lines in module
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

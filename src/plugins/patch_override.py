@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import re
+import xml.etree.ElementTree as ET
 from src.log_manager import log
 from src.profiler import auto_profile
 
@@ -103,12 +104,13 @@ class PatchOverride:
         log.info("po revert finished for project: '%s'", project_name)
         return True
 
-    def po_new(self, project_name, po_name):
+    def po_new(self, project_name, po_name, force=False):
         """
         Create a new PO (patch and override) directory structure for the specified project.
         Args:
             project_name (str): Project or board name.
             po_name (str): Name of the new PO to create.
+            force (bool): If True, skip confirmation prompt.
         Returns:
             bool: True if success, otherwise False.
         """
@@ -139,6 +141,17 @@ class PatchOverride:
         patches_dir = os.path.join(po_path, "patches")
         overrides_dir = os.path.join(po_path, "overrides")
 
+        # Check if PO directory already exists
+        if os.path.exists(po_path):
+            log.error("PO directory '%s' already exists", po_path)
+            return False
+
+        # Show creation information and ask for confirmation
+        if not force:
+            if not self.__confirm_creation(po_name, po_path, board_path):
+                log.info("po_new cancelled by user")
+                return False
+
         try:
             # Create po directory
             os.makedirs(po_path, exist_ok=True)
@@ -160,12 +173,420 @@ class PatchOverride:
                     pass  # Create empty file
                 log.info("Created .gitkeep in overrides directory: '%s'", overrides_dir)
 
+            # Interactive file selection
+            if not force:
+                self.__interactive_file_selection(po_path, board_path)
+
             log.info("po_new finished for project: '%s', po_name: '%s'", project_name, po_name)
             return True
 
         except OSError as e:
             log.error("Failed to create po directory structure for '%s': '%s'", po_name, e)
             return False
+
+    def __confirm_creation(self, po_name, po_path, board_path):
+        """
+        Show creation information and ask for user confirmation.
+        Args:
+            po_name (str): Name of the PO to create.
+            po_path (str): Path to the PO directory.
+            board_path (str): Path to the board directory.
+        Returns:
+            bool: True if user confirms, False otherwise.
+        """
+        print("\n=== PO Creation Confirmation ===")
+        print(f"PO Name: {po_name}")
+        print(f"PO Path: {po_path}")
+        print(f"Board Path: {board_path}")
+
+        print("\nThis will create:")
+        print("  1. PO directory structure with patches/ and overrides/ subdirectories")
+        print("  2. .gitkeep files in both subdirectories")
+        print("  3. Option to select modified files to include in the PO")
+
+        while True:
+            response = input(f"\nDo you want to create PO '{po_name}'? (yes/no): ").strip().lower()
+            if response in ['yes', 'y']:
+                return True
+            if response in ['no', 'n']:
+                return False
+            print("Please enter 'yes' or 'no'.")
+
+    def __interactive_file_selection(self, po_path, board_path):
+        """
+        Interactive file selection for PO creation.
+        Args:
+            po_path (str): Path to the PO directory.
+            board_path (str): Path to the board directory.
+        """
+        print("\n=== File Selection for PO ===")
+        print("Scanning for modified files in repositories...")
+
+        # Find repositories and their modified files
+        repositories = self.__find_repositories(board_path)
+        if not repositories:
+            print("No git repositories found.")
+            return
+
+        all_modified_files = []
+        for repo_path, repo_name in repositories:
+            modified_files = self.__get_modified_files(repo_path, repo_name)
+            if modified_files:
+                all_modified_files.extend(modified_files)
+
+        if not all_modified_files:
+            print("No modified files found in any repository.")
+            return
+
+        print(f"\nFound {len(all_modified_files)} modified files:")
+        for i, (repo_name, file_path, status) in enumerate(all_modified_files, 1):
+            print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
+
+        print("\nSelect files to include in the PO:")
+        print("  Enter file numbers separated by spaces (e.g., '1 3 5')")
+        print("  Enter 'all' to select all files")
+        print("  Enter 'none' to skip file selection")
+        print("  Enter 'q' to quit")
+
+        while True:
+            selection = input("\nSelection: ").strip()
+            if selection.lower() == 'q':
+                print("File selection cancelled.")
+                return
+            if selection.lower() == 'none':
+                print("No files selected.")
+                return
+            if selection.lower() == 'all':
+                selected_files = all_modified_files
+                break
+            try:
+                indices = [int(x.strip()) - 1 for x in selection.split()]
+                if all(0 <= i < len(all_modified_files) for i in indices):
+                    selected_files = [all_modified_files[i] for i in indices]
+                    break
+                print("Invalid file number(s). Please try again.")
+            except ValueError:
+                print("Invalid input. Please enter numbers separated by spaces.")
+
+        if not selected_files:
+            print("No files selected.")
+            return
+
+        # Process selected files
+        self.__process_selected_files(selected_files, po_path, board_path)
+
+    def __find_repositories(self, _):
+        """
+        Find all git repositories starting from the current working directory.
+        Args:
+            _ (str): Unused parameter.
+        Returns:
+            list: List of tuples (repo_path, repo_name).
+        """
+        repositories = []
+        current_dir = os.getcwd()
+
+        # First check if current directory has .repo manifest
+        repo_manifest = os.path.join(current_dir, ".repo", "manifest.xml")
+        if os.path.exists(repo_manifest):
+            # Use manifest for repository discovery
+            print("Found .repo manifest, scanning repositories...")
+            try:
+                tree = ET.parse(repo_manifest)
+                root = tree.getroot()
+                for project in root.findall('.//project'):
+                    path = project.get('path')
+                    if path:
+                        repo_path = os.path.join(current_dir, path)
+                        if os.path.exists(os.path.join(repo_path, ".git")):
+                            repo_name = path if path != "." else "root"
+                            repositories.append((repo_path, repo_name))
+                            print(f"  Found repository: {repo_name} at {repo_path}")
+            except ET.ParseError as e:
+                log.error("Failed to parse .repo manifest: %s", e)
+                print(f"Warning: Failed to parse .repo manifest: {e}")
+        elif os.path.exists(os.path.join(current_dir, ".git")):
+            # Current directory is a single git repository
+            repositories.append((current_dir, "root"))
+            print("Found single git repository at current directory")
+        else:
+            # Recursively search for git repositories in subdirectories
+            print("Scanning subdirectories for git repositories...")
+            for root, dirs, _ in os.walk(current_dir):
+                if ".git" in dirs:
+                    repo_path = root
+                    repo_name = os.path.relpath(repo_path, current_dir)
+                    if repo_name == ".":
+                        repo_name = "root"
+                    repositories.append((repo_path, repo_name))
+                    print(f"  Found repository: {repo_name} at {repo_path}")
+                # Don't recurse into .git directories
+                dirs[:] = [d for d in dirs if d != ".git"]
+
+        return repositories
+
+    def __get_modified_files(self, repo_path, repo_name):
+        """
+        Get modified files in a repository including staged files.
+        Args:
+            repo_path (str): Path to the repository.
+            repo_name (str): Name of the repository.
+        Returns:
+            list: List of tuples (repo_name, file_path, status).
+        """
+        modified_files = []
+
+        try:
+            # Change to repository directory
+            original_cwd = os.getcwd()
+            os.chdir(repo_path)
+
+            # Get staged files (files in index)
+            staged_result = subprocess.run(
+                ["git", "diff", "--name-only", "--cached"],
+                capture_output=True, text=True, check=False
+            )
+
+            staged_files = set()
+            if staged_result.returncode == 0 and staged_result.stdout.strip():
+                staged_files = set(staged_result.stdout.strip().split('\n'))
+
+            # Get modified and untracked files (files in working directory)
+            working_result = subprocess.run(
+                ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
+                capture_output=True, text=True, check=False
+            )
+
+            working_files = set()
+            if working_result.returncode == 0 and working_result.stdout.strip():
+                working_files = set(working_result.stdout.strip().split('\n'))
+
+            # Process all files
+            all_files = staged_files | working_files
+
+            for file_path in all_files:
+                if not file_path.strip():
+                    continue
+
+                # Determine file status
+                status_result = subprocess.run(
+                    ["git", "status", "--porcelain", file_path],
+                    capture_output=True, text=True, check=False
+                )
+
+                if status_result.returncode == 0 and status_result.stdout.strip():
+                    status = status_result.stdout.strip()[:2]
+
+                    # Enhance status description for better understanding
+                    if file_path in staged_files and file_path in working_files:
+                        status = f"{status} (staged+modified)"
+                    elif file_path in staged_files:
+                        status = f"{status} (staged)"
+                    else:
+                        status = f"{status} (working)"
+                else:
+                    status = "?? (unknown)"
+
+                modified_files.append((repo_name, file_path, status))
+
+            # Return to original directory
+            os.chdir(original_cwd)
+
+        except (OSError, subprocess.SubprocessError) as e:
+            log.error("Failed to get modified files for repository %s: %s", repo_name, e)
+            print(f"Warning: Failed to get modified files for repository {repo_name}: {e}")
+
+        return modified_files
+
+    def __process_selected_files(self, selected_files, po_path, board_path):
+        """
+        Process selected files and ask user to choose between patch and override.
+        Args:
+            selected_files (list): List of selected file tuples (repo_name, file_path, status).
+            po_path (str): Path to the PO directory.
+            board_path (str): Path to the board directory.
+        """
+        patches_dir = os.path.join(po_path, "patches")
+        overrides_dir = os.path.join(po_path, "overrides")
+
+        print(f"\nProcessing {len(selected_files)} selected files...")
+
+        for repo_name, file_path, status in selected_files:
+            print(f"\nFile: [{repo_name}] {file_path} ({status})")
+            print("Choose action:")
+            print("  1. Create patch (for tracked files with modifications)")
+            print("  2. Create override (for any file)")
+            print("  3. Skip this file")
+
+            while True:
+                choice = input("Choice (1/2/3): ").strip()
+                if choice == "1":
+                    if self.__create_patch_for_file(repo_name, file_path, patches_dir, force=False):
+                        print(f"  ✓ Created patch for {file_path}")
+                    else:
+                        print(f"  ✗ Failed to create patch for {file_path}")
+                    break
+                if choice == "2":
+                    if self.__create_override_for_file(repo_name, file_path, overrides_dir, board_path):
+                        print(f"  ✓ Created override for {file_path}")
+                    else:
+                        print(f"  ✗ Failed to create override for {file_path}")
+                    break
+                if choice == "3":
+                    print(f"  - Skipped {file_path}")
+                    break
+                print("Invalid choice. Please enter 1, 2, or 3.")
+
+    # Note: The following function has 6 arguments due to the need to pass all context for patch creation.
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __create_patch_for_file(self, repo_name, file_path, patches_dir, force=False):
+        """
+        Create a patch file for the specified file.
+        Args:
+            repo_name (str): Name of the repository.
+            file_path (str): Path to the file relative to repository root.
+            patches_dir (str): Path to the patches directory.
+            board_path (str): Path to the board directory.
+            force (bool): If True, skip interactive prompts and use default behavior.
+        Returns:
+            bool: True if success, False otherwise.
+        """
+        try:
+            # Find the repository path
+            repo_path = self.__find_repo_path_by_name(repo_name)
+            if not repo_path:
+                return False
+
+            # Change to repository directory
+            original_cwd = os.getcwd()
+            os.chdir(repo_path)
+
+            # Check if file is staged
+            staged_result = subprocess.run(
+                ["git", "diff", "--name-only", "--cached"],
+                capture_output=True, text=True, check=False
+            )
+
+            is_staged = False
+            if staged_result.returncode == 0 and staged_result.stdout.strip():
+                staged_files = staged_result.stdout.strip().split('\n')
+                is_staged = file_path in staged_files
+
+            # Determine patch source (staged vs working directory)
+            use_staged = False
+            if is_staged and not force:
+                print(f"    File {file_path} is staged. Choose patch source:")
+                print("      1. Use staged changes (git diff --cached)")
+                print("      2. Use working directory changes (git diff)")
+
+                while True:
+                    choice = input("    Choice (1/2): ").strip()
+                    if choice == "1":
+                        use_staged = True
+                        break
+                    if choice == "2":
+                        use_staged = False
+                        break
+                    print("    Invalid choice. Please enter 1 or 2.")
+            elif is_staged and force:
+                # In force mode, default to staged for staged files
+                use_staged = True
+
+            # Create patch file
+            patch_file_name = f"{repo_name}_{file_path.replace('/', '_')}.patch"
+            patch_file_path = os.path.join(patches_dir, patch_file_name)
+
+            # Generate patch using appropriate git diff command
+            if use_staged:
+                result = subprocess.run(
+                    ["git", "diff", "--cached", "--", file_path],
+                    capture_output=True, text=True, check=False
+                )
+                print(f"    Generating patch from staged changes for {file_path}")
+            else:
+                result = subprocess.run(
+                    ["git", "diff", "--", file_path],
+                    capture_output=True, text=True, check=False
+                )
+                print(f"    Generating patch from working directory for {file_path}")
+
+            if result.returncode == 0 and result.stdout.strip():
+                # Create directory structure if needed
+                os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
+
+                # Write patch file
+                with open(patch_file_path, 'w', encoding='utf-8') as f:
+                    f.write(result.stdout)
+
+                # Return to original directory
+                os.chdir(original_cwd)
+                return True
+            print(f"    Warning: No changes found for {file_path}")
+            os.chdir(original_cwd)
+            return False
+
+        except (OSError, subprocess.SubprocessError) as e:
+            log.error("Failed to create patch for file %s: %s", file_path, e)
+            return False
+
+    # Note: The following function has 6 arguments due to the need to pass all context for override creation.
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __create_override_for_file(self, repo_name, file_path, overrides_dir, _):
+        """
+        Create an override file for the specified file.
+        Args:
+            repo_name (str): Name of the repository.
+            file_path (str): Path to the file relative to repository root.
+            overrides_dir (str): Path to the overrides directory.
+            _ (str): Unused parameter.
+        Returns:
+            bool: True if success, False otherwise.
+        """
+        try:
+            # Find the repository path
+            repo_path = self.__find_repo_path_by_name(repo_name)
+            if not repo_path:
+                return False
+
+            # Source file path
+            src_file = os.path.join(repo_path, file_path)
+            if not os.path.exists(src_file):
+                print(f"    Warning: File {file_path} does not exist")
+                return False
+
+            # Destination file path in overrides directory
+            dest_file = os.path.join(overrides_dir, repo_name, file_path)
+
+            # Create directory structure
+            os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+
+            # Copy file
+            shutil.copy2(src_file, dest_file)
+            return True
+
+        except (OSError, shutil.Error) as e:
+            log.error("Failed to create override for file %s: %s", file_path, e)
+            return False
+
+    def __find_repo_path_by_name(self, repo_name):
+        """
+        Find repository path by name.
+        Args:
+            repo_name (str): Name of the repository.
+        Returns:
+            str: Repository path or None if not found.
+        """
+        current_dir = os.getcwd()
+
+        if repo_name == "root":
+            if os.path.exists(os.path.join(current_dir, ".git")):
+                return current_dir
+        else:
+            repo_path = os.path.join(current_dir, repo_name)
+            if os.path.exists(os.path.join(repo_path, ".git")):
+                return repo_path
+
+        return None
 
     def po_del(self, project_name, po_name, force=False):
         """
