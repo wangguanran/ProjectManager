@@ -32,10 +32,11 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          out/
-          requirements.txt
+          out/binary/pm
+          # out/package/pm-*.whl
+          # out/package/pm-*.tar.gz
           install.sh
-          pyproject.toml
+          uninstall.sh
 
   install_test:
     runs-on: ubuntu-latest
