@@ -103,6 +103,70 @@ class PatchOverride:
         log.info("po revert finished for project: '%s'", project_name)
         return True
 
+    def po_new(self, project_name, po_name):
+        """
+        Create a new PO (patch and override) directory structure for the specified project.
+        Args:
+            project_name (str): Project or board name.
+            po_name (str): Name of the new PO to create.
+        Returns:
+            bool: True if success, otherwise False.
+        """
+        log.info("start po_new for project: '%s', po_name: '%s'", project_name, po_name)
+        if not re.match(r"^po[a-z0-9_]*$", po_name):
+            log.error("po_name '%s' is invalid. It must start with 'po' and only contain lowercase letters, digits, and underscores.", po_name)
+            return False
+        project_cfg = self.all_projects_info.get(project_name, {})
+        board_name = project_cfg.get('board_name')
+        if not board_name:
+            log.error("Cannot find board name for project: '%s'", project_name)
+            return False
+
+        board_path = os.path.join(self.vprojects_path, board_name)
+        po_dir = os.path.join(board_path, "po")
+
+        # Create po directory if it doesn't exist
+        if not os.path.exists(po_dir):
+            try:
+                os.makedirs(po_dir, exist_ok=True)
+                log.info("Created po directory: '%s'", po_dir)
+            except OSError as e:
+                log.error("Failed to create po directory '%s': '%s'", po_dir, e)
+                return False
+
+        # Create the new po directory structure
+        po_path = os.path.join(po_dir, po_name)
+        patches_dir = os.path.join(po_path, "patches")
+        overrides_dir = os.path.join(po_path, "overrides")
+
+        try:
+            # Create po directory
+            os.makedirs(po_path, exist_ok=True)
+            log.info("Created po directory: '%s'", po_path)
+
+            # Create patches directory with .gitkeep
+            os.makedirs(patches_dir, exist_ok=True)
+            gitkeep_file = os.path.join(patches_dir, ".gitkeep")
+            if not os.path.exists(gitkeep_file):
+                with open(gitkeep_file, 'w', encoding='utf-8'):
+                    pass  # Create empty file
+                log.info("Created .gitkeep in patches directory: '%s'", patches_dir)
+
+            # Create overrides directory with .gitkeep
+            os.makedirs(overrides_dir, exist_ok=True)
+            gitkeep_file = os.path.join(overrides_dir, ".gitkeep")
+            if not os.path.exists(gitkeep_file):
+                with open(gitkeep_file, 'w', encoding='utf-8'):
+                    pass  # Create empty file
+                log.info("Created .gitkeep in overrides directory: '%s'", overrides_dir)
+
+            log.info("po_new finished for project: '%s', po_name: '%s'", project_name, po_name)
+            return True
+
+        except OSError as e:
+            log.error("Failed to create po directory structure for '%s': '%s'", po_name, e)
+            return False
+
     def __parse_po_config(self, po_config):
         apply_pos = []
         exclude_pos = set()

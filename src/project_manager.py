@@ -6,6 +6,7 @@ import builtins
 import configparser
 import importlib
 import importlib.util
+import inspect
 import json
 import os
 from src.log_manager import log
@@ -199,7 +200,29 @@ class ProjectManager:
                             desc = desc.strip().splitlines()[0]
                         else:
                             desc = "plugin operation"
-                        builtin_operations[method] = {"func": m, "desc": desc}
+
+                        # Get function signature information
+                        sig = inspect.signature(m)
+                        params = list(sig.parameters.keys())
+                        # Remove 'self' parameter for instance methods
+                        if params and params[0] == 'self':
+                            params = params[1:]
+
+                        # Count required parameters (those without default values)
+                        required_params = []
+                        for param_name in params:
+                            param = sig.parameters[param_name]
+                            if param.default == inspect.Parameter.empty:
+                                required_params.append(param_name)
+
+                        builtin_operations[method] = {
+                            "func": m,
+                            "desc": desc,
+                            "params": params,
+                            "param_count": len(params),
+                            "required_params": required_params,
+                            "required_count": len(required_params)
+                        }
             except (OSError, ImportError, AttributeError) as e:
                 log.error("Failed to load builtin plugin '%s': '%s'", plugin_cls.__name__, e)
         return builtin_operations
@@ -266,12 +289,15 @@ def main():
         help=help_text,
     )
     parser.add_argument("name", help="project or board name")
+    parser.add_argument("args", nargs='*', help="additional arguments for plugin operations")
     parser.add_argument('--perf-analyze', action='store_true', help='Enable cProfile performance analysis')
     args = parser.parse_args()
     args_dict = vars(args)
     builtins.ENABLE_CPROFILE = args_dict.get('perf_analyze', False)
     operate = args_dict["operate"]
     name = args_dict["name"]
+    additional_args = args_dict.get("args", [])
+
     if operate == "build":
         manager.build(project_name=name)
     elif operate == "new_project":
@@ -283,7 +309,29 @@ def main():
     elif operate == "del_board":
         manager.del_board(board_name=name)
     elif operate in manager.builtin_operations:
-        manager.builtin_operations[operate]["func"](name)
+        # Handle plugin operations with variable arguments
+        op_info = manager.builtin_operations[operate]
+        func = op_info["func"]
+        param_count = op_info["param_count"]
+        params = op_info["params"]
+
+        # Check if we have enough arguments (only check required parameters)
+        required_count = op_info["required_count"]
+        if len(additional_args) < required_count - 1:  # -1 because first param is always project_name
+            log.error("Operation '%s' requires %d arguments, but only %d provided",
+                     operate, required_count - 1, len(additional_args))
+            log.error("Required parameters: %s", ", ".join(params[1:required_count]))  # Skip first param (project_name)
+            return
+
+        # Call function with appropriate arguments
+        if param_count == 1:
+            # Only project_name parameter
+            func(name)
+        else:
+            # Multiple parameters: project_name + additional args
+            # Use all provided args, let Python handle defaults for missing ones
+            func_args = [name] + additional_args
+            func(*func_args)
     else:
         log.error("Operation '%s' is not supported.", operate)
 

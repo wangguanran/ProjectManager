@@ -1,7 +1,7 @@
 """
 Tests for patch and override operations.
 """
-# pylint: disable=attribute-defined-outside-init, import-outside-toplevel
+# pylint: disable=attribute-defined-outside-init, import-outside-toplevel, too-many-public-methods
 import os
 import sys
 import tempfile
@@ -588,6 +588,135 @@ index 1234567..abcdefg 100644
 
         finally:
             os.chdir(original_cwd)
+
+    def test_po_new_basic(self):
+        """Test basic po_new functionality."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create new PO
+        result = patch_override.po_new("test_project", "po_new_test")
+        assert result is True
+
+        # Verify directory structure was created
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        po_path = os.path.join(board_path, "po", "po_new_test")
+        patches_dir = os.path.join(po_path, "patches")
+        overrides_dir = os.path.join(po_path, "overrides")
+
+        assert os.path.exists(po_path)
+        assert os.path.isdir(po_path)
+        assert os.path.exists(patches_dir)
+        assert os.path.isdir(patches_dir)
+        assert os.path.exists(overrides_dir)
+        assert os.path.isdir(overrides_dir)
+
+        # Verify .gitkeep files were created
+        assert os.path.exists(os.path.join(patches_dir, ".gitkeep"))
+        assert os.path.exists(os.path.join(overrides_dir, ".gitkeep"))
+
+    def test_po_new_existing_po(self):
+        """Test po_new with existing PO directory."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Create new PO
+        result = patch_override.po_new("test_project", "po_existing_test")
+        assert result is True
+
+        # Try to create the same PO again (should not fail)
+        result = patch_override.po_new("test_project", "po_existing_test")
+        assert result is True
+
+        # Verify directory structure still exists
+        board_path = os.path.join(self.vprojects_path, "test_board")
+        po_path = os.path.join(board_path, "po", "po_existing_test")
+        patches_dir = os.path.join(po_path, "patches")
+        overrides_dir = os.path.join(po_path, "overrides")
+
+        assert os.path.exists(po_path)
+        assert os.path.exists(patches_dir)
+        assert os.path.exists(overrides_dir)
+
+    def test_po_new_invalid_project(self):
+        """Test po_new with invalid project name."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Try to create PO for invalid project
+        result = patch_override.po_new("invalid_project", "test_po")
+        assert result is False
+
+    def test_po_new_missing_board_name(self):
+        """Test po_new with project that has no board_name."""
+        # Create PatchOverride instance with project info missing board_name
+        all_projects_info = {
+            "test_project_no_board": {
+                "PROJECT_PO_CONFIG": "po_test01"
+            }
+        }
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Try to create PO for project without board_name
+        result = patch_override.po_new("test_project_no_board", "test_po")
+        assert result is False
+
+    def test_po_new_invalid_name_no_po_prefix(self):
+        """Test po_new with po_name that doesn't start with 'po'."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Try to create PO with invalid name (doesn't start with 'po')
+        result = patch_override.po_new("test_project", "invalid_name")
+        assert result is False
+
+    def test_po_new_invalid_name_uppercase(self):
+        """Test po_new with po_name containing uppercase letters."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Try to create PO with invalid name (contains uppercase)
+        result = patch_override.po_new("test_project", "po_Test")
+        assert result is False
+
+    def test_po_new_invalid_name_special_chars(self):
+        """Test po_new with po_name containing special characters."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Try to create PO with invalid name (contains special characters)
+        result = patch_override.po_new("test_project", "po-test")
+        assert result is False
+
+    def test_po_new_valid_names(self):
+        """Test po_new with various valid po_name formats."""
+        # Create PatchOverride instance
+        all_projects_info = self._load_all_projects_info()
+        patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
+
+        # Test various valid names
+        valid_names = [
+            "po_test",
+            "po123",
+            "po_test_123",
+            "po_",
+            "po123test"
+        ]
+
+        for po_name in valid_names:
+            result = patch_override.po_new("test_project", po_name)
+            assert result is True, f"Failed for valid name: {po_name}"
+
+            # Verify directory was created
+            board_path = os.path.join(self.vprojects_path, "test_board")
+            po_path = os.path.join(board_path, "po", po_name)
+            assert os.path.exists(po_path), f"Directory not created for: {po_name}"
 
 if __name__ == "__main__":
     # Run tests if script is executed directly
