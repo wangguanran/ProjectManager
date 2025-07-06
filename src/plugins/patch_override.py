@@ -349,7 +349,7 @@ class PatchOverride:
                         result = subprocess.run([
                             "git", "ls-files", "--error-unmatch", dest_file
                         ], cwd=override_target, capture_output=True, text=True, check=False)
-                        
+
                         if result.returncode == 0:
                             # File is tracked by git, use git checkout to restore
                             result = subprocess.run([
@@ -363,7 +363,7 @@ class PatchOverride:
                             # File is not tracked by git, delete it directly
                             log.debug("File '%s' is not tracked by git, deleting directly", dest_file)
                             os.remove(dest_file)
-                        
+
                         # Remove po_name from flag file
                         applied_pos_in_flag.remove(po_name)
                         if applied_pos_in_flag:

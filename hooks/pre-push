@@ -48,9 +48,10 @@ if ! command -v pytest &> /dev/null; then
     pip install pytest
 fi
 
-# Run pylint on source code
+# Run pylint on all Python files in the project
 print_status "Running pylint..."
-if pylint src/ --rcfile=.pylintrc --output-format=text; then
+PY_FILES=$(find . -type f -name '*.py' ! -path './.venv/*')
+if pylint $PY_FILES --rcfile=.pylintrc --output-format=text; then
     print_status "Pylint passed ✓"
 else
     print_error "Pylint failed ✗"

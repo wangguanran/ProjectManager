@@ -1,6 +1,7 @@
 """
 Tests for patch and override operations.
 """
+# pylint: disable=attribute-defined-outside-init, import-outside-toplevel
 import os
 import sys
 import tempfile
@@ -8,29 +9,26 @@ import shutil
 import subprocess
 import pytest
 
-# Add src to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
-
-def load_patch_override():
-    """Dynamically load the PatchOverride module for testing."""
-    # Add the project root to Python path
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-
-    # Now import the module normally
-    from src.plugins.patch_override import PatchOverride
-    return PatchOverride
-
 class TestPatchOverride:
     """Test class for patch and override operations."""
+    # temp_dir: str
+    # vprojects_path: str
+    # test_repo_path: str
+    # patch_override_cls: type
 
     def setup_method(self):
         """Set up test environment before each test."""
+        # Add project root to path for imports
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        # Import PatchOverride after path is set
+        from src.plugins.patch_override import PatchOverride
         self.temp_dir = tempfile.mkdtemp()
         print(f"Created temporary directory: {self.temp_dir}")
         self.vprojects_path = os.path.join(self.temp_dir, "vprojects")
         self.test_repo_path = os.path.join(self.temp_dir, "test_repo")
+        self.patch_override_cls = PatchOverride
 
         # Create vprojects directory structure
         os.makedirs(self.vprojects_path)
@@ -40,9 +38,6 @@ class TestPatchOverride:
 
         # Create test project structure
         self._create_test_project_structure()
-
-        # Load PatchOverride class
-        self.PatchOverride = load_patch_override()
 
     def teardown_method(self):
         """Clean up test environment after each test."""
@@ -161,7 +156,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply
             result = patch_override.po_apply("test_project")
@@ -211,7 +206,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply
             result = patch_override.po_apply("test_project")
@@ -242,7 +237,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply first time
             result1 = patch_override.po_apply("test_project")
@@ -273,7 +268,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply with invalid project
             result = patch_override.po_apply("invalid_project")
@@ -298,7 +293,7 @@ index 1234567..abcdefg 100644
                 }
             }
 
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply
             result = patch_override.po_apply("test_project_no_config")
@@ -318,7 +313,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # First apply po_apply
             result = patch_override.po_apply("test_project")
@@ -371,7 +366,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply
             result = patch_override.po_apply("test_project")
@@ -405,7 +400,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply
             result = patch_override.po_apply("test_project")
@@ -436,7 +431,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply po_apply
             result = patch_override.po_apply("test_project")
@@ -475,7 +470,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Revert with invalid project
             result = patch_override.po_revert("invalid_project")
@@ -500,7 +495,7 @@ index 1234567..abcdefg 100644
                 }
             }
 
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Revert
             result = patch_override.po_revert("test_project_no_config")
@@ -520,15 +515,15 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # Apply only po_test01 manually (simulate partial application)
             po_test01_patch_dir = os.path.join(self.vprojects_path, "test_board", "po", "po_test01", "patches")
             patch_file = os.path.join(po_test01_patch_dir, "main.py.patch")
-            
+
             # Apply patch manually
             subprocess.run(["git", "apply", patch_file], cwd=self.test_repo_path, check=True)
-            
+
             # Create flag file manually
             with open(".patch_applied", 'w', encoding='utf-8') as f:
                 f.write("po_test01\n")
@@ -558,7 +553,7 @@ index 1234567..abcdefg 100644
         try:
             # Create PatchOverride instance
             all_projects_info = self._load_all_projects_info()
-            patch_override = self.PatchOverride(self.vprojects_path, all_projects_info)
+            patch_override = self.patch_override_cls(self.vprojects_path, all_projects_info)
 
             # First cycle: apply -> revert
             result1 = patch_override.po_apply("test_project")
