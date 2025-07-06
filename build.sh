@@ -28,20 +28,20 @@ if command -v pyinstaller &> /dev/null; then
     
     # Use more compatible configuration options
     pyinstaller \
-        --onefile \                    # Package everything into a single executable file
-        --strip \                      # Strip debug symbols to reduce file size
-        --hidden-import=git \          # Include git module explicitly
-        --hidden-import=git.cmd \      # Include git.cmd module explicitly
-        --hidden-import=git.repo \     # Include git.repo module explicitly
-        --hidden-import=importlib_metadata \  # Include importlib_metadata module explicitly
-        --collect-all=git \            # Collect all git-related modules and data
-        --collect-all=importlib_metadata \    # Collect all importlib_metadata modules and data
-        --add-data "$(pwd)/pyproject.toml:." \  # Include pyproject.toml in the package
-        --distpath out \               # Set output directory for the executable
-        --workpath out/build \         # Set temporary build directory
-        --specpath out \               # Set directory for the .spec file
-        -n pm \                        # Set the name of the output executable
-        src/project_manager.py         # Main script to package
+        --onefile \
+        --strip \
+        --hidden-import=git \
+        --hidden-import=git.cmd \
+        --hidden-import=git.repo \
+        --hidden-import=importlib_metadata \
+        --collect-all=git \
+        --collect-all=importlib_metadata \
+        --add-data "$(pwd)/pyproject.toml:." \
+        --distpath out \
+        --workpath out/build \
+        --specpath out \
+        -n pm \
+        src/project_manager.py
     
     echo "Binary generated at out/pm"
     
