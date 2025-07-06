@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# 设置输出目录
+# Set output directory
 OUT_DIR="out"
 mkdir -p $OUT_DIR
 
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# 检查pyinstaller
+# Check pyinstaller
 if ! command -v pyinstaller &> /dev/null; then
     echo "pyinstaller not found, installing..."
     pip install pyinstaller
@@ -22,72 +22,57 @@ python3 -m build --outdir $OUT_DIR
 
 echo "--- Build complete. Find the artifacts in the 'out' directory. ---"
 
-# 生成独立二进制（需已安装 pyinstaller）
+# Generate standalone binary (requires pyinstaller)
 if command -v pyinstaller &> /dev/null; then
     echo "--- Building standalone binary with pyinstaller ---"
     
-    # 使用更兼容的配置选项
+    # Use more compatible configuration options
     pyinstaller \
-        --onefile \
-        --strip \
-        --hidden-import=git \
-        --hidden-import=git.cmd \
-        --hidden-import=git.repo \
-        --hidden-import=importlib_metadata \
-        --collect-all=git \
-        --collect-all=importlib_metadata \
-        --add-data "$(pwd)/pyproject.toml:." \
-        --distpath out \
-        --workpath out/build \
-        --specpath out \
-        -n pm \
-        src/project_manager.py
+        --onefile \                    # Package everything into a single executable file
+        --strip \                      # Strip debug symbols to reduce file size
+        --hidden-import=git \          # Include git module explicitly
+        --hidden-import=git.cmd \      # Include git.cmd module explicitly
+        --hidden-import=git.repo \     # Include git.repo module explicitly
+        --hidden-import=importlib_metadata \  # Include importlib_metadata module explicitly
+        --collect-all=git \            # Collect all git-related modules and data
+        --collect-all=importlib_metadata \    # Collect all importlib_metadata modules and data
+        --add-data "$(pwd)/pyproject.toml:." \  # Include pyproject.toml in the package
+        --distpath out \               # Set output directory for the executable
+        --workpath out/build \         # Set temporary build directory
+        --specpath out \               # Set directory for the .spec file
+        -n pm \                        # Set the name of the output executable
+        src/project_manager.py         # Main script to package
     
     echo "Binary generated at out/pm"
     
-    # 应用静态链接以提高兼容性
-    if command -v staticx &> /dev/null; then
-        echo "--- Applying static linking for better compatibility ---"
-        # 检查patchelf是否安装
-        if command -v patchelf &> /dev/null; then
-            staticx out/pm out/pm-static
-            mv out/pm-static out/pm
-            echo "Static linking applied successfully"
-        else
-            echo "patchelf not found. Installing..."
-            sudo apt-get update && sudo apt-get install -y patchelf
-            echo "--- Applying static linking for better compatibility ---"
-            staticx out/pm out/pm-static
-            mv out/pm-static out/pm
-            echo "Static linking applied successfully"
-        fi
-    else
+    # Apply static linking for better compatibility
+    echo "--- Applying static linking for better compatibility ---"
+    # Check if staticx is installed, install if not
+    if ! command -v staticx &> /dev/null; then
         echo "staticx not found. Installing for better compatibility..."
         pip install staticx
-        echo "--- Applying static linking for better compatibility ---"
-        # 检查patchelf是否安装
-        if command -v patchelf &> /dev/null; then
-            staticx out/pm out/pm-static
-            mv out/pm-static out/pm
-            echo "Static linking applied successfully"
-        else
-            echo "patchelf not found. Installing..."
-            sudo apt-get update && sudo apt-get install -y patchelf
-            echo "--- Applying static linking for better compatibility ---"
-            staticx out/pm out/pm-static
-            mv out/pm-static out/pm
-            echo "Static linking applied successfully"
-        fi
     fi
+    # Check if patchelf is installed, install if not
+    if ! command -v patchelf &> /dev/null; then
+        echo "patchelf not found. Installing..."
+        sudo apt-get update && sudo apt-get install -y patchelf
+    fi
+    echo "--- Cleaning RPATH/RUNPATH tags before static linking ---"
+    find out/ -name "*.so*" -type f -exec patchelf --remove-rpath {} \; 2>/dev/null || true
+    patchelf --remove-rpath out/pm 2>/dev/null || true
+    echo "RPATH/RUNPATH tags cleaned"
+    staticx out/pm out/pm-static
+    mv out/pm-static out/pm
+    echo "Static linking applied successfully"
     
-    # 再次移除debug_info以减小文件大小
+    # Remove debug info to reduce file size
     echo "--- Final debug info removal ---"
     strip out/pm
     
     echo "Final binary generated at out/pm with static linking"
 else
-    echo "pyinstaller 未安装，跳过二进制打包。可用 pip install pyinstaller 安装。"
+    echo "pyinstaller not installed, skipping binary packaging. Use 'pip install pyinstaller' to install."
 fi
 
-# 清理src目录下的egg-info
+# Clean egg-info in src directory
 rm -rf src/*.egg-info 
