@@ -1269,3 +1269,83 @@ class PatchOverride:
                 po_name = token
                 apply_pos.append(po_name)
         return apply_pos, exclude_pos, exclude_files
+
+    def po_list(self, project_name, short=False):
+        """
+        List all enabled PO (patch/override) directories for the specified project.
+        Args:
+            project_name (str): Project or board name.
+            short (bool): If True, only list po names, not details.
+        Returns:
+            list: List of dicts with PO info (name, patch_files, override_files)
+        """
+        log.info("start po_list for project: '%s'", project_name)
+        project_cfg = self.all_projects_info.get(project_name, {})
+        board_name = project_cfg.get("board_name")
+        if not board_name:
+            log.error("Cannot find board name for project: '%s'", project_name)
+            return []
+        board_path = os.path.join(self.vprojects_path, board_name)
+        po_dir = os.path.join(board_path, "po")
+        if not os.path.isdir(po_dir):
+            log.warning("No po directory found for '%s'", project_name)
+            return []
+        # Get enabled pos from config
+        po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
+        enabled_pos = set()
+        if po_config:
+            apply_pos, exclude_pos, _ = self.__parse_po_config(po_config)
+            enabled_pos = set([po for po in apply_pos if po not in exclude_pos])
+        # 只列出配置中启用的po
+        po_list = []
+        for po_name in sorted(enabled_pos):
+            po_path = os.path.join(po_dir, po_name)
+            if not os.path.isdir(po_path):
+                continue
+            patches_dir = os.path.join(po_path, "patches")
+            overrides_dir = os.path.join(po_path, "overrides")
+            patch_files = []
+            override_files = []
+            if os.path.isdir(patches_dir):
+                for root, _, files in os.walk(patches_dir):
+                    for f in files:
+                        if f == ".gitkeep":
+                            continue
+                        rel_path = os.path.relpath(os.path.join(root, f), patches_dir)
+                        patch_files.append(rel_path)
+            if os.path.isdir(overrides_dir):
+                for root, _, files in os.walk(overrides_dir):
+                    for f in files:
+                        if f == ".gitkeep":
+                            continue
+                        rel_path = os.path.relpath(os.path.join(root, f), overrides_dir)
+                        override_files.append(rel_path)
+            po_info = {
+                "name": po_name,
+                "patch_files": patch_files,
+                "override_files": override_files,
+            }
+            po_list.append(po_info)
+        # Print summary
+        print(f"\nConfigured PO list for project: {project_name} (board: {board_name})")
+        if not po_list:
+            print("  No configured PO found.")
+        elif short:
+            for po in po_list:
+                print(f"  {po['name']}")
+        else:
+            for po in po_list:
+                print(f"\nPO: {po['name']}")
+                print("  patches:")
+                if po["patch_files"]:
+                    for pf in po["patch_files"]:
+                        print(f"    - {pf}")
+                else:
+                    print("    (none)")
+                print("  overrides:")
+                if po["override_files"]:
+                    for of in po["override_files"]:
+                        print(f"    - {of}")
+                else:
+                    print("    (none)")
+        return po_list

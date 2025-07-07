@@ -10,6 +10,8 @@ import importlib.util
 import inspect
 import json
 import os
+import re
+import sys
 from src.log_manager import log
 from src.profiler import auto_profile
 from src.utils import path_from_root, get_version
@@ -287,21 +289,67 @@ class ProjectManager:
         # TODO: implement del_board
 
 
-def main():
-    """
-    Main entry point for the project manager CLI.
-    """
-    manager = ProjectManager()
-    # Calculate the maximum length of operation names for proper alignment
-    max_op_length = (
-        max(len(op) for op in manager.builtin_operations)
-        if manager.builtin_operations
-        else 0
-    )
-    builtin_help_lines = [
-        f"  {op:<{max_op_length}}     {info['desc']}"
-        for op, info in manager.builtin_operations.items()
-    ]
+def parse_args_and_plugin_args(manager):
+    # All imports should be at the top of the file
+    # import argparse, inspect, re, sys
+
+    def get_supported_flags(sig):
+        return [
+            name
+            for name, param in sig.parameters.items()
+            if name not in ("self", "project_name")
+            and param.default is not inspect.Parameter.empty
+        ]
+
+    def get_flag_description(docstring, flag):
+        if not docstring:
+            return "(no description)"
+        pattern = rf"{flag} \(([^)]+)\): ([^\n]+)"
+        m = re.search(pattern, docstring)
+        if m:
+            return m.group(2).strip()
+        return "(no description)"
+
+    # Collect all plugin flags, their supported operations, and descriptions
+    flag_info = {}
+    for op, info in manager.builtin_operations.items():
+        func = info["func"]
+        sig = inspect.signature(func)
+        doc = func.__doc__
+        flags = get_supported_flags(sig)
+        for flag in flags:
+            if flag not in flag_info:
+                flag_info[flag] = {"ops": [], "desc": None}
+            flag_info[flag]["ops"].append(op)
+            if not flag_info[flag]["desc"]:
+                flag_info[flag]["desc"] = get_flag_description(doc, flag)
+
+    # Build builtin operations help lines
+    builtin_help_lines = []
+    for op, info in manager.builtin_operations.items():
+        func = info["func"]
+        sig = inspect.signature(func)
+        desc = info["desc"]
+        flags = get_supported_flags(sig)
+        if flags:
+            flag_str = " ".join([f"--{f.replace('_','-')}" for f in flags])
+            builtin_help_lines.append(f"  {op:<15} {desc} {flag_str}")
+        else:
+            builtin_help_lines.append(f"  {op:<15} {desc}")
+
+    # Build plugin options section for epilog
+    if flag_info:
+        plugin_options_lines = []
+        for flag, meta in sorted(flag_info.items()):
+            flag_display = f"--{flag.replace('_','-')}"
+            ops_display = f"Supported by: {', '.join(meta['ops'])}"
+            desc = meta["desc"]
+            flag_ops = f"  {flag_display:<10} {ops_display:<22}"
+            plugin_options_lines.append(f"{flag_ops}{desc}")
+        plugin_options = "\n".join(plugin_options_lines)
+    else:
+        plugin_options = ""
+
     help_text = (
         "supported operations:\n"
         "  build         build the specified project\n"
@@ -314,7 +362,10 @@ def main():
     choices = ["build", "new_project", "del_project", "new_board", "del_board"] + list(
         manager.builtin_operations.keys()
     )
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=plugin_options if plugin_options else None,
+    )
     parser.add_argument("--version", action="version", version=get_version())
     parser.add_argument(
         "operate",
@@ -330,12 +381,56 @@ def main():
         action="store_true",
         help="Enable cProfile performance analysis",
     )
-    args = parser.parse_args()
+
+    # Only add plugin flags as argparse arguments when showing help
+    if "--help" in sys.argv or "-h" in sys.argv:
+        for flag, meta in sorted(flag_info.items()):
+            flag_display = f"--{flag.replace('_','-')}"
+            ops_display = f"Supported by: {', '.join(meta['ops'])}."
+            desc = meta["desc"]
+            parser.add_argument(
+                flag_display,
+                action="store_true",
+                help=f"{ops_display} {desc}",
+            )
+        parser.epilog = None
+    else:
+        parser.epilog = plugin_options if plugin_options else None
+
+    args, unknown = parser.parse_known_args()
     args_dict = vars(args)
-    builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
+    additional_args = args_dict.get("args", []) + unknown
+    # Merge parse_plugin_args logic here
+    parsed_args = []
+    parsed_kwargs = {}
+    i = 0
+    while i < len(additional_args):
+        arg = additional_args[i]
+        if arg.startswith("--"):
+            key = arg[2:].replace("-", "_")
+            if i + 1 < len(additional_args) and not additional_args[i + 1].startswith(
+                "--"
+            ):
+                value = additional_args[i + 1]
+                parsed_kwargs[key] = value
+                i += 2
+            else:
+                parsed_kwargs[key] = True
+                i += 1
+        else:
+            parsed_args.append(arg)
+            i += 1
     operate = args_dict["operate"]
-    name = args_dict.get("name")  # Use get() to handle None case
-    additional_args = args_dict.get("args", [])
+    name = args_dict.get("name")
+    return operate, name, parsed_args, parsed_kwargs, args_dict
+
+
+def main():
+    manager = ProjectManager()
+    operate, name, parsed_args, parsed_kwargs, args_dict = parse_args_and_plugin_args(
+        manager
+    )
+    builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
 
     if operate == "build":
         manager.build(project_name=name)
@@ -348,37 +443,25 @@ def main():
     elif operate == "del_board":
         manager.del_board(board_name=name)
     elif operate in manager.builtin_operations:
-        # Handle plugin operations with variable arguments
         op_info = manager.builtin_operations[operate]
         func = op_info["func"]
-        param_count = op_info["param_count"]
         params = op_info["params"]
-
-        # Check if we have enough arguments (only check required parameters)
         required_count = op_info["required_count"]
-        if (
-            len(additional_args) < required_count - 1
-        ):  # -1 because first param is always project_name
+        if len(parsed_args) < max(0, required_count - 1):
             log.error(
                 "Operation '%s' requires %d arguments, but only %d provided",
                 operate,
                 required_count - 1,
-                len(additional_args),
+                len(parsed_args),
             )
-            log.error(
-                "Required parameters: %s", ", ".join(params[1:required_count])
-            )  # Skip first param (project_name)
+            log.error("Required parameters: %s", ", ".join(params[1:required_count]))
             return
-
-        # Call function with appropriate arguments
-        if param_count == 1:
-            # Only project_name parameter
-            func(name)
-        else:
-            # Multiple parameters: project_name + additional args
-            # Use all provided args, let Python handle defaults for missing ones
-            func_args = [name] + additional_args
-            func(*func_args)
+        func_args = [name] + parsed_args
+        func_kwargs = parsed_kwargs
+        try:
+            func(*func_args, **func_kwargs)
+        except TypeError as e:
+            log.error("Failed to call operation '%s': %s", operate, e)
     else:
         log.error("Operation '%s' is not supported.", operate)
 
