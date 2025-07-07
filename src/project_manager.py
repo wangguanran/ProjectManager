@@ -1,6 +1,7 @@
 """
 Main module for project management.
 """
+
 import argparse
 import builtins
 import configparser
@@ -17,17 +18,21 @@ from src.plugins.patch_override import PatchOverride
 PM_CONFIG_PATH = path_from_root("pm_config.json")
 DEFAULT_KEYWORD = "demo"
 
+
 @auto_profile
 class ProjectManager:
     """
     Project utility class. Provides project management and plugin operation features.
     """
+
     _instance = None
     _initialized = False
+
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+
     def __init__(self):
         if self._initialized:
             return
@@ -38,12 +43,19 @@ class ProjectManager:
 
         self.all_projects_info = self.__load_all_projects(self.vprojects_path)
         log.debug("Loaded %d projects.", len(self.all_projects_info))
-        log.debug("Loaded projects info:\n'%s'", json.dumps(self.all_projects_info, indent=2, ensure_ascii=False))
+        log.debug(
+            "Loaded projects info:\n'%s'",
+            json.dumps(self.all_projects_info, indent=2, ensure_ascii=False),
+        )
 
-        self.platform_operations = self.__load_platform_plugin_operations(self.vprojects_path)
+        self.platform_operations = self.__load_platform_plugin_operations(
+            self.vprojects_path
+        )
         log.debug("Loaded %d platform operations.", len(self.platform_operations))
 
-        self.builtin_operations = self.__load_builtin_plugin_operations(self.vprojects_path, self.all_projects_info)
+        self.builtin_operations = self.__load_builtin_plugin_operations(
+            self.vprojects_path, self.all_projects_info
+        )
         log.debug("Loaded %d builtin  operations.", len(self.builtin_operations))
 
     def __load_all_projects(self, vprojects_path):
@@ -73,21 +85,26 @@ class ProjectManager:
                 continue
             # First pass: check for duplicate keys in the whole ini file
             has_duplicate = False
-            with open(ini_file, 'r', encoding='utf-8') as f:
+            with open(ini_file, "r", encoding="utf-8") as f:
                 current_project = None
                 keys_in_project = set()
                 for line in f:
                     line = line.strip()
-                    if not line or line.startswith(';') or line.startswith('#'):
+                    if not line or line.startswith(";") or line.startswith("#"):
                         continue
-                    if line.startswith('[') and line.endswith(']'):
+                    if line.startswith("[") and line.endswith("]"):
                         current_project = line[1:-1].strip()
                         keys_in_project = set()
                         continue
-                    if '=' in line and current_project:
-                        key = line.split('=', 1)[0].strip()
+                    if "=" in line and current_project:
+                        key = line.split("=", 1)[0].strip()
                         if key in keys_in_project:
-                            log.error("Duplicate key '%s' found in project '%s' of file '%s'", key, current_project, ini_file)
+                            log.error(
+                                "Duplicate key '%s' found in project '%s' of file '%s'",
+                                key,
+                                current_project,
+                                ini_file,
+                            )
                             has_duplicate = True
                         else:
                             keys_in_project.add(key)
@@ -99,15 +116,21 @@ class ProjectManager:
             config.read(ini_file, encoding="utf-8")
             for project in config.sections():
                 project_dict = dict(config.items(project))
-                project_dict['board_name'] = item  # Save board info in project dict
+                project_dict = {
+                    k.upper(): v for k, v in project_dict.items()
+                }  # 统一 key 大写
+                project_dict["board_name"] = item  # Save board info in project dict
                 all_projects[project] = project_dict
+
         # Build parent-child relationship and merge configs
         def find_parent(project):
             # The parent project name is the project name with the last '-' and following part removed
-            if '-' in project:
-                return project.rsplit('-', 1)[0]
+            if "-" in project:
+                return project.rsplit("-", 1)[0]
             return None
+
         merged_projects = {}
+
         def merge_config(project):
             if project in merged_projects:
                 return merged_projects[project]
@@ -119,19 +142,17 @@ class ProjectManager:
                 parent_cfg = merge_config(parent)
                 # Copy parent config first
                 for k, v in parent_cfg.items():
-                    if k == 'PROJECT_PO_CONFIG':
-                        merged[k] = v  # Use parent's first, will handle concatenation later
-                    else:
-                        merged[k] = v
+                    merged[k] = v
             # Then add/override with child's own config
             for k, v in all_projects[project].items():
-                if k == 'PROJECT_PO_CONFIG' and k in merged:
+                if k == "PROJECT_PO_CONFIG" and k in merged:
                     # Concatenate parent and child, parent first, child after
-                    merged[k] = merged[k].strip() + ' ' + v.strip()
+                    merged[k] = merged[k].strip() + " " + v.strip()
                 else:
                     merged[k] = v
             merged_projects[project] = merged
             return merged
+
         all_projects_info = {}
         for project in all_projects:
             if project in invalid_projects:
@@ -163,7 +184,9 @@ class ProjectManager:
                 script_path = os.path.join(scripts_dir, file_name)
                 module_name = f"{item}_scripts_{os.path.splitext(file_name)[0]}"
                 try:
-                    spec = importlib.util.spec_from_file_location(module_name, script_path)
+                    spec = importlib.util.spec_from_file_location(
+                        module_name, script_path
+                    )
                     mod = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(mod)
                     for attr in dir(mod):
@@ -174,8 +197,7 @@ class ProjectManager:
                             platform_operations.add(attr)
                 except OSError as e:
                     log.error(
-                        "Failed to load script: '%s', error: '%s'",
-                        script_path, e
+                        "Failed to load script: '%s', error: '%s'", script_path, e
                     )
                     continue
         return list(platform_operations)
@@ -195,7 +217,7 @@ class ProjectManager:
                         continue
                     m = getattr(instance, method)
                     if callable(m):
-                        desc = getattr(m, '__doc__', None)
+                        desc = getattr(m, "__doc__", None)
                         if desc:
                             desc = desc.strip().splitlines()[0]
                         else:
@@ -205,7 +227,7 @@ class ProjectManager:
                         sig = inspect.signature(m)
                         params = list(sig.parameters.keys())
                         # Remove 'self' parameter for instance methods
-                        if params and params[0] == 'self':
+                        if params and params[0] == "self":
                             params = params[1:]
 
                         # Count required parameters (those without default values)
@@ -221,10 +243,12 @@ class ProjectManager:
                             "params": params,
                             "param_count": len(params),
                             "required_params": required_params,
-                            "required_count": len(required_params)
+                            "required_count": len(required_params),
                         }
             except (OSError, ImportError, AttributeError) as e:
-                log.error("Failed to load builtin plugin '%s': '%s'", plugin_cls.__name__, e)
+                log.error(
+                    "Failed to load builtin plugin '%s': '%s'", plugin_cls.__name__, e
+                )
         return builtin_operations
 
     def new_project(self, project_name):
@@ -262,14 +286,22 @@ class ProjectManager:
         """
         # TODO: implement del_board
 
+
 def main():
     """
     Main entry point for the project manager CLI.
     """
     manager = ProjectManager()
     # Calculate the maximum length of operation names for proper alignment
-    max_op_length = max(len(op) for op in manager.builtin_operations) if manager.builtin_operations else 0
-    builtin_help_lines = [f"  {op:<{max_op_length}}     {info['desc']}" for op, info in manager.builtin_operations.items()]
+    max_op_length = (
+        max(len(op) for op in manager.builtin_operations)
+        if manager.builtin_operations
+        else 0
+    )
+    builtin_help_lines = [
+        f"  {op:<{max_op_length}}     {info['desc']}"
+        for op, info in manager.builtin_operations.items()
+    ]
     help_text = (
         "supported operations:\n"
         "  build         build the specified project\n"
@@ -277,25 +309,32 @@ def main():
         "  del_project   delete a project\n"
         "  new_board     create a new board\n"
         "  del_board     delete a board\n"
-        "builtin operations:\n"
-        + "\n".join(builtin_help_lines)
+        "builtin operations:\n" + "\n".join(builtin_help_lines)
     )
-    choices = ["build", "new_project", "del_project", "new_board", "del_board"] + list(manager.builtin_operations.keys())
+    choices = ["build", "new_project", "del_project", "new_board", "del_board"] + list(
+        manager.builtin_operations.keys()
+    )
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--version', action="version", version=get_version())
+    parser.add_argument("--version", action="version", version=get_version())
     parser.add_argument(
         "operate",
         choices=choices,
         help=help_text,
     )
     parser.add_argument("name", help="project or board name")
-    parser.add_argument("args", nargs='*', help="additional arguments for plugin operations")
-    parser.add_argument('--perf-analyze', action='store_true', help='Enable cProfile performance analysis')
+    parser.add_argument(
+        "args", nargs="*", help="additional arguments for plugin operations"
+    )
+    parser.add_argument(
+        "--perf-analyze",
+        action="store_true",
+        help="Enable cProfile performance analysis",
+    )
     args = parser.parse_args()
     args_dict = vars(args)
-    builtins.ENABLE_CPROFILE = args_dict.get('perf_analyze', False)
+    builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
     operate = args_dict["operate"]
-    name = args_dict["name"]
+    name = args_dict.get("name")  # Use get() to handle None case
     additional_args = args_dict.get("args", [])
 
     if operate == "build":
@@ -317,10 +356,18 @@ def main():
 
         # Check if we have enough arguments (only check required parameters)
         required_count = op_info["required_count"]
-        if len(additional_args) < required_count - 1:  # -1 because first param is always project_name
-            log.error("Operation '%s' requires %d arguments, but only %d provided",
-                     operate, required_count - 1, len(additional_args))
-            log.error("Required parameters: %s", ", ".join(params[1:required_count]))  # Skip first param (project_name)
+        if (
+            len(additional_args) < required_count - 1
+        ):  # -1 because first param is always project_name
+            log.error(
+                "Operation '%s' requires %d arguments, but only %d provided",
+                operate,
+                required_count - 1,
+                len(additional_args),
+            )
+            log.error(
+                "Required parameters: %s", ", ".join(params[1:required_count])
+            )  # Skip first param (project_name)
             return
 
         # Call function with appropriate arguments
@@ -336,5 +383,5 @@ def main():
         log.error("Operation '%s' is not supported.", operate)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
