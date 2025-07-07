@@ -15,28 +15,37 @@ fi
 # Make sure hooks directory exists
 mkdir -p .git/hooks
 
-# Install pre-push hook
-if [ -f ".git/hooks/pre-push" ]; then
-    echo "Pre-push hook already exists. Overwriting..."
-fi
-
-# Copy the pre-push hook from hooks directory
-if [ -f "hooks/pre-push" ]; then
-    cp hooks/pre-push .git/hooks/pre-push
-    echo "Pre-push hook copied from hooks/pre-push"
-else
-    echo "Error: hooks/pre-push not found"
-    exit 1
-fi
-
-# Make it executable
-chmod +x .git/hooks/pre-push
+# Copy all hook files from hooks directory
+for hook_file in hooks/*; do
+    if [ -f "$hook_file" ]; then
+        hook_name=$(basename "$hook_file")
+        
+        # Skip non-hook files
+        if [ "$hook_name" = "install_hooks.sh" ] || [ "$hook_name" = "README.md" ]; then
+            continue
+        fi
+        
+        if [ -f ".git/hooks/$hook_name" ]; then
+            echo "Hook $hook_name already exists. Overwriting..."
+        fi
+        
+        cp "$hook_file" ".git/hooks/$hook_name"
+        chmod +x ".git/hooks/$hook_name"
+        echo "Hook $hook_name copied and made executable"
+    fi
+done
 
 echo "Git hooks installed successfully!"
 echo ""
-echo "The pre-push hook will now run:"
-echo "  - Pylint code quality checks"
-echo "  - Pytest unit tests"
+echo "The following hooks are now active:"
+for hook_file in hooks/*; do
+    if [ -f "$hook_file" ]; then
+        hook_name=$(basename "$hook_file")
+        if [ "$hook_name" != "install_hooks.sh" ] && [ "$hook_name" != "README.md" ]; then
+            echo "  - $hook_name"
+        fi
+    fi
+done
 echo ""
-echo "These checks will run automatically before every git push."
-echo "If you need to bypass the hook temporarily, use: git push --no-verify" 
+echo "These hooks will run automatically before/after git operations."
+echo "If you need to bypass hooks temporarily, use: git --no-verify" 

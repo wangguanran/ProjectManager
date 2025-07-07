@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Check if black is installed, if not, try to install it
+if ! command -v black >/dev/null 2>&1; then
+    echo "[pre-commit] 'black' not found. Installing via pip..."
+    pip install black
+    # Re-check if black is installed after installation
+    if ! command -v black >/dev/null 2>&1; then
+        echo "[pre-commit] Error: 'black' could not be installed. Please install it manually."
+        exit 1
+    fi
+fi
+
+# Check formatting without making changes
+if ! black --check .; then
+    echo "[pre-commit] Code style issues found. Please run 'black .' to format your code before committing."
+    exit 1
+fi
+
+exit 0 
