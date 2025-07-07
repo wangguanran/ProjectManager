@@ -16,7 +16,7 @@ class TestPatchOverrideDel(BasePatchOverrideTest):
     def test_basic_functionality(self):
         """Test basic functionality - implementation of abstract method."""
         # This is a placeholder for the abstract method
-        return True
+        assert True
 
     def test_po_del_invalid_po_name(self):
         """Test po_del with invalid PO name."""

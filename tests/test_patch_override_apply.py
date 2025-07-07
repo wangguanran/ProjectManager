@@ -15,7 +15,7 @@ class TestPatchOverrideApply(BasePatchOverrideTest):
     def test_basic_functionality(self):
         """Test basic functionality - implementation of abstract method."""
         # This is a placeholder for the abstract method
-        return True
+        assert True
 
     def test_po_apply_basic(self):
         """Test basic po_apply functionality."""

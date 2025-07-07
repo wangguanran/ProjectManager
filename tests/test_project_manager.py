@@ -257,7 +257,14 @@ class TestMainFunction:
         """Test main function with build operation."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
-        mock_pm_instance.builtin_operations = {"test_op": {"desc": "test"}}
+        mock_pm_instance.builtin_operations = {
+            "test_op": {
+                "desc": "test",
+                "func": MagicMock(),
+                "params": [],
+                "required_count": 0,
+            }
+        }
 
         mock_parser = MagicMock()
         mock_parser_class.return_value = mock_parser
@@ -268,6 +275,7 @@ class TestMainFunction:
         mock_args.args = []
         mock_args.perf_analyze = False
         mock_parser.parse_args.return_value = mock_args
+        mock_parser.parse_known_args.return_value = (mock_args, [])
 
         self.main()
 
@@ -300,6 +308,7 @@ class TestMainFunction:
         mock_args.args = ["po_test01"]
         mock_args.perf_analyze = False
         mock_parser.parse_args.return_value = mock_args
+        mock_parser.parse_known_args.return_value = (mock_args, [])
 
         from src.project_manager import main
 
@@ -332,9 +341,11 @@ class TestMainFunction:
 
         mock_parser = MagicMock()
         mock_parser_class.return_value = mock_parser
-        mock_parser.parse_args.return_value = MagicMock(
+        mock_args = MagicMock(
             operate="po_apply", name="test_project", args=[], perf_analyze=False
         )
+        mock_parser.parse_args.return_value = mock_args
+        mock_parser.parse_known_args.return_value = (mock_args, [])
 
         self.main()
 
@@ -347,13 +358,22 @@ class TestMainFunction:
         """Test main function with unsupported operation."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
-        mock_pm_instance.builtin_operations = {"test_op": {"desc": "test"}}
+        mock_pm_instance.builtin_operations = {
+            "test_op": {
+                "desc": "test",
+                "func": MagicMock(),
+                "params": [],
+                "required_count": 0,
+            }
+        }
 
         mock_parser = MagicMock()
         mock_parser_class.return_value = mock_parser
-        mock_parser.parse_args.return_value = MagicMock(
+        mock_args = MagicMock(
             operate="unsupported_op", name="test_project", args=[], perf_analyze=False
         )
+        mock_parser.parse_args.return_value = mock_args
+        mock_parser.parse_known_args.return_value = (mock_args, [])
 
         self.main()
 

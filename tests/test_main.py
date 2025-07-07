@@ -38,15 +38,24 @@ class TestMainFunction:
             ) as mock_parser_class:
                 mock_parser = MagicMock()
                 mock_parser_class.return_value = mock_parser
-                mock_parser.parse_args.return_value = MagicMock(
+                mock_args = MagicMock(
                     operate="build", name="test", args=[], perf_analyze=False
                 )
+                mock_parser.parse_args.return_value = mock_args
+                mock_parser.parse_known_args.return_value = (mock_args, [])
 
                 # Mock ProjectManager to avoid initialization issues
                 with patch("src.project_manager.ProjectManager") as mock_pm_class:
                     mock_pm_instance = MagicMock()
                     mock_pm_class.return_value = mock_pm_instance
-                    mock_pm_instance.builtin_operations = {"test_op": {"desc": "test"}}
+                    mock_pm_instance.builtin_operations = {
+                        "test_op": {
+                            "desc": "test",
+                            "func": MagicMock(),
+                            "params": [],
+                            "required_count": 0,
+                        }
+                    }
 
                     self.main()
                     # The main function should not call project_manager.main directly
