@@ -43,7 +43,7 @@ if command -v pyinstaller &> /dev/null; then
         --workpath $BINARY_DIR/build \
         --specpath $BINARY_DIR \
         -n pm \
-        src/project_manager.py
+        src/__main__.py
 
     echo "Binary generated at $BINARY_DIR/pm"
 

@@ -6,10 +6,10 @@ import os
 import shutil
 import subprocess
 import re
+import fnmatch
 import xml.etree.ElementTree as ET
 from src.log_manager import log
 from src.profiler import auto_profile
-import fnmatch
 
 
 @auto_profile
@@ -94,7 +94,14 @@ class PatchOverride:
                         log.error("Invalid patch file path: '%s'", rel_path)
                         continue
                     repo_name = path_parts[0]
-                    patch_file_relative = os.path.join(*path_parts[1:])
+                    # 排除exclude_files中配置的patch文件
+                    if po_name in exclude_files and rel_path in exclude_files[po_name]:
+                        log.debug(
+                            "patch file '%s' in po '%s' is excluded by config",
+                            rel_path,
+                            po_name,
+                        )
+                        continue
                     patch_target = find_repo_path_by_name(repo_name)
                     if not patch_target:
                         log.error("Cannot find repo path for '%s'", repo_name)
