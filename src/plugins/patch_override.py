@@ -9,6 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 from src.log_manager import log
 from src.profiler import auto_profile
+import fnmatch
 
 
 @auto_profile
@@ -67,34 +68,45 @@ class PatchOverride:
                 log.debug("No patches dir for po: '%s'", po_name)
                 return True
             log.debug("applying patches for po: '%s'", po_name)
+
+            # 获取repo路径查找函数
+            def find_repo_path_by_name(repo_name):
+                current_dir = os.getcwd()
+                if repo_name == "root":
+                    if os.path.exists(os.path.join(current_dir, ".git")):
+                        return current_dir
+                else:
+                    repo_path = os.path.join(current_dir, repo_name)
+                    if os.path.exists(os.path.join(repo_path, ".git")):
+                        return repo_path
+                return None
+
             for current_dir, _, files in os.walk(po_patch_dir):
-                log.debug("current_dir: '%s', files: '%s'", current_dir, files)
                 for fname in files:
                     if fname == ".gitkeep":
                         continue
-                    log.debug("current_dir: '%s', fname: '%s'", current_dir, fname)
                     rel_path = os.path.relpath(
                         os.path.join(current_dir, fname), po_patch_dir
                     )
-                    log.debug("patch rel_path: '%s'", rel_path)
-                    if po_name in exclude_files and rel_path in exclude_files[po_name]:
-                        log.debug(
-                            "patch file '%s' in po '%s' is excluded by config",
-                            rel_path,
-                            po_name,
-                        )
-                        continue
+                    # rel_path: repo_name/file_path.patch
                     path_parts = rel_path.split(os.sep)
-                    patch_target = path_parts[0] if len(path_parts) > 1 else "."
+                    if len(path_parts) < 2:
+                        log.error("Invalid patch file path: '%s'", rel_path)
+                        continue
+                    repo_name = path_parts[0]
+                    patch_file_relative = os.path.join(*path_parts[1:])
+                    patch_target = find_repo_path_by_name(repo_name)
+                    if not patch_target:
+                        log.error("Cannot find repo path for '%s'", repo_name)
+                        continue
                     patch_flag = os.path.join(patch_target, ".patch_applied")
-                    log.debug(
-                        "patch patch_target: '%s', patch_flag: '%s'",
-                        patch_target,
-                        patch_flag,
+                    patch_file = os.path.join(current_dir, fname)
+                    log.info(
+                        "applying patch: '%s' to repo: '%s'", patch_file, patch_target
                     )
                     if patch_target in patch_applied_dirs:
                         log.debug(
-                            "patch flag already set for dir: '%s', skipping",
+                            "patch flag already set for repo: '%s', skipping",
                             patch_target,
                         )
                         continue
@@ -104,19 +116,14 @@ class PatchOverride:
                                 applied_pos_in_flag = f.read().strip().split("\n")
                             if po_name in applied_pos_in_flag:
                                 log.info(
-                                    "patch already applied for dir: '%s' by po: '%s', skipping",
+                                    "patch already applied for repo: '%s' by po: '%s', skipping",
                                     patch_target,
                                     po_name,
                                 )
                                 patch_applied_dirs.add(patch_target)
                                 continue
                         except OSError:
-                            # If file exists but can't be read, treat as not applied
                             pass
-                    patch_file = os.path.join(current_dir, fname)
-                    log.info(
-                        "applying patch: '%s' to dir: '%s'", patch_file, patch_target
-                    )
                     try:
                         result = subprocess.run(
                             ["git", "apply", patch_file],
@@ -138,12 +145,11 @@ class PatchOverride:
                                 result.stderr,
                             )
                             return False
-                        os.makedirs(patch_target, exist_ok=True)
                         with open(patch_flag, "a", encoding="utf-8") as f:
                             f.write(f"{po_name}\n")
                         patch_applied_dirs.add(patch_target)
                         log.info(
-                            "patch applied and flag set for dir: '%s'", patch_target
+                            "patch applied and flag set for repo: '%s'", patch_target
                         )
                     except subprocess.SubprocessError as e:
                         log.error(
@@ -656,9 +662,9 @@ class PatchOverride:
             return repositories
 
         def __get_modified_files(repo_path, repo_name):
-            """Get modified files in a repository including staged files."""
+            """Get modified files in a repository including staged files, with ignore support."""
             modified_files = []
-
+            ignore_patterns = __load_ignore_patterns()
             try:
                 # Change to repository directory
                 original_cwd = os.getcwd()
@@ -691,8 +697,16 @@ class PatchOverride:
                 # Process all files
                 all_files = staged_files | working_files
 
+                def is_ignored(file_path):
+                    for pattern in ignore_patterns:
+                        if fnmatch.fnmatch(file_path, pattern):
+                            return True
+                    return False
+
                 for file_path in all_files:
                     if not file_path.strip():
+                        continue
+                    if is_ignored(file_path):
                         continue
 
                     # Determine file status
@@ -790,9 +804,11 @@ class PatchOverride:
                     # In force mode, default to staged for staged files
                     use_staged = True
 
-                # Create patch file
-                patch_file_name = f"{repo_name}_{file_path.replace('/', '_')}.patch"
-                patch_file_path = os.path.join(patches_dir, patch_file_name)
+                # Create patch file path: patches_dir/repo_name/file_path.patch
+                patch_file_path = os.path.join(
+                    patches_dir, repo_name, f"{file_path}.patch"
+                )
+                os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
 
                 # Generate patch using appropriate git diff command
                 if use_staged:
@@ -815,9 +831,6 @@ class PatchOverride:
                     )
 
                 if result.returncode == 0 and result.stdout.strip():
-                    # Create directory structure if needed
-                    os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
-
                     # Write patch file
                     with open(patch_file_path, "w", encoding="utf-8") as f:
                         f.write(result.stdout)
@@ -955,6 +968,22 @@ class PatchOverride:
 
             # Process selected files
             __process_selected_files(selected_files, po_path)
+
+        def __load_ignore_patterns():
+            """Load ignore patterns from po_ignore.conf or .gitignore."""
+            ignore_files = [
+                os.path.join(os.getcwd(), "po_ignore.conf"),
+                os.path.join(os.getcwd(), ".gitignore"),
+            ]
+            patterns = []
+            for ignore_file in ignore_files:
+                if os.path.exists(ignore_file):
+                    with open(ignore_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                patterns.append(line)
+            return patterns
 
         # Show creation information and ask for confirmation
         if not force:
