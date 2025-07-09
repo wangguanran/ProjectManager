@@ -2,13 +2,14 @@
 Tests for utils functions.
 """
 
+# pylint: disable=attribute-defined-outside-init
+
 import os
 import sys
 import tempfile
-import shutil
 import importlib.util
-import pytest
-from unittest.mock import patch, MagicMock
+import re
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
@@ -19,9 +20,9 @@ def load_utils():
         os.path.join(os.path.dirname(__file__), "../src/utils.py")
     )
     spec = importlib.util.spec_from_file_location("utils", utils_path)
-    utils = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(utils)
-    return utils
+    utils_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(utils_mod)
+    return utils_mod
 
 
 # Load utils module
@@ -99,8 +100,6 @@ class TestGetFilename:
             # Should end with suffix
             assert filename.endswith(".txt")
             # Should contain timestamp in format YYYYMMDD_HHMMSS
-            import re
-
             timestamp_pattern = r"test_(\d{8}_\d{6})\.txt"
             match = re.match(timestamp_pattern, filename)
             assert match is not None
@@ -385,7 +384,7 @@ class TestListFilePath:
             )
 
             for filepath in [level1_file, level2_file, level3_file]:
-                with open(filepath, "w") as f:
+                with open(filepath, "w", encoding="utf-8") as f:
                     f.write("test content")
 
             # List with max_depth=1 (should only get level1 files)
@@ -404,13 +403,13 @@ class TestListFilePath:
 
             # Should not raise exception, just return empty list
             result = list(list_file_path(nonexistent_dir))
-            assert result == []
+            assert not result
 
     def test_list_file_path_empty_directory(self):
         """Test list_file_path with empty directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             result = list(list_file_path(temp_dir))
-            assert result == []
+            assert not result
 
     def test_list_file_path_with_subdirectories(self):
         """Test list_file_path with subdirectories containing files."""
@@ -421,7 +420,7 @@ class TestListFilePath:
 
             # Create files in subdirectory
             subdir_file = os.path.join(subdir, "subfile.txt")
-            with open(subdir_file, "w") as f:
+            with open(subdir_file, "w", encoding="utf-8") as f:
                 f.write("test content")
 
             # List all files

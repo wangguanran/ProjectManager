@@ -2,21 +2,29 @@
 Tests for profiler module.
 """
 
+# pylint: disable=attribute-defined-outside-init
+# pylint: disable=import-outside-toplevel
+
 import os
 import sys
 import time
+from unittest.mock import patch
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestProfilerFunctions:
     """Test cases for profiler functions."""
 
     def setup_method(self):
+        """Set up test environment for profiler tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.profiler import func_time, func_cprofile, auto_profile
+        from src.profiler import (
+            func_time,
+            func_cprofile,
+            auto_profile,
+        )
 
         self.func_time = func_time
         self.func_cprofile = func_cprofile
@@ -62,6 +70,7 @@ class TestAutoProfile:
     """Test cases for auto_profile decorator."""
 
     def setup_method(self):
+        """Set up test environment for auto_profile tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
@@ -74,13 +83,18 @@ class TestAutoProfile:
 
         @self.auto_profile
         class TestClass:
+            """A test class for auto_profile class decorator."""
+
             def public_method(self):
+                """A public method for testing."""
                 return "public_result"
 
             def _private_method(self):
+                """A private method for testing."""
                 return "private_result"
 
             def __magic_method__(self):
+                """A magic method for testing."""
                 return "magic_result"
 
         # Create instance
@@ -91,7 +105,7 @@ class TestAutoProfile:
         assert result == "public_result"
 
         # Test that private methods are not wrapped
-        result = obj._private_method()
+        result = obj._private_method()  # pylint: disable=protected-access
         assert result == "private_result"
 
         # Test that magic methods are not wrapped
@@ -100,14 +114,16 @@ class TestAutoProfile:
 
     def test_auto_profile_with_cprofile_enabled(self):
         """Test auto_profile with cProfile enabled."""
-        # Enable cProfile
         import builtins
 
         builtins.ENABLE_CPROFILE = True
 
         @self.auto_profile
         class TestClass:
+            """A test class for cProfile enabled."""
+
             def test_method(self):
+                """A test method for cProfile enabled."""
                 return "test_result"
 
         obj = TestClass()
@@ -119,7 +135,6 @@ class TestAutoProfile:
 
     def test_auto_profile_with_cprofile_disabled(self):
         """Test auto_profile with cProfile disabled."""
-        # Ensure cProfile is disabled
         import builtins
 
         if hasattr(builtins, "ENABLE_CPROFILE"):
@@ -127,7 +142,10 @@ class TestAutoProfile:
 
         @self.auto_profile
         class TestClass:
+            """A test class for cProfile disabled."""
+
             def test_method(self):
+                """A test method for cProfile disabled."""
                 return "test_result"
 
         obj = TestClass()
@@ -139,9 +157,12 @@ class TestAutoProfile:
 
         @self.auto_profile
         class TestClass:
+            """A test class with non-callable attribute."""
+
             attribute = "not_callable"
 
             def method(self):
+                """A method for testing non-callable attribute."""
                 return "method_result"
 
         obj = TestClass()
@@ -154,13 +175,18 @@ class TestAutoProfile:
 
         @self.auto_profile
         class TestClass:
+            """A test class with multiple methods."""
+
             def method1(self):
+                """First test method."""
                 return "result1"
 
             def method2(self):
+                """Second test method."""
                 return "result2"
 
             def method3(self):
+                """Third test method."""
                 return "result3"
 
         obj = TestClass()
@@ -173,7 +199,10 @@ class TestAutoProfile:
 
         @self.auto_profile
         class TestClass:
+            """A test class for method arguments."""
+
             def method_with_args(self, arg1, arg2, kwarg1=None):
+                """A method with arguments for testing."""
                 return f"{arg1}_{arg2}_{kwarg1}"
 
         obj = TestClass()
@@ -188,7 +217,10 @@ class TestAutoProfile:
 
         @self.auto_profile
         class TestClass:
+            """A test class for method exceptions."""
+
             def method_with_exception(self):
+                """A method that raises an exception for testing."""
                 raise ValueError("Test exception")
 
         obj = TestClass()
@@ -200,10 +232,14 @@ class TestProfilerIntegration:
     """Integration tests for profiler functionality."""
 
     def setup_method(self):
+        """Set up test environment for profiler integration tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.profiler import func_time, auto_profile
+        from src.profiler import (
+            func_time,
+            auto_profile,
+        )
 
         self.func_time = func_time
         self.auto_profile = auto_profile
@@ -239,14 +275,18 @@ class TestProfilerIntegration:
 
         @self.auto_profile
         class PerformanceTestClass:
+            """A test class for performance profiling."""
+
             def __init__(self):
                 self.counter = 0
 
             def increment(self):
+                """Increment the counter."""
                 self.counter += 1
                 return self.counter
 
             def reset(self):
+                """Reset the counter."""
                 self.counter = 0
                 return self.counter
 

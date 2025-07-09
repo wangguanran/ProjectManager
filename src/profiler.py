@@ -55,19 +55,31 @@ def func_cprofile(func):
 def auto_profile(cls):
     """
     Class decorator: automatically decorate all public instance methods with func_time and (optionally) func_cprofile, dynamically at call time.
+    保证 staticmethod/classmethod 包裹后类型不丢失。
     """
+
+    def make_wrapper(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            enable_cprofile = getattr(builtins, "ENABLE_CPROFILE", False)
+            if enable_cprofile:
+                return func_time(func_cprofile(func))(*args, **kwargs)
+            return func_time(func)(*args, **kwargs)
+
+        return wrapper
+
     for attr_name, attr_value in cls.__dict__.items():
-        if callable(attr_value) and not attr_name.startswith("__"):
-
-            def make_wrapper(func):
-                @wraps(func)
-                def wrapper(*args, **kwargs):
-                    enable_cprofile = getattr(builtins, "ENABLE_CPROFILE", False)
-                    if enable_cprofile:
-                        return func_time(func_cprofile(func))(*args, **kwargs)
-                    return func_time(func)(*args, **kwargs)
-
-                return wrapper
-
-            setattr(cls, attr_name, make_wrapper(attr_value))
+        if attr_name.startswith("__"):
+            continue
+        if isinstance(attr_value, staticmethod):
+            func = attr_value.__func__
+            wrapped = staticmethod(make_wrapper(func))
+        elif isinstance(attr_value, classmethod):
+            func = attr_value.__func__
+            wrapped = classmethod(make_wrapper(func))
+        elif callable(attr_value):
+            wrapped = make_wrapper(attr_value)
+        else:
+            continue
+        setattr(cls, attr_name, wrapped)
     return cls

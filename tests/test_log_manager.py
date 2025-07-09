@@ -2,6 +2,10 @@
 Tests for log_manager module.
 """
 
+# pylint: disable=attribute-defined-outside-init
+# pylint: disable=import-outside-toplevel
+# pylint: disable=protected-access
+
 import os
 import sys
 import tempfile
@@ -13,15 +17,18 @@ class TestColoredFormatter:
     """Test cases for ColoredFormatter class."""
 
     def setup_method(self):
+        """Set up test environment for ColoredFormatter tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import ColoredFormatter
+        from src.log_manager import (
+            ColoredFormatter,
+        )
 
         self.colored_formatter = ColoredFormatter
 
     def test_colored_formatter_format(self):
-        """Test ColoredFormatter format method."""
+        """Test the format method of ColoredFormatter."""
         formatter = self.colored_formatter()
 
         record = MagicMock()
@@ -136,10 +143,13 @@ class TestLogManager:
     """Test cases for LogManager class."""
 
     def setup_method(self):
+        """Set up test environment for LogManager tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import LogManager
+        from src.log_manager import (
+            LogManager,
+        )
 
         self.log_manager = LogManager
 
@@ -149,13 +159,13 @@ class TestLogManager:
         self.log_manager._LogManager__instance = None
 
     def test_singleton_pattern(self):
-        """Test that LogManager follows singleton pattern."""
+        """Test singleton pattern of LogManager."""
         lm1 = self.log_manager()
         lm2 = self.log_manager()
         assert lm1 is lm2
 
     def test_logger_initialization(self):
-        """Test logger initialization."""
+        """Test logger initialization in LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 lm = self.log_manager()
@@ -165,7 +175,7 @@ class TestLogManager:
                 assert logger.name == "FileLogger"
 
     def test_logger_handlers(self):
-        """Test that logger has correct handlers."""
+        """Test logger handlers in LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 lm = self.log_manager()
@@ -175,7 +185,7 @@ class TestLogManager:
                 assert len(logger.handlers) > 0
 
     def test_logger_level(self):
-        """Test logger level."""
+        """Test logger level in LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 lm = self.log_manager()
@@ -185,7 +195,7 @@ class TestLogManager:
                 assert logger.level == logging.DEBUG
 
     def test_logger_logging(self):
-        """Test that logger can actually log messages."""
+        """Test logger logging in LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 lm = self.log_manager()
@@ -202,7 +212,7 @@ class TestLogManager:
                 assert True
 
     def test_logger_with_file_handler(self):
-        """Test logger with file handler."""
+        """Test logger with file handler in LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 lm = self.log_manager()
@@ -223,7 +233,7 @@ class TestLogManager:
                     assert len(log_files) > 0
 
     def test_logger_multiple_instances(self):
-        """Test that multiple LogManager instances return the same logger."""
+        """Test multiple instances of LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 lm1 = self.log_manager()
@@ -240,10 +250,13 @@ class TestLogManagerIntegration:
     """Integration tests for LogManager."""
 
     def setup_method(self):
+        """Set up test environment for LogManager integration tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import LogManager
+        from src.log_manager import (
+            LogManager,
+        )
 
         self.log_manager = LogManager
 
@@ -262,7 +275,7 @@ class TestLogManagerIntegration:
                 assert os.path.exists(os.path.join(temp_dir, "logs"))
 
     def test_logger_with_organize_files(self):
-        """Test logger with organize_files functionality."""
+        """Test logger with organize files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
                 # Create some existing log files
@@ -286,6 +299,7 @@ class TestGlobalLog:
     """Test cases for global log instance."""
 
     def setup_method(self):
+        """Set up test environment for global log tests."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
@@ -294,7 +308,7 @@ class TestGlobalLog:
         self.log = log
 
     def test_global_log_instance(self):
-        """Test that global log instance is available."""
+        """Test global log instance."""
         assert self.log is not None
         assert isinstance(self.log, logging.Logger)
 
@@ -310,7 +324,7 @@ class TestGlobalLog:
         assert True
 
     def test_global_log_levels(self):
-        """Test global log with different levels."""
+        """Test global log levels."""
         # Test that we can check log levels
         assert self.log.isEnabledFor(logging.DEBUG)
         assert self.log.isEnabledFor(logging.INFO)

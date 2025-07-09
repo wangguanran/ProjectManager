@@ -14,38 +14,43 @@ from src.profiler import auto_profile
 @auto_profile
 class PatchOverride:
     """
-    Patch and override operations for po.
+    Patch and override utility class. All methods are static and stateless.
     """
 
-    def __init__(self, vprojects_path, all_projects_info):
-        self.vprojects_path = vprojects_path
-        self.all_projects_info = all_projects_info
+    def __init__(self):
+        raise NotImplementedError(
+            "PatchOverride is a utility class and cannot be instantiated."
+        )
 
-    def po_apply(self, project_name):
+    @staticmethod
+    def po_apply(env, projects_info, project_name):
         """
         Apply patch and override for the specified project.
         Args:
-            project_name (str): Project or board name.
+            env (dict): Global environment dict.
+            projects_info (dict): All projects info.
+            project_name (str): Project name.
         Returns:
             bool: True if success, otherwise False.
         """
+        vprojects_path = env["vprojects_path"]
         log.info("start po_apply for project: '%s'", project_name)
-        project_cfg = self.all_projects_info.get(project_name, {})
+        project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
         if not board_name:
             log.error("Cannot find board name for project: '%s'", project_name)
             return False
-        board_path = os.path.join(self.vprojects_path, board_name)
+        board_path = os.path.join(vprojects_path, board_name)
         po_dir = os.path.join(board_path, "po")
         po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
         if not po_config:
             log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
             return True
-        apply_pos, exclude_pos, exclude_files = self.__parse_po_config(po_config)
-        apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
-        log.debug(
-            "all_projects_info: %s", str(self.all_projects_info.get(project_name, {}))
+        apply_pos, exclude_pos, exclude_files = PatchOverride.__parse_po_config(
+            po_config
         )
+        apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
+        log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
         log.debug("po_dir: '%s'", po_dir)
         if apply_pos:
             log.debug("apply_pos: %s", str(apply_pos))
@@ -246,31 +251,35 @@ class PatchOverride:
         log.info("po apply finished for project: '%s'", project_name)
         return True
 
-    def po_revert(self, project_name):
+    @staticmethod
+    def po_revert(env, projects_info, project_name):
         """
         Revert patch and override for the specified project.
         Args:
-            project_name (str): Project or board name.
+            env (dict): Global environment dict.
+            projects_info (dict): All projects info.
+            project_name (str): Project name.
         Returns:
             bool: True if success, otherwise False.
         """
+        vprojects_path = env["vprojects_path"]
         log.info("start po_revert for project: '%s'", project_name)
-        project_cfg = self.all_projects_info.get(project_name, {})
+        project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
         if not board_name:
             log.error("Cannot find board name for project: '%s'", project_name)
             return False
-        board_path = os.path.join(self.vprojects_path, board_name)
+        board_path = os.path.join(vprojects_path, board_name)
         po_dir = os.path.join(board_path, "po")
         po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
         if not po_config:
             log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
             return True
-        apply_pos, exclude_pos, exclude_files = self.__parse_po_config(po_config)
-        apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
-        log.debug(
-            "all_projects_info: %s", str(self.all_projects_info.get(project_name, {}))
+        apply_pos, exclude_pos, exclude_files = PatchOverride.__parse_po_config(
+            po_config
         )
+        apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
+        log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
         log.debug("po_dir: '%s'", po_dir)
         if apply_pos:
             log.debug("apply_pos: %s", str(apply_pos))
@@ -527,11 +536,14 @@ class PatchOverride:
         log.info("po revert finished for project: '%s'", project_name)
         return True
 
-    def po_new(self, project_name, po_name, force=False):
+    @staticmethod
+    def po_new(env, projects_info, project_name, po_name, force=False):
         """
         Create a new PO (patch and override) directory structure for the specified project.
         Args:
-            project_name (str): Project or board name.
+            env (dict): Global environment dict.
+            projects_info (dict): All projects info.
+            project_name (str): Project name.
             po_name (str): Name of the new PO to create.
             force (bool): If True, skip confirmation prompt.
         Returns:
@@ -544,13 +556,13 @@ class PatchOverride:
                 po_name,
             )
             return False
-        project_cfg = self.all_projects_info.get(project_name, {})
+        project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
         if not board_name:
             log.error("Cannot find board name for project: '%s'", project_name)
             return False
 
-        board_path = os.path.join(self.vprojects_path, board_name)
+        board_path = os.path.join(env["vprojects_path"], board_name)
         po_dir = os.path.join(board_path, "po")
 
         # Create po directory if it doesn't exist
@@ -988,11 +1000,14 @@ class PatchOverride:
             )
             return False
 
-    def po_del(self, project_name, po_name, force=False):
+    @staticmethod
+    def po_del(env, projects_info, project_name, po_name, force=False):
         """
         Delete the specified PO directory and remove it from all project configurations.
         Args:
-            project_name (str): Project or board name.
+            env (dict): Global environment dict.
+            projects_info (dict): All projects info.
+            project_name (str): Project name.
             po_name (str): Name of the PO to delete.
             force (bool): If True, skip confirmation prompt.
         Returns:
@@ -1008,13 +1023,13 @@ class PatchOverride:
             )
             return False
 
-        project_cfg = self.all_projects_info.get(project_name, {})
+        project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
         if not board_name:
             log.error("Cannot find board name for project: '%s'", project_name)
             return False
 
-        board_path = os.path.join(self.vprojects_path, board_name)
+        board_path = os.path.join(env["vprojects_path"], board_name)
         po_dir = os.path.join(board_path, "po")
         po_path = os.path.join(po_dir, po_name)
 
@@ -1036,7 +1051,7 @@ class PatchOverride:
                 __print_directory_tree(po_path, prefix="  ")
 
             # Show which projects use this PO
-            using_projects = __find_projects_using_po(po_name)
+            using_projects = __find_projects_using_po(po_name, projects_info)
             if using_projects:
                 print("\nProjects using this PO:")
                 for project in using_projects:
@@ -1088,10 +1103,10 @@ class PatchOverride:
             except OSError as e:
                 print(f"{prefix}Error reading directory: {e}")
 
-        def __find_projects_using_po(po_name):
+        def __find_projects_using_po(po_name, projects_info):
             """Find all projects that use the specified PO."""
             using_projects = []
-            for project_name, project_cfg in self.all_projects_info.items():
+            for project_name, project_cfg in projects_info.items():
                 po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
                 if not po_config:
                     continue
@@ -1182,13 +1197,13 @@ class PatchOverride:
                 log.error("Failed to update ini file '%s': '%s'", ini_file, e)
                 return False
 
-        def __remove_po_from_configs(po_name):
+        def __remove_po_from_configs(po_name, projects_info):
             """Remove the specified PO from all project configurations."""
             log.debug("Removing PO '%s' from all project configurations", po_name)
 
             # Group projects by their board and ini file
             board_configs = {}
-            for project_name, project_cfg in self.all_projects_info.items():
+            for project_name, project_cfg in projects_info.items():
                 board_name = project_cfg.get("board_name")
                 if not board_name:
                     continue
@@ -1197,7 +1212,7 @@ class PatchOverride:
                     board_configs[board_name] = {}
 
                 # Find the ini file for this board
-                board_path = os.path.join(self.vprojects_path, board_name)
+                board_path = os.path.join(env["vprojects_path"], board_name)
                 ini_file = None
                 for f in os.listdir(board_path):
                     if f.endswith(".ini"):
@@ -1228,7 +1243,7 @@ class PatchOverride:
                 return False
 
         # First, remove the PO from all project configurations
-        if not __remove_po_from_configs(po_name):
+        if not __remove_po_from_configs(po_name, projects_info):
             log.error("Failed to remove PO '%s' from project configurations", po_name)
             return False
 
@@ -1251,41 +1266,25 @@ class PatchOverride:
         )
         return True
 
-    def __parse_po_config(self, po_config):
-        apply_pos = []
-        exclude_pos = set()
-        exclude_files = {}
-        tokens = re.findall(r"-?\w+(?:\[[^\]]+\])?", po_config)
-        for token in tokens:
-            if token.startswith("-"):
-                if "[" in token:
-                    po_name, files = re.match(r"-(\w+)\[([^\]]+)\]", token).groups()
-                    file_list = set(f.strip() for f in files.split())
-                    exclude_files.setdefault(po_name, set()).update(file_list)
-                else:
-                    po_name = token[1:]
-                    exclude_pos.add(po_name)
-            else:
-                po_name = token
-                apply_pos.append(po_name)
-        return apply_pos, exclude_pos, exclude_files
-
-    def po_list(self, project_name, short=False):
+    @staticmethod
+    def po_list(env, projects_info, project_name, short=False):
         """
         List all enabled PO (patch/override) directories for the specified project.
         Args:
-            project_name (str): Project or board name.
+            env (dict): Global environment dict.
+            projects_info (dict): All projects info.
+            project_name (str): Project name.
             short (bool): If True, only list po names, not details.
         Returns:
             list: List of dicts with PO info (name, patch_files, override_files)
         """
         log.info("start po_list for project: '%s'", project_name)
-        project_cfg = self.all_projects_info.get(project_name, {})
+        project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
         if not board_name:
             log.error("Cannot find board name for project: '%s'", project_name)
             return []
-        board_path = os.path.join(self.vprojects_path, board_name)
+        board_path = os.path.join(env["vprojects_path"], board_name)
         po_dir = os.path.join(board_path, "po")
         if not os.path.isdir(po_dir):
             log.warning("No po directory found for '%s'", project_name)
@@ -1294,8 +1293,8 @@ class PatchOverride:
         po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
         enabled_pos = set()
         if po_config:
-            apply_pos, exclude_pos, _ = self.__parse_po_config(po_config)
-            enabled_pos = set([po for po in apply_pos if po not in exclude_pos])
+            apply_pos, exclude_pos, _ = PatchOverride.__parse_po_config(po_config)
+            enabled_pos = {po for po in apply_pos if po not in exclude_pos}
         # 只列出配置中启用的po
         po_list = []
         for po_name in sorted(enabled_pos):
@@ -1349,3 +1348,23 @@ class PatchOverride:
                 else:
                     print("    (none)")
         return po_list
+
+    @staticmethod
+    def __parse_po_config(po_config):
+        apply_pos = []
+        exclude_pos = set()
+        exclude_files = {}
+        tokens = re.findall(r"-?\w+(?:\[[^\]]+\])?", po_config)
+        for token in tokens:
+            if token.startswith("-"):
+                if "[" in token:
+                    po_name, files = re.match(r"-(\w+)\[([^\]]+)\]", token).groups()
+                    file_list = set(f.strip() for f in files.split())
+                    exclude_files.setdefault(po_name, set()).update(file_list)
+                else:
+                    po_name = token[1:]
+                    exclude_pos.add(po_name)
+            else:
+                po_name = token
+                apply_pos.append(po_name)
+        return apply_pos, exclude_pos, exclude_files

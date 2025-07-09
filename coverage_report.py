@@ -5,6 +5,7 @@ Simple coverage report for Project Manager
 
 import json
 from pathlib import Path
+import subprocess
 
 
 def main():
@@ -21,9 +22,9 @@ def main():
         return
 
     try:
-        with open(status_file, "r") as f:
+        with open(status_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
         print(f"❌ Error reading coverage data: {e}")
         return
 
@@ -37,7 +38,7 @@ def main():
 
     file_reports = []
 
-    for file_key, file_data in files.items():
+    for file_data in files.values():
         file_info = file_data.get("index", {})
         file_path = file_info.get("file", "")
 
@@ -89,21 +90,21 @@ def main():
         else 0
     )
 
-    print(f"\n📊 OVERALL COVERAGE:")
+    print("\n📊 OVERALL COVERAGE:")
     print(
-        f"   Statements: {total_statements - total_missing}/{total_statements} ({overall_coverage:.1f}%)"
+        f"   Statements: {total_statements - total_missing} / {total_statements} ({overall_coverage:.1f}%)"
     )
     print(
-        f"   Branches: {total_branches - total_branch_missing}/{total_branches} ({overall_branch_coverage:.1f}%)"
+        f"   Branches: {total_branches - total_branch_missing} / {total_branches} ({overall_branch_coverage:.1f}%)"
     )
     print(f"   Missing statements: {total_missing}")
     print(f"   Missing branches: {total_branch_missing}")
 
     # File breakdown
-    print(f"\n📁 FILE BREAKDOWN:")
+    print("\n📁 FILE BREAKDOWN:")
     print("-" * 100)
     print(
-        f"{'File':<40} | {'Stmts':>6} | {'Miss':>4} | {'Cover':>6} | {'Branch':>6} | {'BrMiss':>6}"
+        f"{'File': <40} | {'Stmts': >6} | {'Miss': >4} | {'Cover': >6} | {'Branch': >6} | {'BrMiss': >6}"
     )
     print("-" * 100)
 
@@ -125,13 +126,13 @@ def main():
     # Files needing attention
     low_coverage = [f for f in file_reports if f["coverage"] < 80]
     if low_coverage:
-        print(f"\n⚠️  FILES NEEDING ATTENTION (Coverage < 80%):")
+        print("\n⚠️  FILES NEEDING ATTENTION (Coverage < 80%):")
         print("-" * 60)
         for report in low_coverage:
             print(f"   {report['file']} ({report['coverage']:.1f}% coverage)")
 
     # Recommendations
-    print(f"\n💡 RECOMMENDATIONS:")
+    print("\n💡 RECOMMENDATIONS:")
     print("-" * 30)
 
     if overall_coverage < 80:
@@ -149,25 +150,25 @@ def main():
         print("      Add tests to cover different code paths and edge cases")
 
     # Test status
-    print(f"\n🧪 TEST STATUS:")
+    print("\n🧪 TEST STATUS:")
     print("-" * 20)
-    import subprocess
 
     try:
         result = subprocess.run(
             ["python3", "-m", "pytest", "tests/", "--tb=no", "-q"],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode == 0:
             print("   ✅ All tests passing")
         else:
             print("   ❌ Some tests failing")
             print("      Check test output for details")
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         print(f"   ⚠️  Could not determine test status: {e}")
 
-    print(f"\n📖 For detailed HTML report, open: htmlcov/index.html")
+    print("\n📖 For detailed HTML report, open: htmlcov/index.html")
 
 
 if __name__ == "__main__":

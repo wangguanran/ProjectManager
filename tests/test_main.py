@@ -2,6 +2,9 @@
 Tests for __main__.py module.
 """
 
+# pylint: disable=attribute-defined-outside-init
+# pylint: disable=import-outside-toplevel
+
 import os
 import sys
 from unittest.mock import patch, MagicMock
@@ -21,21 +24,16 @@ class TestMainFunction:
 
     def test_main_module_execution(self):
         """Test that main module can be executed."""
-        with patch("src.project_manager.main") as mock_main:
-            # Import and execute the module
+        with patch("src.__main__.main") as mock_main:
             import src.__main__
 
-            # Check that main was called when __name__ == "__main__"
-            # Since we're not running as main, it shouldn't be called
+            _ = src.__main__  # avoid unused-import warning
             mock_main.assert_not_called()
 
     def test_main_module_direct_call(self):
         """Test direct call to main function."""
-        with patch("src.project_manager.main") as mock_project_main:
-            # Mock the argument parser to avoid SystemExit
-            with patch(
-                "src.project_manager.argparse.ArgumentParser"
-            ) as mock_parser_class:
+        with patch("src.__main__.main") as mock_project_main:
+            with patch("src.__main__.argparse.ArgumentParser") as mock_parser_class:
                 mock_parser = MagicMock()
                 mock_parser_class.return_value = mock_parser
                 mock_args = MagicMock(
@@ -43,9 +41,9 @@ class TestMainFunction:
                 )
                 mock_parser.parse_args.return_value = mock_args
                 mock_parser.parse_known_args.return_value = (mock_args, [])
-
-                # Mock ProjectManager to avoid initialization issues
-                with patch("src.project_manager.ProjectManager") as mock_pm_class:
+                with patch(
+                    "src.plugins.project_manager.ProjectManager"
+                ) as mock_pm_class:
                     mock_pm_instance = MagicMock()
                     mock_pm_class.return_value = mock_pm_instance
                     mock_pm_instance.builtin_operations = {
@@ -56,8 +54,5 @@ class TestMainFunction:
                             "required_count": 0,
                         }
                     }
-
                     self.main()
-                    # The main function should not call project_manager.main directly
-                    # It should handle the arguments itself
                     mock_project_main.assert_not_called()

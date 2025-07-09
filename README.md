@@ -19,7 +19,7 @@ optional arguments:
   -h, --help     show this help message and exit
   -v, --version  show program's version number and exit
 
-new_project:
+project_new:
   -b             specify the new project as the board project
   --base BASE    specify a new project to be created based on this
 ```
@@ -31,7 +31,7 @@ new_project:
 ```log
 vprojects/.cache/logs/Log_20200225_223744.log
 
-[2020-02-25 22:37:44,542] [DEBUG     ] [project.py          ] [parse_cmd           ] [111  ]	argv = ['/home/dserver/build_projects2/build2/VZ6737M_65_I_N_vtrunk/vprojects/project-manager/project.py', 'del_project', 'tnz801']
+[2020-02-25 22:37:44,542] [DEBUG     ] [project.py          ] [parse_cmd           ] [111  ]	argv = ['/home/dserver/build_projects2/build2/VZ6737M_65_I_N_vtrunk/vprojects/project-manager/project.py', 'project_del', 'tnz801']
 ```
 
 * cprofile目录下保存代码的执行时间分析
