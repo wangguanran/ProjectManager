@@ -93,7 +93,15 @@ class PatchOverride:
                     if len(path_parts) < 2:
                         log.error("Invalid patch file path: '%s'", rel_path)
                         continue
-                    repo_name = path_parts[0]
+                    if len(path_parts) == 1:
+                        repo_name = "root"
+                        # For root repository, patch file contains only filename
+                        # file_path variable is not used in this context
+                    else:
+                        repo_name = path_parts[0]
+                        # For other repositories, patch file contains only filename
+                        # file_path variable is not used in this context
+
                     # Exclude patch files configured in exclude_files
                     if po_name in exclude_files and rel_path in exclude_files[po_name]:
                         log.debug(
@@ -194,7 +202,13 @@ class PatchOverride:
                         )
                         continue
                     path_parts = rel_path.split(os.sep)
-                    override_target = path_parts[0] if len(path_parts) > 1 else "."
+                    if len(path_parts) == 1:
+                        override_target = "."
+                        # file_path variable is not used in this context
+                    else:
+                        override_target = path_parts[0]
+                        # file_path variable is not used in this context
+
                     override_flag = os.path.join(override_target, ".override_applied")
                     log.debug(
                         "override override_target: '%s', override_flag: '%s'",
@@ -328,7 +342,35 @@ class PatchOverride:
                         )
                         continue
                     path_parts = rel_path.split(os.sep)
-                    patch_target = path_parts[0] if len(path_parts) > 1 else "."
+                    if len(path_parts) == 1:
+                        repo_name = "root"
+                        # For root repository, patch file contains only filename
+                        # file_path variable is not used in this context
+                    else:
+                        repo_name = path_parts[0]
+                        # For other repositories, patch file contains only filename
+                        # file_path variable is not used in this context
+
+                    # 在 __revert_patch 内，patch_target = find_repo_path_by_name(repo_name) 需要提前定义 find_repo_path_by_name
+                    # 直接将 patch_target 的赋值方式与 __apply_patch 保持一致
+                    # 替换：
+                    # patch_target = find_repo_path_by_name(repo_name)
+                    # patch_flag = os.path.join(patch_target, ".patch_applied")
+
+                    # 先定义 find_repo_path_by_name
+                    def find_repo_path_by_name(repo_name):
+                        current_dir = os.getcwd()
+                        if repo_name == "root":
+                            if os.path.exists(os.path.join(current_dir, ".git")):
+                                return current_dir
+                        else:
+                            repo_path = os.path.join(current_dir, repo_name)
+                            if os.path.exists(os.path.join(repo_path, ".git")):
+                                return repo_path
+                        return None
+
+                    # 然后 patch_target = find_repo_path_by_name(repo_name)
+                    patch_target = find_repo_path_by_name(repo_name)
                     patch_flag = os.path.join(patch_target, ".patch_applied")
                     log.debug(
                         "patch patch_target: '%s', patch_flag: '%s'",
@@ -427,7 +469,13 @@ class PatchOverride:
                         )
                         continue
                     path_parts = rel_path.split(os.sep)
-                    override_target = path_parts[0] if len(path_parts) > 1 else "."
+                    if len(path_parts) == 1:
+                        override_target = "."
+                        # file_path variable is not used in this context
+                    else:
+                        override_target = path_parts[0]
+                        # file_path variable is not used in this context
+
                     override_flag = os.path.join(override_target, ".override_applied")
                     log.debug(
                         "override override_target: '%s', override_flag: '%s'",
@@ -612,8 +660,7 @@ class PatchOverride:
             print(
                 "  1. PO directory structure with patches/ and overrides/ subdirectories"
             )
-            print("  2. .gitkeep files in both subdirectories")
-            print("  3. Option to select modified files to include in the PO")
+            print("  2. Option to select modified files to include in the PO")
 
             while True:
                 response = (
@@ -814,10 +861,32 @@ class PatchOverride:
                     # In force mode, default to staged for staged files
                     use_staged = True
 
+                # Ask user for custom patch name
+                default_filename = os.path.basename(file_path)
+                print(f"    Default patch name: {default_filename}.patch")
+                custom_name = input(
+                    "    Enter custom patch name (or press Enter for default): "
+                ).strip()
+
+                if custom_name:
+                    # Remove .patch extension if user included it
+                    if custom_name.endswith(".patch"):
+                        custom_name = custom_name[:-6]
+                    filename = custom_name
+                else:
+                    filename = default_filename
+
                 # Create patch file path: patches_dir/repo_name/file_path.patch
-                patch_file_path = os.path.join(
-                    patches_dir, repo_name, f"{file_path}.patch"
-                )
+                if repo_name == "root":
+                    # For root repository, patch is based on root directory, use only filename
+                    patch_file_path = os.path.join(patches_dir, f"{filename}.patch")
+                else:
+                    # For other repositories, patch is based on repo root directory, use only filename
+                    patch_file_path = os.path.join(
+                        patches_dir, repo_name, f"{filename}.patch"
+                    )
+
+                # Create patches directory and subdirectories if they don't exist
                 os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
 
                 # Generate patch using appropriate git diff command
@@ -871,9 +940,13 @@ class PatchOverride:
                     return False
 
                 # Destination file path in overrides directory
-                dest_file = os.path.join(overrides_dir, repo_name, file_path)
+                if repo_name == "root":
+                    # For root repository, use the full relative path
+                    dest_file = os.path.join(overrides_dir, file_path)
+                else:
+                    dest_file = os.path.join(overrides_dir, repo_name, file_path)
 
-                # Create directory structure
+                # Create overrides directory and subdirectories if they don't exist
                 os.makedirs(os.path.dirname(dest_file), exist_ok=True)
 
                 # Copy file
@@ -884,42 +957,42 @@ class PatchOverride:
                 log.error("Failed to create override for file %s: %s", file_path, e)
                 return False
 
-        def __process_selected_files(selected_files, po_path):
-            """Process selected files and ask user to choose between patch and override."""
+        def __process_single_file(file_info, po_path):
+            """Process a single file and ask user to choose between patch and override."""
+            repo_name, file_path, status = file_info
             patches_dir = os.path.join(po_path, "patches")
             overrides_dir = os.path.join(po_path, "overrides")
 
-            print(f"\nProcessing {len(selected_files)} selected files...")
+            # Create po directory when first file is selected
+            os.makedirs(po_path, exist_ok=True)
+            log.info("Created po directory: '%s'", po_path)
 
-            for repo_name, file_path, status in selected_files:
-                print(f"\nFile: [{repo_name}] {file_path} ({status})")
-                print("Choose action:")
-                print("  1. Create patch (for tracked files with modifications)")
-                print("  2. Create override (for any file)")
-                print("  3. Skip this file")
+            print(f"\nFile: [{repo_name}] {file_path} ({status})")
+            print("Choose action:")
+            print("  1. Create patch (for tracked files with modifications)")
+            print("  2. Create override (for any file)")
+            print("  3. Skip this file")
 
-                while True:
-                    choice = input("Choice (1/2/3): ").strip()
-                    if choice == "1":
-                        if __create_patch_for_file(
-                            repo_name, file_path, patches_dir, force=False
-                        ):
-                            print(f"  ✓ Created patch for {file_path}")
-                        else:
-                            print(f"  ✗ Failed to create patch for {file_path}")
-                        break
-                    if choice == "2":
-                        if __create_override_for_file(
-                            repo_name, file_path, overrides_dir
-                        ):
-                            print(f"  ✓ Created override for {file_path}")
-                        else:
-                            print(f"  ✗ Failed to create override for {file_path}")
-                        break
-                    if choice == "3":
-                        print(f"  - Skipped {file_path}")
-                        break
-                    print("Invalid choice. Please enter 1, 2, or 3.")
+            while True:
+                choice = input("Choice (1/2/3): ").strip()
+                if choice == "1":
+                    if __create_patch_for_file(
+                        repo_name, file_path, patches_dir, force=False
+                    ):
+                        print(f"  ✓ Created patch for {file_path}")
+                        return True
+                    print(f"  ✗ Failed to create patch for {file_path}")
+                    return False
+                if choice == "2":
+                    if __create_override_for_file(repo_name, file_path, overrides_dir):
+                        print(f"  ✓ Created override for {file_path}")
+                        return True
+                    print(f"  ✗ Failed to create override for {file_path}")
+                    return False
+                if choice == "3":
+                    print(f"  - Skipped {file_path}")
+                    return False
+                print("Invalid choice. Please enter 1, 2, or 3.")
 
         def __interactive_file_selection(po_path):
             """Interactive file selection for PO creation."""
@@ -942,42 +1015,62 @@ class PatchOverride:
                 print("No modified files found in any repository.")
                 return
 
-            print(f"\nFound {len(all_modified_files)} modified files:")
-            for i, (repo_name, file_path, status) in enumerate(all_modified_files, 1):
-                print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
-
-            print("\nSelect files to include in the PO:")
-            print("  Enter file numbers separated by spaces (e.g., '1 3 5')")
-            print("  Enter 'all' to select all files")
-            print("  Enter 'none' to skip file selection")
-            print("  Enter 'q' to quit")
+            # Track processed files
+            processed_files = set()
+            remaining_files = all_modified_files.copy()
 
             while True:
+                print(
+                    f"\n=== File Selection (Remaining: {len(remaining_files)}/{len(all_modified_files)}) ==="
+                )
+
+                # Show remaining files
+                if remaining_files:
+                    print("Remaining files to process:")
+                    for i, (repo_name, file_path, status) in enumerate(
+                        remaining_files, 1
+                    ):
+                        print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
+                else:
+                    print("All files have been processed!")
+                    break
+
+                # Show processed files summary
+                if processed_files:
+                    print(f"\nProcessed files ({len(processed_files)}):")
+                    for repo_name, file_path, status in sorted(processed_files):
+                        print(f"  ✓ [{repo_name}] {file_path} ({status})")
+
+                print("\nOptions:")
+                print("  Enter file number to process (e.g., '1')")
+                print("  Enter 'all' to process all remaining files")
+                print("  Enter 'q' to quit and finish")
+
                 selection = input("\nSelection: ").strip()
                 if selection.lower() == "q":
-                    print("File selection cancelled.")
-                    return
-                if selection.lower() == "none":
-                    print("No files selected.")
-                    return
-                if selection.lower() == "all":
-                    selected_files = all_modified_files
+                    print("File selection finished.")
                     break
+
+                if selection.lower() == "all":
+                    # Process all remaining files
+                    files_to_process = remaining_files.copy()
+                    for file_info in files_to_process:
+                        __process_single_file(file_info, po_path)
+                        processed_files.add(file_info)
+                        remaining_files.remove(file_info)
+                    continue
+
                 try:
-                    indices = [int(x.strip()) - 1 for x in selection.split()]
-                    if all(0 <= i < len(all_modified_files) for i in indices):
-                        selected_files = [all_modified_files[i] for i in indices]
-                        break
-                    print("Invalid file number(s). Please try again.")
+                    index = int(selection) - 1
+                    if 0 <= index < len(remaining_files):
+                        file_info = remaining_files[index]
+                        if __process_single_file(file_info, po_path):
+                            processed_files.add(file_info)
+                        remaining_files.pop(index)
+                    else:
+                        print("Invalid file number. Please try again.")
                 except ValueError:
-                    print("Invalid input. Please enter numbers separated by spaces.")
-
-            if not selected_files:
-                print("No files selected.")
-                return
-
-            # Process selected files
-            __process_selected_files(selected_files, po_path)
+                    print("Invalid input. Please enter a number, 'all', or 'q'.")
 
         def __load_ignore_patterns():
             """Load ignore patterns from po_ignore.conf or .gitignore."""
@@ -1002,29 +1095,21 @@ class PatchOverride:
                 return False
 
         try:
-            # Create po directory
-            os.makedirs(po_path, exist_ok=True)
-            log.info("Created po directory: '%s'", po_path)
-
-            # Create patches directory with .gitkeep
-            os.makedirs(patches_dir, exist_ok=True)
-            gitkeep_file = os.path.join(patches_dir, ".gitkeep")
-            if not os.path.exists(gitkeep_file):
-                with open(gitkeep_file, "w", encoding="utf-8"):
-                    pass  # Create empty file
-                log.info("Created .gitkeep in patches directory: '%s'", patches_dir)
-
-            # Create overrides directory with .gitkeep
-            os.makedirs(overrides_dir, exist_ok=True)
-            gitkeep_file = os.path.join(overrides_dir, ".gitkeep")
-            if not os.path.exists(gitkeep_file):
-                with open(gitkeep_file, "w", encoding="utf-8"):
-                    pass  # Create empty file
-                log.info("Created .gitkeep in overrides directory: '%s'", overrides_dir)
-
-            # Interactive file selection
+            # Interactive file selection first
             if not force:
                 __interactive_file_selection(po_path)
+
+            # In force mode, create empty directory structure
+            if force:
+                # Create po directory
+                os.makedirs(po_path, exist_ok=True)
+                log.info("Created po directory: '%s'", po_path)
+
+                # Create patches directory (force mode creates empty directories)
+                os.makedirs(patches_dir, exist_ok=True)
+
+                # Create overrides directory (force mode creates empty directories)
+                os.makedirs(overrides_dir, exist_ok=True)
 
             log.info(
                 "po_new finished for project: '%s', po_name: '%s'",
