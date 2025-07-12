@@ -39,6 +39,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TWINE_USERNAME: ${{ github.actor }}
+          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python -m twine upload --repository-url https://npm.pkg.github.com/ dist/* 
+          python -m twine upload --repository-url https://pypi.pkg.github.com/wangguanran/ dist/* 

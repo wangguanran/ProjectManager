@@ -103,7 +103,7 @@ pip install multi-project-manager
 
 **From GitHub Package Registry**:
 ```bash
-pip install multi-project-manager --index-url https://npm.pkg.github.com/
+pip install multi-project-manager --index-url https://pypi.pkg.github.com/wangguanran/
 ```
 
 **Usage**:
