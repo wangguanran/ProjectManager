@@ -35,16 +35,16 @@ pip install -e .
 
 **Pull the latest image**:
 ```bash
-docker pull ghcr.io/wangguanran/ProjectManager:latest
+docker pull ghcr.io/wangguanran/projectmanager:latest
 ```
 
 **Run with Docker**:
 ```bash
 # Basic usage
-docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/ProjectManager:latest
+docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/projectmanager:latest
 
 # With specific command
-docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/ProjectManager:latest po_apply myproject
+docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/projectmanager:latest po_apply myproject
 ```
 
 ## Main Features
