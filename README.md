@@ -1,14 +1,8 @@
 # ProjectManager
 
-![GitHub stars](https://img.shields.io/github/stars/wangguanran/ProjectManager.svg)
-![GitHub forks](https://img.shields.io/github/forks/wangguanran/ProjectManager.svg)
-![GitHub issues](https://img.shields.io/github/issues/wangguanran/ProjectManager.svg)
-![GitHub last commit](https://img.shields.io/github/last-commit/wangguanran/ProjectManager.svg)
-![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg)
-![Python](https://img.shields.io/badge/python-3.7+-blue.svg)
-![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-lightgrey.svg)
-![Build Status](https://github.com/wangguanran/ProjectManager/actions/workflows/python-app.yml/badge.svg)
-![Pylint](https://github.com/wangguanran/ProjectManager/actions/workflows/pylint.yml/badge.svg)
+![GitHub stars](https://img.shields.io/github/stars/wangguanran/ProjectManager.svg) ![GitHub forks](https://img.shields.io/github/forks/wangguanran/ProjectManager.svg) ![GitHub issues](https://img.shields.io/github/issues/wangguanran/ProjectManager.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/wangguanran/ProjectManager.svg)
+![Build Status](https://github.com/wangguanran/ProjectManager/actions/workflows/python-app.yml/badge.svg) ![Pylint](https://github.com/wangguanran/ProjectManager/actions/workflows/pylint.yml/badge.svg)
+![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg) ![Python](https://img.shields.io/badge/python-3.7+-blue.svg) ![Platform](https://img.shields.io/badge/platform-linux-blue.svg)
 
 Universal Project and Patch (PO) Management Tool
 
