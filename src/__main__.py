@@ -297,23 +297,29 @@ def main():
     """Main entry point for the CLI project manager."""
     log.debug("sys.argv: %s", sys.argv)
 
-    root_path = os.path.dirname(os.path.dirname(__file__))
+    # Define root_path as current working directory
+    root_path = os.getcwd()
+    # Use vprojects path from current working directory
+    vprojects_path = os.path.join(root_path, "vprojects")
+
     env = {
         "root_path": root_path,
-        "vprojects_path": os.path.join(root_path, "vprojects"),
+        "vprojects_path": vprojects_path,
     }
-    log.debug("env: %s", env)
+    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 
     projects_info = _load_all_projects(env["vprojects_path"])
     log.debug("Loaded %d projects.", len(projects_info))
     log.debug(
-        "Loaded projects info:\n'%s'",
+        "Loaded projects info:\n%s",
         json.dumps(projects_info, indent=4, ensure_ascii=False),
     )
     platform_operations = _load_platform_plugin_operations(env["vprojects_path"])
     log.debug("Loaded %d platform operations.", len(platform_operations))
+    log.debug("Platform operations: %s", list(platform_operations.keys()))
     builtin_operations = _load_builtin_plugin_operations()
     log.debug("Loaded %d builtin operations.", len(builtin_operations))
+    log.debug("Builtin operations: %s", list(builtin_operations.keys()))
 
     # Merge all operations
     all_operations = {**builtin_operations, **platform_operations}
