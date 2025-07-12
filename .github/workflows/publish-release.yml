@@ -71,20 +71,20 @@ jobs:
     - name: Create release assets
       run: |
         mkdir -p release
-        cp out/binary/pm release/project-manager-linux-x64
+        cp out/binary/pm release/multi-project-manager-linux-x64
         cd release
-        sha256sum project-manager-linux-x64 > project-manager-linux-x64.sha256
+        sha256sum multi-project-manager-linux-x64 > multi-project-manager-linux-x64.sha256
         cd ..
         
         # Create release notes
         cat > release/RELEASE_NOTES.md << EOF
-        # ProjectManager Release
+        # Multi-Project Manager Release
         
         ## Installation
         
         ### Python Package
         \`\`\`bash
-        pip install project-manager
+        pip install multi-project-manager
         \`\`\`
         
         ### Docker Image
@@ -95,16 +95,16 @@ jobs:
         ### Linux Binary
         \`\`\`bash
         # Download the binary
-        wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/project-manager-linux-x64
+        wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/multi-project-manager-linux-x64
         
         # Make it executable
-        chmod +x project-manager-linux-x64
+        chmod +x multi-project-manager-linux-x64
         
         # Move to system path (optional)
-        sudo mv project-manager-linux-x64 /usr/local/bin/project-manager
+        sudo mv multi-project-manager-linux-x64 /usr/local/bin/multi-project-manager
         
         # Run
-        project-manager --help
+        multi-project-manager --help
         \`\`\`
         
         ## Usage
@@ -130,8 +130,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          release/project-manager-linux-x64
-          release/project-manager-linux-x64.sha256
+          release/multi-project-manager-linux-x64
+          release/multi-project-manager-linux-x64.sha256
         body_path: release/RELEASE_NOTES.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

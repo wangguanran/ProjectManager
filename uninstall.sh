@@ -3,12 +3,12 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-echo "--- Checking if project-manager is installed ---"
+echo "--- Checking if multi-project-manager is installed ---"
 
 # Uninstall from system environment (pip)
 if command -v pip3 &> /dev/null; then
-    echo "Uninstalling project-manager from system environment (pip)..."
-    pip3 uninstall -y project-manager || true
+    echo "Uninstalling multi-project-manager from system environment (pip)..."
+pip3 uninstall -y multi-project-manager || true
 fi
 
 # Remove standalone binary from ~/.local/bin

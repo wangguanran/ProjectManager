@@ -98,12 +98,12 @@ In your GitHub repository, go to Settings → Secrets and variables → Actions,
 
 **From PyPI**:
 ```bash
-pip install project-manager
+pip install multi-project-manager
 ```
 
 **From GitHub Package Registry**:
 ```bash
-pip install project-manager --index-url https://npm.pkg.github.com/
+pip install multi-project-manager --index-url https://npm.pkg.github.com/
 ```
 
 **Usage**:
