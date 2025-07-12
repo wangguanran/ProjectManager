@@ -10,6 +10,43 @@ Universal Project and Patch (PO) Management Tool
 
 ProjectManager is a project management and patch (patch/override, PO) management tool for multi-board, multi-project environments. It supports project/board creation, deletion, building, as well as PO directory management and patch application/rollback operations. Suitable for scenarios requiring batch management of different hardware platforms and custom patches.
 
+## Installation
+
+### Python Package
+
+**From PyPI**:
+```bash
+pip install project-manager
+```
+
+**From GitHub Package Registry**:
+```bash
+pip install project-manager --index-url https://npm.pkg.github.com/
+```
+
+**From Source**:
+```bash
+git clone https://github.com/wangguanran/ProjectManager.git
+cd ProjectManager
+pip install -e .
+```
+
+### Docker Image
+
+**Pull the latest image**:
+```bash
+docker pull ghcr.io/wangguanran/ProjectManager:latest
+```
+
+**Run with Docker**:
+```bash
+# Basic usage
+docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/ProjectManager:latest
+
+# With specific command
+docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/ProjectManager:latest po_apply myproject
+```
+
 ## Main Features
 
 - Support for unified management of multiple boards and projects

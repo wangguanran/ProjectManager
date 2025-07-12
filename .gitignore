@@ -132,3 +132,6 @@ dmypy.json
 .vscode
 
 out
+
+# GitHub Package Registry
+.pypirc

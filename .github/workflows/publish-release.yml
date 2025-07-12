@@ -1,4 +1,4 @@
-name: Release
+name: Publish Release
 
 on:
   push:
@@ -82,7 +82,17 @@ jobs:
         
         ## Installation
         
-        ### Linux
+        ### Python Package
+        \`\`\`bash
+        pip install project-manager
+        \`\`\`
+        
+        ### Docker Image
+        \`\`\`bash
+        docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+        \`\`\`
+        
+        ### Linux Binary
         \`\`\`bash
         # Download the binary
         wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/project-manager-linux-x64
@@ -95,6 +105,16 @@ jobs:
         
         # Run
         project-manager --help
+        \`\`\`
+        
+        ## Usage
+        
+        \`\`\`bash
+        # Python package
+        python -m src --help
+        
+        # Docker
+        docker run -v \$(pwd)/vprojects:/app/vprojects ghcr.io/${{ github.repository }}:${{ github.ref_name }}
         \`\`\`
         
         ## Checksum
