@@ -1,12 +1,12 @@
 # vprojects
 
-通用项目管理工具
+Universal Project Management Tool
 
-## 已完成
+## Completed
 
 ### projects.py
 
-#### 操作指令
+#### Operation Commands
 
 ```txt
 usage: project.py [-h] [-v] [-b] [--base BASE] operate project_name
@@ -24,9 +24,9 @@ project_new:
   --base BASE    specify a new project to be created based on this
 ```
 
-1.代码执行时会在vprojects下创建.cache/logs和.cache/cprofile目录，保存名会包含当前时间
+1. When code is executed, it will create .cache/logs and .cache/cprofile directories under vprojects, with filenames containing the current time
 
-* logs目录下保存脚本的运行log
+* The logs directory stores script execution logs
 
 ```log
 vprojects/.cache/logs/Log_20200225_223744.log
@@ -34,7 +34,7 @@ vprojects/.cache/logs/Log_20200225_223744.log
 [2020-02-25 22:37:44,542] [DEBUG     ] [project.py          ] [parse_cmd           ] [111  ]	argv = ['/home/dserver/build_projects2/build2/VZ6737M_65_I_N_vtrunk/vprojects/project-manager/project.py', 'project_del', 'tnz801']
 ```
 
-* cprofile目录下保存代码的执行时间分析
+* The cprofile directory stores code execution time analysis
 
 ```txt
 vprojects/.cache/cprofile/Stats_20200225_223744.cprofile
@@ -58,21 +58,21 @@ Tue Feb 25 22:37:44 2020    profile_dump
 
 ```
 
-#### 新建主板项目
+#### Create New Board Project
 
-* 以平台文件为base创建项目
-* 以其他主板项目为base创建项目
+* Create project based on platform files
+* Create project based on other board projects
 
 ### platform_manager.py
 
-#### 构建平台项目
+#### Build Platform Project
 
-* 自动扫描代码根目录下的所有目录，记录各目录下Git未追踪的文件
-* 保存文件完整路径名，以及软连接文件链接地址
-* 记录平台项目的创建时间
-* 将新增的项目文件拷贝至vprojects中
-* 手动输入平台名称，如：mt6735，脚本会在vprojects/new_project_base目录中创建对应的目录，将所有新增文件拷贝到此目录下
-* 记录的数据有[^keyword]，create_time,file_list,link_list
+* Automatically scan all directories under the code root directory, record Git untracked files in each directory
+* Save complete file path names and soft link file link addresses
+* Record platform project creation time
+* Copy new project files to vprojects
+* Manually input platform name, such as: mt6735, the script will create corresponding directories in vprojects/new_project_base directory, and copy all new files to this directory
+* Recorded data includes [^keyword], create_time, file_list, link_list
 
 ```json
 vprojects/new_project_base/new_project_base.json
@@ -93,9 +93,9 @@ vprojects/new_project_base/new_project_base.json
 
 ```
 
-# 计划添加
+# Planned Additions
 
-1.po_manager.py add_to_po,new_po --common,del_po,list_po,cmp_po_diff
-2.自动保存patch文件时，添加注释信息，注释信息包括修改时间、修改人、邮件、修改日志。相关信息可以从git中读取
+1. po_manager.py add_to_po, new_po --common, del_po, list_po, cmp_po_diff
+2. When automatically saving patch files, add comment information including modification time, modifier, email, and modification log. Related information can be read from git
 
-[^keyword]:keyword在创建json文件时并不会主动生成，默认此值为"demo",是指明在以此平台为模板创建主板项目时，脚本会对文件名中出现的哪个字符串左替换操作
+[^keyword]: keyword is not actively generated when creating json files, default value is "demo", which specifies which string in the filename the script will perform replacement operations on when creating board projects based on this platform as a template

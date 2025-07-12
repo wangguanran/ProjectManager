@@ -55,7 +55,7 @@ def func_cprofile(func):
 def auto_profile(cls):
     """
     Class decorator: automatically decorate all public instance methods with func_time and (optionally) func_cprofile, dynamically at call time.
-    保证 staticmethod/classmethod 包裹后类型不丢失。
+    Ensures that staticmethod/classmethod wrapper types are not lost.
     """
 
     def make_wrapper(func):

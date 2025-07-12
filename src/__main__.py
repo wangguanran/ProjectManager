@@ -17,7 +17,7 @@ from src.plugins.project_manager import ProjectManager
 from src.plugins.patch_override import PatchOverride
 
 
-# ===== 迁移的工具函数 =====
+# ===== Migration utility functions =====
 def _load_all_projects(vprojects_path):
     exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
     if not os.path.exists(vprojects_path):
@@ -109,9 +109,9 @@ def _load_all_projects(vprojects_path):
 
 def _load_plugin_operations(plugin_classes):
     """
-    通用插件加载函数，仅支持类插件（只收集静态方法和类方法）。
+    Generic plugin loading function, only supports class plugins (only collects static methods and class methods).
     plugin_classes: list of plugin classes
-    返回: dict，key为操作名，value为操作描述和方法等
+    Returns: dict, key is operation name, value is operation description and method etc.
     """
     operations = {}
     for plugin_cls in plugin_classes:
@@ -231,7 +231,7 @@ def _parse_args_and_plugin_args(builtin_operations):
     else:
         plugin_options = ""
 
-    # 只通过插件注册的 operation 生成 help/choices
+    # Only generate help/choices through plugin-registered operations
     help_text = "supported operations :\n" + "\n".join(builtin_help_lines)
     choices = list(builtin_operations.keys())
     parser = argparse.ArgumentParser(
@@ -315,7 +315,7 @@ def main():
     builtin_operations = _load_builtin_plugin_operations()
     log.debug("Loaded %d builtin operations.", len(builtin_operations))
 
-    # 合并所有操作
+    # Merge all operations
     all_operations = {**builtin_operations, **platform_operations}
 
     operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(
@@ -323,20 +323,20 @@ def main():
     )
     builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
 
-    # 只通过插件注册的 operation 执行
+    # Only execute operations registered through plugins
     if operate in all_operations:
         op_info = all_operations[operate]
         func = op_info["func"]
         params = op_info["params"]
         sig = inspect.signature(func)
-        # 只统计 CLI 用户需要输入的参数（去掉 env, projects_info）
+        # Only count CLI parameters that users need to input (remove env, projects_info)
         cli_params = [p for p in params if p not in ("env", "projects_info")]
         required_cli_params = [
             p
             for p in cli_params
             if sig.parameters[p].default == inspect.Parameter.empty
         ]
-        # name + parsed_args 是用户实际输入的参数
+        # name + parsed_args are the actual parameters input by the user
         user_args = [name] + parsed_args
         if len(user_args) < len(required_cli_params):
             log.error(

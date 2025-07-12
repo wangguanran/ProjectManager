@@ -69,7 +69,7 @@ class PatchOverride:
                 return True
             log.debug("applying patches for po: '%s'", po_name)
 
-            # 获取repo路径查找函数
+            # Get repo path lookup function
             def find_repo_path_by_name(repo_name):
                 current_dir = os.getcwd()
                 if repo_name == "root":
@@ -94,7 +94,7 @@ class PatchOverride:
                         log.error("Invalid patch file path: '%s'", rel_path)
                         continue
                     repo_name = path_parts[0]
-                    # 排除exclude_files中配置的patch文件
+                    # Exclude patch files configured in exclude_files
                     if po_name in exclude_files and rel_path in exclude_files[po_name]:
                         log.debug(
                             "patch file '%s' in po '%s' is excluded by config",
@@ -185,6 +185,7 @@ class PatchOverride:
                         os.path.join(current_dir, fname), po_override_dir
                     )
                     log.debug("override rel_path: '%s'", rel_path)
+                    # Exclude override files configured in exclude_files
                     if po_name in exclude_files and rel_path in exclude_files[po_name]:
                         log.debug(
                             "override file '%s' in po '%s' is excluded by config",
@@ -318,6 +319,7 @@ class PatchOverride:
                         os.path.join(current_dir, fname), po_patch_dir
                     )
                     log.debug("patch rel_path: '%s'", rel_path)
+                    # Exclude patch files configured in exclude_files
                     if po_name in exclude_files and rel_path in exclude_files[po_name]:
                         log.debug(
                             "patch file '%s' in po '%s' is excluded by config",
@@ -416,6 +418,7 @@ class PatchOverride:
                         os.path.join(current_dir, fname), po_override_dir
                     )
                     log.debug("override rel_path: '%s'", rel_path)
+                    # Exclude override files configured in exclude_files
                     if po_name in exclude_files and rel_path in exclude_files[po_name]:
                         log.debug(
                             "override file '%s' in po '%s' is excluded by config",
@@ -1331,7 +1334,7 @@ class PatchOverride:
         if po_config:
             apply_pos, exclude_pos, _ = PatchOverride.__parse_po_config(po_config)
             enabled_pos = {po for po in apply_pos if po not in exclude_pos}
-        # 只列出配置中启用的po
+        # Only list POs enabled in configuration
         po_list = []
         for po_name in sorted(enabled_pos):
             po_path = os.path.join(po_dir, po_name)
