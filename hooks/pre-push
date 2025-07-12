@@ -54,7 +54,7 @@ print_status "Running pylint..."
 REPO_ROOT=$(git rev-parse --show-toplevel)
 # Change to repository root to ensure correct path resolution
 cd "$REPO_ROOT"
-PY_FILES=$(find . -type f -name '*.py' ! -path './.venv/*' ! -path './out/*')
+PY_FILES=$(find . -type f -name '*.py' ! -path './venv/*' ! -path './out/*')
 if pylint $PY_FILES --rcfile=.pylintrc --output-format=text --reports=y; then
     print_status "Pylint passed ✓"
 else
