@@ -6,8 +6,24 @@ name: Python application
 on:
   push:
     branches: [ "master" ]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - 'build.sh'
+      - 'setup_venv.sh'
+      - 'install.sh'
+      - 'uninstall.sh'
   pull_request:
     branches: [ "master" ]
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - 'build.sh'
+      - 'setup_venv.sh'
+      - 'install.sh'
+      - 'uninstall.sh'
   workflow_dispatch:
 
 permissions:

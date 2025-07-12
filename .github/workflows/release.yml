@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - 'build.sh'
+      - 'setup_venv.sh'
+      - 'install.sh'
+      - 'uninstall.sh'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -76,7 +85,7 @@ jobs:
         ### Linux
         \`\`\`bash
         # Download the binary
-        wget https://github.com/\${{ github.repository }}/releases/download/\${{ github.ref_name }}/project-manager-linux-x64
+        wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/project-manager-linux-x64
         
         # Make it executable
         chmod +x project-manager-linux-x64
@@ -92,7 +101,7 @@ jobs:
         Verify the download with the provided SHA256 checksum.
         
         ## Changes
-        - Automated release from tag \${{ github.ref_name }}
+        - Automated release from tag ${{ github.ref_name }}
         - Built with enhanced compatibility and static linking
         - All tests and linting passed
         EOF
