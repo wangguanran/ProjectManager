@@ -371,6 +371,9 @@ class PatchOverride:
 
                     # 然后 patch_target = find_repo_path_by_name(repo_name)
                     patch_target = find_repo_path_by_name(repo_name)
+                    if not patch_target:
+                        log.error("Cannot find repo path for '%s'", repo_name)
+                        continue
                     patch_flag = os.path.join(patch_target, ".patch_applied")
                     log.debug(
                         "patch patch_target: '%s', patch_flag: '%s'",
@@ -679,6 +682,9 @@ class PatchOverride:
             repositories = []
             current_dir = os.getcwd()
 
+            # Get ignore patterns from project configuration
+            ignore_patterns = __load_ignore_patterns(project_cfg)
+
             # First check if current directory has .repo manifest
             repo_manifest = os.path.join(current_dir, ".repo", "manifest.xml")
             if os.path.exists(repo_manifest):
@@ -693,15 +699,48 @@ class PatchOverride:
                             repo_path = os.path.join(current_dir, path)
                             if os.path.exists(os.path.join(repo_path, ".git")):
                                 repo_name = path if path != "." else "root"
-                                repositories.append((repo_path, repo_name))
-                                print(f"  Found repository: {repo_name} at {repo_path}")
+
+                                # Check if this repository should be ignored
+                                should_ignore = False
+                                for pattern in ignore_patterns:
+                                    if fnmatch.fnmatch(repo_name, pattern):
+                                        print(
+                                            f"  Ignoring repository: {repo_name} (matches pattern: {pattern})"
+                                        )
+                                        should_ignore = True
+                                        break
+
+                                if not should_ignore:
+                                    repositories.append((repo_path, repo_name))
+                                    print(
+                                        f"  Found repository: {repo_name} at {repo_path}"
+                                    )
+                                else:
+                                    print(
+                                        f"  Skipped repository: {repo_name} (ignored by config)"
+                                    )
                 except ET.ParseError as e:
                     log.error("Failed to parse .repo manifest: %s", e)
                     print(f"Warning: Failed to parse .repo manifest: {e}")
             elif os.path.exists(os.path.join(current_dir, ".git")):
                 # Current directory is a single git repository
-                repositories.append((current_dir, "root"))
-                print("Found single git repository at current directory")
+                repo_name = "root"
+
+                # Check if root repository should be ignored
+                should_ignore = False
+                for pattern in ignore_patterns:
+                    if fnmatch.fnmatch(repo_name, pattern):
+                        print(
+                            f"  Ignoring root repository (matches pattern: {pattern})"
+                        )
+                        should_ignore = True
+                        break
+
+                if not should_ignore:
+                    repositories.append((current_dir, repo_name))
+                    print("Found single git repository at current directory")
+                else:
+                    print("Skipped root repository (ignored by config)")
             else:
                 # Recursively search for git repositories in subdirectories
                 print("Scanning subdirectories for git repositories...")
@@ -711,8 +750,24 @@ class PatchOverride:
                         repo_name = os.path.relpath(repo_path, current_dir)
                         if repo_name == ".":
                             repo_name = "root"
-                        repositories.append((repo_path, repo_name))
-                        print(f"  Found repository: {repo_name} at {repo_path}")
+
+                        # Check if this repository should be ignored
+                        should_ignore = False
+                        for pattern in ignore_patterns:
+                            if fnmatch.fnmatch(repo_name, pattern):
+                                print(
+                                    f"  Ignoring repository: {repo_name} (matches pattern: {pattern})"
+                                )
+                                should_ignore = True
+                                break
+
+                        if not should_ignore:
+                            repositories.append((repo_path, repo_name))
+                            print(f"  Found repository: {repo_name} at {repo_path}")
+                        else:
+                            print(
+                                f"  Skipped repository: {repo_name} (ignored by config)"
+                            )
                     # Don't recurse into .git directories
                     dirs[:] = [d for d in dirs if d != ".git"]
 
@@ -721,7 +776,7 @@ class PatchOverride:
         def __get_modified_files(repo_path, repo_name):
             """Get modified files in a repository including staged files, with ignore support."""
             modified_files = []
-            ignore_patterns = __load_ignore_patterns()
+            ignore_patterns = __load_ignore_patterns(project_cfg)
             try:
                 # Change to repository directory
                 original_cwd = os.getcwd()
@@ -1072,20 +1127,36 @@ class PatchOverride:
                 except ValueError:
                     print("Invalid input. Please enter a number, 'all', or 'q'.")
 
-        def __load_ignore_patterns():
-            """Load ignore patterns from po_ignore.conf or .gitignore."""
-            ignore_files = [
-                os.path.join(os.getcwd(), "po_ignore.conf"),
-                os.path.join(os.getcwd(), ".gitignore"),
-            ]
+        def __load_ignore_patterns(project_cfg):
+            """Load ignore patterns from project configuration or .gitignore."""
             patterns = []
-            for ignore_file in ignore_files:
-                if os.path.exists(ignore_file):
-                    with open(ignore_file, "r", encoding="utf-8") as f:
+
+            # First, try to get ignore patterns from project configuration
+            if project_cfg:
+                po_ignore_config = project_cfg.get("PROJECT_PO_IGNORE", "").strip()
+                if po_ignore_config:
+                    config_patterns = [
+                        p.strip() for p in po_ignore_config.split() if p.strip()
+                    ]
+                    patterns.extend(config_patterns)
+                    log.debug(
+                        "Loaded ignore patterns from project config: %s",
+                        config_patterns,
+                    )
+
+            # Then load from .gitignore file
+            gitignore_file = os.path.join(os.getcwd(), ".gitignore")
+            if os.path.exists(gitignore_file):
+                try:
+                    with open(gitignore_file, "r", encoding="utf-8") as f:
                         for line in f:
                             line = line.strip()
                             if line and not line.startswith("#"):
                                 patterns.append(line)
+                    log.debug("Loaded ignore patterns from file: %s", gitignore_file)
+                except OSError as e:
+                    log.warning("Failed to read ignore file %s: %s", gitignore_file, e)
+
             return patterns
 
         # Show creation information and ask for confirmation
@@ -1482,9 +1553,11 @@ class PatchOverride:
         for token in tokens:
             if token.startswith("-"):
                 if "[" in token:
-                    po_name, files = re.match(r"-(\w+)\[([^\]]+)\]", token).groups()
-                    file_list = set(f.strip() for f in files.split())
-                    exclude_files.setdefault(po_name, set()).update(file_list)
+                    match = re.match(r"-(\w+)\[([^\]]+)\]", token)
+                    if match:
+                        po_name, files = match.groups()
+                        file_list = set(f.strip() for f in files.split())
+                        exclude_files.setdefault(po_name, set()).update(file_list)
                 else:
                     po_name = token[1:]
                     exclude_pos.add(po_name)
