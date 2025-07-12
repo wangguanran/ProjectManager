@@ -50,9 +50,9 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          out/binary/pm
-          # out/package/pm-*.whl
-          # out/package/pm-*.tar.gz
+          out/binary/mpm
+          # out/package/mpm-*.whl
+          # out/package/mpm-*.tar.gz
           install.sh
           uninstall.sh
 
@@ -71,8 +71,8 @@ jobs:
       run: |
         bash install.sh
         export PATH="$HOME/.local/bin:$PATH"
-        pm --version
-        rm "$HOME/.local/bin/pm"
+        mpm --version
+        rm "$HOME/.local/bin/mpm"
 
   pytest:
     name: pytest
