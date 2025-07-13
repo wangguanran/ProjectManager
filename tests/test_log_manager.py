@@ -6,11 +6,11 @@ Tests for log_manager module.
 # pylint: disable=import-outside-toplevel
 # pylint: disable=protected-access
 
+import logging
 import os
 import sys
 import tempfile
-import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestColoredFormatter:

@@ -2,12 +2,13 @@
 Profiling decorators for performance analysis.
 """
 
-import time
+import builtins
 import cProfile
 import io
 import pstats
-import builtins
+import time
 from functools import wraps
+
 from src.log_manager import log
 from src.utils import path_from_root
 

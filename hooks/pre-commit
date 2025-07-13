@@ -4,17 +4,48 @@
 if ! command -v black >/dev/null 2>&1; then
     echo "[pre-commit] 'black' not found. Installing via pip..."
     pip install black
-    # Re-check if black is installed after installation
     if ! command -v black >/dev/null 2>&1; then
         echo "[pre-commit] Error: 'black' could not be installed. Please install it manually."
         exit 1
     fi
 fi
 
+# Check if isort is installed, if not, try to install it
+if ! command -v isort >/dev/null 2>&1; then
+    echo "[pre-commit] 'isort' not found. Installing via pip..."
+    pip install isort
+    if ! command -v isort >/dev/null 2>&1; then
+        echo "[pre-commit] Error: 'isort' could not be installed. Please install it manually."
+        exit 1
+    fi
+fi
+
+# Check if mypy is installed, if not, try to install it
+# if ! command -v mypy >/dev/null 2>&1; then
+#     echo "[pre-commit] 'mypy' not found. Installing via pip..."
+#     pip install mypy
+#     if ! command -v mypy >/dev/null 2>&1; then
+#         echo "[pre-commit] Error: 'mypy' could not be installed. Please install it manually."
+#         exit 1
+#     fi
+# fi
+
 # Check formatting without making changes
 if ! black --check .; then
     echo "[pre-commit] Code style issues found. Please run 'black .' to format your code before committing."
     exit 1
 fi
+
+# Check import sorting
+if ! isort --check-only .; then
+    echo "[pre-commit] Import sorting issues found. Please run 'isort .' to fix imports before committing."
+    exit 1
+fi
+
+# Run mypy type checking
+# if ! mypy src/; then
+#     echo "[pre-commit] Type checking issues found. Please fix mypy errors before committing."
+#     exit 1
+# fi
 
 exit 0 

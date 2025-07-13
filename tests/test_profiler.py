@@ -9,6 +9,7 @@ import os
 import sys
 import time
 from unittest.mock import patch
+
 import pytest
 
 
@@ -21,9 +22,9 @@ class TestProfilerFunctions:
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.profiler import (
-            func_time,
-            func_cprofile,
             auto_profile,
+            func_cprofile,
+            func_time,
         )
 
         self.func_time = func_time
@@ -237,8 +238,8 @@ class TestProfilerIntegration:
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.profiler import (
-            func_time,
             auto_profile,
+            func_time,
         )
 
         self.func_time = func_time

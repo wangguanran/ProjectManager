@@ -7,7 +7,7 @@ Tests for __main__.py module.
 
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestMainFunction:

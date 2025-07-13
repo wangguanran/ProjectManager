@@ -5,7 +5,8 @@ Log manager module.
 import logging
 import logging.config
 import os
-from src.utils import organize_files, get_filename
+
+from src.utils import get_filename, organize_files
 
 LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
 

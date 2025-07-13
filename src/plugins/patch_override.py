@@ -2,12 +2,13 @@
 Patch and override operations for project management.
 """
 
+import fnmatch
 import os
+import re
 import shutil
 import subprocess
-import re
-import fnmatch
 import xml.etree.ElementTree as ET
+
 from src.log_manager import log
 from src.profiler import auto_profile
 

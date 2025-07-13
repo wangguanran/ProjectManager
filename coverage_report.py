@@ -4,8 +4,8 @@ Simple coverage report for Project Manager
 """
 
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 
 def main():

@@ -4,8 +4,9 @@ Utility functions collection.
 
 import os
 import shutil
-import time
 import sys
+import time
+
 import toml
 
 

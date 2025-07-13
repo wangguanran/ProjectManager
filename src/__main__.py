@@ -2,19 +2,20 @@
 Main entry point for running the src package as a module.
 """
 
-import importlib.util
-import inspect
 import argparse
 import builtins
+import configparser
+import importlib.util
+import inspect
+import json
 import os
 import re
 import sys
-import configparser
-import json
-from src.utils import get_version
+
 from src.log_manager import log
-from src.plugins.project_manager import ProjectManager
 from src.plugins.patch_override import PatchOverride
+from src.plugins.project_manager import ProjectManager
+from src.utils import get_version
 
 
 # ===== Migration utility functions =====
