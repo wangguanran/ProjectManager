@@ -1139,9 +1139,32 @@ class PatchOverride:
                         p.strip() for p in po_ignore_config.split() if p.strip()
                     ]
                     patterns.extend(config_patterns)
+
+                    # Add enhanced patterns for path containment matching
+                    enhanced_patterns = []
+                    for pattern in config_patterns:
+                        # Skip patterns that already contain wildcards or special characters
+                        if any(char in pattern for char in ["*", "?", "[", "]"]):
+                            continue
+
+                        # Add patterns to match repositories and files containing the pattern in their path
+                        enhanced_patterns.extend(
+                            [
+                                f"*{pattern}*",  # Match any path containing the pattern
+                                f"*{pattern}/*",  # Match directories starting with the pattern
+                                f"*/{pattern}/*",  # Match directories containing the pattern
+                                f"*/{pattern}",  # Match files/directories ending with the pattern
+                            ]
+                        )
+
+                    patterns.extend(enhanced_patterns)
                     log.debug(
                         "Loaded ignore patterns from project config: %s",
                         config_patterns,
+                    )
+                    log.debug(
+                        "Added enhanced patterns for path containment: %s",
+                        enhanced_patterns,
                     )
 
             # Then load from .gitignore file
@@ -1157,6 +1180,7 @@ class PatchOverride:
                 except OSError as e:
                     log.warning("Failed to read ignore file %s: %s", gitignore_file, e)
 
+            log.debug("Loaded ignore patterns: %s", patterns)
             return patterns
 
         # Show creation information and ask for confirmation
