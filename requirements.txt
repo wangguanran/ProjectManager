@@ -4,3 +4,4 @@ gitpython
 pyinstaller
 toml
 pylint 
+pytest-cov 
