@@ -3,5 +3,6 @@ pytest
 gitpython
 pyinstaller
 toml
-pylint 
-pytest-cov 
+pylint
+pytest-cov
+configupdater

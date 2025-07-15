@@ -4,13 +4,14 @@ Main entry point for running the src package as a module.
 
 import argparse
 import builtins
-import configparser
 import importlib.util
 import inspect
 import json
 import os
 import re
 import sys
+
+import configupdater
 
 from src.log_manager import log
 from src.plugins.patch_override import PatchOverride
@@ -24,20 +25,22 @@ def _load_all_projects(vprojects_path):
     if not os.path.exists(vprojects_path):
         log.warning("vprojects directory does not exist: '%s'", vprojects_path)
         return {}
-    all_projects = {}
+    projects = {}
+    raw_configs = {}
     invalid_projects = set()
     for item in os.listdir(vprojects_path):
-        item_path = os.path.join(vprojects_path, item)
-        if not os.path.isdir(item_path) or item in exclude_dirs:
+        board_name = item
+        board_path = os.path.join(vprojects_path, board_name)
+        if not os.path.isdir(board_path) or board_name in exclude_dirs:
             continue
-        ini_file = None
-        for f in os.listdir(item_path):
-            if f.endswith(".ini"):
-                ini_file = os.path.join(item_path, f)
-                break
-        if not ini_file:
-            log.warning("No ini file found in board directory: '%s'", item_path)
+        ini_files = [f for f in os.listdir(board_path) if f.endswith(".ini")]
+        if not ini_files:
+            log.warning("No ini file found in board directory: '%s'", board_path)
             continue
+        assert (
+            len(ini_files) == 1
+        ), f"Multiple ini files found in {board_path}: {ini_files}"
+        ini_file = os.path.join(board_path, ini_files[0])
         has_duplicate = False
         with open(ini_file, "r", encoding="utf-8") as f:
             current_project = None
@@ -64,48 +67,49 @@ def _load_all_projects(vprojects_path):
                         keys_in_project.add(key)
         if has_duplicate:
             continue
-        config = configparser.ConfigParser()
-        config.optionxform = str
+        config = configupdater.ConfigUpdater()
         config.read(ini_file, encoding="utf-8")
         for project in config.sections():
-            project_dict = dict(config.items(project))
-            project_dict = {k.upper(): v for k, v in project_dict.items()}
-            project_dict["board_name"] = item
-            all_projects[project] = project_dict
+            config_dict = {k.upper(): v.value for k, v in config[project].items()}
+            raw_configs[project] = config_dict
+            projects[project] = {
+                "config": None,  # 占位，后面merge
+                "board_name": board_name,
+                "board_path": board_path,
+                "ini_file": ini_file,
+            }
 
     def find_parent(project):
         if "-" in project:
             return project.rsplit("-", 1)[0]
         return None
 
-    merged_projects = {}
+    merged_configs = {}
 
     def merge_config(project):
-        if project in merged_projects:
-            return merged_projects[project]
+        if project in merged_configs:
+            return merged_configs[project]
         if project in invalid_projects:
             return {}
         parent = find_parent(project)
         merged = {}
-        if parent and parent in all_projects:
+        if parent and parent in raw_configs:
             parent_cfg = merge_config(parent)
             for k, v in parent_cfg.items():
                 merged[k] = v
-        for k, v in all_projects[project].items():
+        for k, v in raw_configs[project].items():
             if k == "PROJECT_PO_CONFIG" and k in merged:
                 merged[k] = merged[k].strip() + " " + v.strip()
             else:
                 merged[k] = v
-        merged_projects[project] = merged
+        merged_configs[project] = merged
         return merged
 
-    projects_info = {}
-    for project in all_projects:
+    for project in projects:
         if project in invalid_projects:
             continue
-        merged_cfg = merge_config(project)
-        projects_info[project] = merged_cfg
-    return projects_info
+        projects[project]["config"] = merge_config(project)
+    return projects
 
 
 def _load_plugin_operations(plugin_classes):
@@ -309,11 +313,11 @@ def main():
     }
     log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 
-    projects_info = _load_all_projects(env["vprojects_path"])
-    log.debug("Loaded %d projects.", len(projects_info))
+    projects = _load_all_projects(env["vprojects_path"])
+    log.debug("Loaded %d projects.", len(projects))
     log.debug(
         "Loaded projects info:\n%s",
-        json.dumps(projects_info, indent=4, ensure_ascii=False),
+        json.dumps(projects, indent=4, ensure_ascii=False),
     )
     platform_operations = _load_platform_plugin_operations(env["vprojects_path"])
     log.debug("Loaded %d platform operations.", len(platform_operations))
@@ -354,7 +358,7 @@ def main():
             )
             log.error("Required parameters: %s", ", ".join(required_cli_params))
             sys.exit(1)
-        func_args = [env, projects_info] + user_args
+        func_args = [env, projects] + user_args
         func_kwargs = parsed_kwargs
         try:
             func(*func_args, **func_kwargs)
