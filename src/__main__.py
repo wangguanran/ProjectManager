@@ -105,10 +105,10 @@ def _load_all_projects(vprojects_path):
         merged_configs[project] = merged
         return merged
 
-    for project in projects:
+    for project, project_info in projects.items():
         if project in invalid_projects:
             continue
-        projects[project]["config"] = merge_config(project)
+        project_info["config"] = merge_config(project)
     return projects
 
 
