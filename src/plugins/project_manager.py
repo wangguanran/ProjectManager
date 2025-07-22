@@ -109,10 +109,15 @@ class ProjectManager:
             print(f"Project '{project_name}' already exists in board '{board_name}'.")
             return False
 
-        # 递归继承配置
+        # Recursively inherit configuration
         inherited_config = get_inherited_config(projects_info, project_name)
-        board_platform = inherited_config.get("BOARD_PLATFORM")
-        project_customer = inherited_config.get("PROJECT_CUSTOMER")
+        parent_config = (
+            inherited_config.get("config", {})
+            if isinstance(inherited_config.get("config", {}), dict)
+            else {}
+        )
+        board_platform = parent_config.get("BOARD_PLATFORM")
+        project_customer = parent_config.get("PROJECT_CUSTOMER")
         project_name_parts = []
         if board_platform:
             project_name_parts.append(board_platform)
@@ -121,17 +126,17 @@ class ProjectManager:
             project_name_parts.append(project_customer)
         project_name_value = "_".join(project_name_parts)
 
-        # 只写入新项目特有字段
+        # Only write new project-specific fields
         new_section_lines = [f"[{project_name}]\n"]
         new_section_lines.append(f"PROJECT_NAME={project_name_value}\n")
-        new_section_lines.append("PROJECT_PO_CONFIG=\n")
+        # Do not write PROJECT_PO_CONFIG by default, let it inherit from parent
         new_section_lines.append("\n")
 
-        # 读取原始ini文件内容以保留注释和格式
+        # Read the original ini file content to preserve comments and formatting
         with open(ini_file, "r", encoding="utf-8") as f:
             original_lines = f.readlines()
 
-        # --- 解析所有段落内容 ---
+        # --- Parse all section contents ---
         section_blocks = []  # [(section_name, [lines])]
         current_section = None
         current_lines = []
@@ -150,7 +155,7 @@ class ProjectManager:
         if current_section is not None:
             section_blocks.append((current_section, strip_empty_lines(current_lines)))
 
-        # --- 新项目段落加入到section_blocks ---
+        # --- Add new project section to section_blocks ---
         new_section = (project_name, new_section_lines)
         section_blocks.append(new_section)
 
@@ -177,10 +182,23 @@ class ProjectManager:
                 last_section_obj.add_after.space()
             config.add_section(project_name)
         config[project_name]["PROJECT_NAME"] = project_name_value
-        config[project_name]["PROJECT_PO_CONFIG"] = ""
+        # Do not write PROJECT_PO_CONFIG by default
         config.update_file()
         log.debug("Created new project '%s' in board '%s'.", project_name, board_name)
         print(f"Created new project '{project_name}' in board '{board_name}'.")
+        # Print all config for the new project (merged: ini section + inherited config['config'])
+        parent_config = (
+            inherited_config.get("config", {})
+            if isinstance(inherited_config.get("config", {}), dict)
+            else {}
+        )
+        merged_config = dict(parent_config)
+        if project_name in config:
+            for key, value in config[project_name].items():
+                merged_config[key] = value.value if hasattr(value, "value") else value
+        print(f"All config for project '{project_name}':")
+        for key, value in merged_config.items():
+            print(f"  {key} = {value}")
         return True
 
     @staticmethod
