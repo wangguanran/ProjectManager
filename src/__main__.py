@@ -15,6 +15,7 @@ import configupdater
 
 from src.log_manager import log
 from src.plugins.patch_override import PatchOverride
+from src.plugins.project_builder import ProjectBuilder
 from src.plugins.project_manager import ProjectManager
 from src.utils import get_version
 
@@ -153,7 +154,7 @@ def _load_plugin_operations(plugin_classes):
 
 
 def _load_builtin_plugin_operations():
-    plugin_classes = [ProjectManager, PatchOverride]
+    plugin_classes = [ProjectManager, PatchOverride, ProjectBuilder]
     return _load_plugin_operations(plugin_classes)
 
 

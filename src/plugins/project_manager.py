@@ -274,17 +274,6 @@ class ProjectManager:
         return True
 
     @staticmethod
-    def project_build(env, projects_info, project_name):
-        """
-        Build the specified project.
-        Args:
-            env (dict): Global environment dict.
-            projects_info (dict): All projects info.
-            project_name (str): Project name.
-        """
-        # TODO: implement project_build
-
-    @staticmethod
     def board_new(env, projects_info, board_name):
         """
         Create a new board.
