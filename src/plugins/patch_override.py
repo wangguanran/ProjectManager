@@ -626,8 +626,9 @@ class PatchOverride:
             return False
         project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
-        if not board_name:
-            log.error("Cannot find board name for project: '%s'", project_name)
+        board_path = project_cfg.get("board_path")
+        if not board_name or not board_path:
+            log.error("Board info missing for project '%s'", project_name)
             return False
 
         board_path = os.path.join(env["vprojects_path"], board_name)
@@ -1245,8 +1246,9 @@ class PatchOverride:
 
         project_cfg = projects_info.get(project_name, {})
         board_name = project_cfg.get("board_name")
-        if not board_name:
-            log.error("Cannot find board name for project: '%s'", project_name)
+        board_path = project_cfg.get("board_path")
+        if not board_name or not board_path:
+            log.error("Board info missing for project '%s'", project_name)
             return False
 
         board_path = os.path.join(env["vprojects_path"], board_name)
@@ -1425,27 +1427,13 @@ class PatchOverride:
             board_configs = {}
             for project_name, project_cfg in projects_info.items():
                 board_name = project_cfg.get("board_name")
-                if not board_name:
+                ini_file = project_cfg.get("ini_file")
+                if not board_name or not ini_file:
                     continue
-
                 if board_name not in board_configs:
                     board_configs[board_name] = {}
-
-                # Find the ini file for this board
-                board_path = os.path.join(env["vprojects_path"], board_name)
-                ini_file = None
-                for f in os.listdir(board_path):
-                    if f.endswith(".ini"):
-                        ini_file = os.path.join(board_path, f)
-                        break
-
-                if not ini_file:
-                    log.error("No ini file found for board: '%s'", board_name)
-                    return False
-
                 if ini_file not in board_configs[board_name]:
                     board_configs[board_name][ini_file] = []
-
                 board_configs[board_name][ini_file].append(project_name)
 
             # Process each ini file

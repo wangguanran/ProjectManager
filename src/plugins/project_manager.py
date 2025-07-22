@@ -31,6 +31,8 @@ class ProjectManager:
             project_name (str): Project name. Must be provided.
         """
 
+        _ = env
+
         def find_parent_project(name):
             if "-" in name:
                 return name.rsplit("-", 1)[0]
@@ -52,20 +54,18 @@ class ProjectManager:
                 lines = lines[:-1]
             return lines
 
-        vprojects_path = env["vprojects_path"]
+        project_cfg = projects_info.get(project_name, {})
+        board_name = project_cfg.get("board_name")
+        board_path = project_cfg.get("board_path")
+        ini_file = project_cfg.get("ini_file")
         if not project_name:
             log.error("Project name must be provided.")
             print("Error: Project name must be provided.")
             return False
-
-        # Infer board_name from project_name (prefix before first '-')
-        if "-" in project_name:
-            board_name = project_name.split("-", 1)[0]
-        else:
-            board_name = project_name
-
-        # Check that board directory exists
-        board_path = os.path.join(vprojects_path, board_name)
+        if not board_name or not board_path:
+            log.error("Board info missing for project '%s'", project_name)
+            print(f"Error: Board info missing for project '{project_name}'.")
+            return False
         if not os.path.isdir(board_path):
             log.error(
                 "Board directory '%s' does not exist for project '%s'.",
@@ -76,13 +76,6 @@ class ProjectManager:
                 f"Error: Board directory '{board_name}' does not exist for project '{project_name}'."
             )
             return False
-
-        # Find ini file in board directory
-        ini_file = None
-        for f in os.listdir(board_path):
-            if f.endswith(".ini"):
-                ini_file = os.path.join(board_path, f)
-                break
         if not ini_file:
             log.error("No ini file found for board: '%s'", board_name)
             print(f"No ini file found for board: '{board_name}'")
