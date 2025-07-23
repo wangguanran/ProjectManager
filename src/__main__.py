@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 import configupdater
 
@@ -264,7 +265,7 @@ def _parse_args_and_plugin_args(builtin_operations):
     # Only generate help/choices through plugin-registered operations
     help_text = "supported operations :\n" + "\n".join(builtin_help_lines)
     choices = list(builtin_operations)
-    # No longer add plugin-related parameters to parser, only describe in epilog or help_text
+    # Do not add plugin-related parameters to parser, only describe in epilog or help_text
     parser = argparse.ArgumentParser(
         usage="__main__.py [options] operations name [args ...]",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -285,7 +286,7 @@ def _parse_args_and_plugin_args(builtin_operations):
         help="Enable cProfile performance analysis",
     )
 
-    # 不再将插件相关参数加到 parser，只在 epilog 或 help_text 里说明
+    # Do not add plugin-related parameters to parser, only describe in epilog or help_text
     parser.epilog = plugin_options if plugin_options else None
 
     args, unknown = parser.parse_known_args()
@@ -315,6 +316,45 @@ def _parse_args_and_plugin_args(builtin_operations):
     return operate, name, parsed_args, parsed_kwargs, args_dict
 
 
+def find_repositories():
+    """
+    Return a list of (repo_path, repo_name) for all git repositories in current dir or .repo manifest.
+    repo_name: relative path, root repo is 'root'.
+    """
+    current_dir = os.getcwd()
+    manifest = os.path.join(current_dir, ".repo", "manifest.xml")
+    repositories = []
+    if os.path.exists(manifest):
+        # manifest mode
+        try:
+            tree = ET.parse(manifest)
+            root = tree.getroot()
+            for project in root.findall(".//project"):
+                path = project.get("path")
+                if path:
+                    repo_path = os.path.join(current_dir, path)
+                    if os.path.exists(os.path.join(repo_path, ".git")):
+                        repo_name = path if path != "." else "root"
+                        repositories.append((repo_path, repo_name))
+        except ET.ParseError as e:
+            log.error("Failed to parse .repo manifest: %s", e)
+    elif os.path.exists(os.path.join(current_dir, ".git")):
+        # single repo mode
+        repositories.append((current_dir, "root"))
+    else:
+        # recursively find all subdirectories with .git
+        for root_dir, dirs, _ in os.walk(current_dir):
+            if ".git" in dirs:
+                repo_path = root_dir
+                repo_name = os.path.relpath(repo_path, current_dir)
+                if repo_name == ".":
+                    repo_name = "root"
+                repositories.append((repo_path, repo_name))
+                # do not recurse into .git directory
+                dirs[:] = [d for d in dirs if d != ".git"]
+    return repositories
+
+
 def main():
     """Main entry point for the CLI project manager."""
     log.debug("sys.argv: %s", sys.argv)
@@ -327,6 +367,7 @@ def main():
     env = {
         "root_path": root_path,
         "vprojects_path": vprojects_path,
+        "repositories": find_repositories(),
     }
     log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 

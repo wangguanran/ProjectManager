@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import subprocess
-import xml.etree.ElementTree as ET
 
 from src.log_manager import log
 from src.profiler import auto_profile
@@ -61,6 +60,9 @@ class PatchOverride:
         if exclude_files:
             log.debug("exclude_files: %s", str(exclude_files))
 
+        # Use repositories from env
+        repositories = env.get("repositories", [])
+
         def __apply_patch(po_name, po_patch_dir, exclude_files):
             """Apply patches for the specified po."""
             patch_applied_dirs = set()
@@ -70,15 +72,9 @@ class PatchOverride:
                 return True
             log.debug("applying patches for po: '%s'", po_name)
 
-            # Get repo path lookup function
             def find_repo_path_by_name(repo_name):
-                current_dir = os.getcwd()
-                if repo_name == "root":
-                    if os.path.exists(os.path.join(current_dir, ".git")):
-                        return current_dir
-                else:
-                    repo_path = os.path.join(current_dir, repo_name)
-                    if os.path.exists(os.path.join(repo_path, ".git")):
+                for repo_path, rname in repositories:
+                    if rname == repo_name:
                         return repo_path
                 return None
 
@@ -89,21 +85,15 @@ class PatchOverride:
                     rel_path = os.path.relpath(
                         os.path.join(current_dir, fname), po_patch_dir
                     )
-                    # rel_path: repo_name/file_path.patch
                     path_parts = rel_path.split(os.sep)
                     if len(path_parts) < 2:
                         log.error("Invalid patch file path: '%s'", rel_path)
                         continue
                     if len(path_parts) == 1:
                         repo_name = "root"
-                        # For root repository, patch file contains only filename
-                        # file_path variable is not used in this context
                     else:
                         repo_name = path_parts[0]
-                        # For other repositories, patch file contains only filename
-                        # file_path variable is not used in this context
 
-                    # Exclude patch files configured in exclude_files
                     if po_name in exclude_files and rel_path in exclude_files[po_name]:
                         log.debug(
                             "patch file '%s' in po '%s' is excluded by config",
@@ -317,6 +307,9 @@ class PatchOverride:
         if exclude_files:
             log.debug("exclude_files: %s", str(exclude_files))
 
+        # Use repositories from env
+        repositories = env.get("repositories", [])
+
         def __revert_patch(po_name, po_patch_dir, exclude_files):
             """Revert patches for the specified po."""
             log.debug("po_name: '%s', po_patch_dir: '%s'", po_name, po_patch_dir)
@@ -352,25 +345,20 @@ class PatchOverride:
                         # For other repositories, patch file contains only filename
                         # file_path variable is not used in this context
 
-                    # 在 __revert_patch 内，patch_target = find_repo_path_by_name(repo_name) 需要提前定义 find_repo_path_by_name
-                    # 直接将 patch_target 的赋值方式与 __apply_patch 保持一致
-                    # 替换：
+                    # In __revert_patch, patch_target = find_repo_path_by_name(repo_name) needs to define find_repo_path_by_name first
+                    # Directly keep the assignment method of patch_target consistent with __apply_patch
+                    # Replace:
                     # patch_target = find_repo_path_by_name(repo_name)
                     # patch_flag = os.path.join(patch_target, ".patch_applied")
 
-                    # 先定义 find_repo_path_by_name
+                    # First define find_repo_path_by_name
                     def find_repo_path_by_name(repo_name):
-                        current_dir = os.getcwd()
-                        if repo_name == "root":
-                            if os.path.exists(os.path.join(current_dir, ".git")):
-                                return current_dir
-                        else:
-                            repo_path = os.path.join(current_dir, repo_name)
-                            if os.path.exists(os.path.join(repo_path, ".git")):
+                        for repo_path, rname in repositories:
+                            if rname == repo_name:
                                 return repo_path
                         return None
 
-                    # 然后 patch_target = find_repo_path_by_name(repo_name)
+                    # Then patch_target = find_repo_path_by_name(repo_name)
                     patch_target = find_repo_path_by_name(repo_name)
                     if not patch_target:
                         log.error("Cannot find repo path for '%s'", repo_name)
@@ -679,102 +667,6 @@ class PatchOverride:
                     return False
                 print("Please enter 'yes' or 'no'.")
 
-        def __find_repositories():
-            """Find all git repositories starting from the current working directory."""
-            repositories = []
-            current_dir = os.getcwd()
-
-            # Get ignore patterns from project configuration
-            ignore_patterns = __load_ignore_patterns(project_cfg)
-
-            # First check if current directory has .repo manifest
-            repo_manifest = os.path.join(current_dir, ".repo", "manifest.xml")
-            if os.path.exists(repo_manifest):
-                # Use manifest for repository discovery
-                print("Found .repo manifest, scanning repositories...")
-                try:
-                    tree = ET.parse(repo_manifest)
-                    root = tree.getroot()
-                    for project in root.findall(".//project"):
-                        path = project.get("path")
-                        if path:
-                            repo_path = os.path.join(current_dir, path)
-                            if os.path.exists(os.path.join(repo_path, ".git")):
-                                repo_name = path if path != "." else "root"
-
-                                # Check if this repository should be ignored
-                                should_ignore = False
-                                for pattern in ignore_patterns:
-                                    if fnmatch.fnmatch(repo_name, pattern):
-                                        print(
-                                            f"  Ignoring repository: {repo_name} (matches pattern: {pattern})"
-                                        )
-                                        should_ignore = True
-                                        break
-
-                                if not should_ignore:
-                                    repositories.append((repo_path, repo_name))
-                                    print(
-                                        f"  Found repository: {repo_name} at {repo_path}"
-                                    )
-                                else:
-                                    print(
-                                        f"  Skipped repository: {repo_name} (ignored by config)"
-                                    )
-                except ET.ParseError as e:
-                    log.error("Failed to parse .repo manifest: %s", e)
-                    print(f"Warning: Failed to parse .repo manifest: {e}")
-            elif os.path.exists(os.path.join(current_dir, ".git")):
-                # Current directory is a single git repository
-                repo_name = "root"
-
-                # Check if root repository should be ignored
-                should_ignore = False
-                for pattern in ignore_patterns:
-                    if fnmatch.fnmatch(repo_name, pattern):
-                        print(
-                            f"  Ignoring root repository (matches pattern: {pattern})"
-                        )
-                        should_ignore = True
-                        break
-
-                if not should_ignore:
-                    repositories.append((current_dir, repo_name))
-                    print("Found single git repository at current directory")
-                else:
-                    print("Skipped root repository (ignored by config)")
-            else:
-                # Recursively search for git repositories in subdirectories
-                print("Scanning subdirectories for git repositories...")
-                for root, dirs, _ in os.walk(current_dir):
-                    if ".git" in dirs:
-                        repo_path = root
-                        repo_name = os.path.relpath(repo_path, current_dir)
-                        if repo_name == ".":
-                            repo_name = "root"
-
-                        # Check if this repository should be ignored
-                        should_ignore = False
-                        for pattern in ignore_patterns:
-                            if fnmatch.fnmatch(repo_name, pattern):
-                                print(
-                                    f"  Ignoring repository: {repo_name} (matches pattern: {pattern})"
-                                )
-                                should_ignore = True
-                                break
-
-                        if not should_ignore:
-                            repositories.append((repo_path, repo_name))
-                            print(f"  Found repository: {repo_name} at {repo_path}")
-                        else:
-                            print(
-                                f"  Skipped repository: {repo_name} (ignored by config)"
-                            )
-                    # Don't recurse into .git directories
-                    dirs[:] = [d for d in dirs if d != ".git"]
-
-            return repositories
-
         def __get_modified_files(repo_path, repo_name):
             """Get modified files in a repository including staged files, with ignore support."""
             modified_files = []
@@ -861,16 +753,10 @@ class PatchOverride:
 
         def __find_repo_path_by_name(repo_name):
             """Find repository path by name."""
-            current_dir = os.getcwd()
-
-            if repo_name == "root":
-                if os.path.exists(os.path.join(current_dir, ".git")):
-                    return current_dir
-            else:
-                repo_path = os.path.join(current_dir, repo_name)
-                if os.path.exists(os.path.join(repo_path, ".git")):
+            # 直接用env['repositories']
+            for repo_path, rname in env.get("repositories", []):
+                if rname == repo_name:
                     return repo_path
-
             return None
 
         def __create_patch_for_file(repo_name, file_path, patches_dir, force=False):
@@ -1051,13 +937,12 @@ class PatchOverride:
                     return False
                 print("Invalid choice. Please enter 1, 2, or 3.")
 
-        def __interactive_file_selection(po_path):
+        def __interactive_file_selection(po_path, repositories):
             """Interactive file selection for PO creation."""
             print("\n=== File Selection for PO ===")
             print("Scanning for modified files in repositories...")
 
-            # Find repositories and their modified files
-            repositories = __find_repositories()
+            # 直接使用传入的repositories参数
             if not repositories:
                 print("No git repositories found.")
                 return
@@ -1194,7 +1079,8 @@ class PatchOverride:
         try:
             # Interactive file selection first
             if not force:
-                __interactive_file_selection(po_path)
+                # 传入env['repositories']
+                __interactive_file_selection(po_path, env.get("repositories", []))
 
             # In force mode, create empty directory structure
             if force:

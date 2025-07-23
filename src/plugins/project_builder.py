@@ -2,6 +2,11 @@
 Project build utility class for CLI operations.
 """
 
+import os
+import shutil
+import subprocess
+from datetime import datetime
+
 from src.log_manager import log
 from src.profiler import auto_profile
 
@@ -23,45 +28,20 @@ class ProjectBuilder:
         Generate after, before, patch, commit directories for all repositories or current repo, under a timestamped diff directory.
         Patch files are named changes_worktree.patch and changes_staged.patch.
         If single repo, do not create root subdirectory, put files directly under after, before, etc.
-        Diff directory is .cache/build/{project_name}/{timestamp}/
+        Diff directory is .cache/build/{project_name}/{timestamp}/diff
         """
-        import os
-        import shutil
-        import subprocess
-        from datetime import datetime
-        from pathlib import Path
+        _ = env
+        _ = projects_info
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Only keep valid filename characters in project_name
         safe_project_name = "".join(
             c if c.isalnum() or c in ("-", "_") else "_" for c in str(project_name)
         )
         diff_root = os.path.join(".cache", "build", safe_project_name, ts, "diff")
         os.makedirs(diff_root, exist_ok=True)
 
-        def find_repositories():
-            current_dir = os.getcwd()
-            repo_manifest = os.path.join(current_dir, ".repo", "manifest.xml")
-            repositories = []
-            if os.path.exists(repo_manifest):
-                import xml.etree.ElementTree as ET
-
-                tree = ET.parse(repo_manifest)
-                root = tree.getroot()
-                for project in root.findall(".//project"):
-                    path = project.get("path")
-                    if path:
-                        repo_path = os.path.join(current_dir, path)
-                        if os.path.exists(os.path.join(repo_path, ".git")):
-                            repo_name = path if path != "." else "root"
-                            repositories.append((repo_path, repo_name))
-            elif os.path.exists(os.path.join(current_dir, ".git")):
-                repositories.append((current_dir, "root"))
-            return repositories
-
-        def safe_copy(src, dst):
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(src, dst)
+        repositories = env.get("repositories", [])
+        single_repo = len(repositories) == 1
 
         def is_tracked(repo_path, file_path):
             try:
@@ -70,9 +50,10 @@ class ProjectBuilder:
                     cwd=repo_path,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    check=True,
                 )
                 return result.returncode == 0
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 return False
 
         def save_file_snapshot(repo_path, file_path, out_dir, ref=None):
@@ -83,7 +64,6 @@ class ProjectBuilder:
                 if os.path.exists(abs_file):
                     shutil.copy2(abs_file, out_file)
             else:
-                # Only save before for tracked files
                 if is_tracked(repo_path, file_path):
                     with open(out_file, "wb") as f:
                         subprocess.run(
@@ -91,6 +71,7 @@ class ProjectBuilder:
                             cwd=repo_path,
                             stdout=f,
                             stderr=subprocess.DEVNULL,
+                            check=True,
                         )
 
         def save_patch(repo_path, file_paths, out_dir, patch_name, staged=False):
@@ -101,7 +82,9 @@ class ProjectBuilder:
             else:
                 cmd = ["git", "diff"] + file_paths
             with open(out_file, "w", encoding="utf-8") as f:
-                subprocess.run(cmd, cwd=repo_path, stdout=f, stderr=subprocess.DEVNULL)
+                subprocess.run(
+                    cmd, cwd=repo_path, stdout=f, stderr=subprocess.DEVNULL, check=True
+                )
 
         def save_commits(repo_path, out_dir):
             try:
@@ -138,8 +121,9 @@ class ProjectBuilder:
                     cwd=repo_path,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    check=True,
                 )
-            except subprocess.CalledProcessError:
+            except (OSError, subprocess.SubprocessError):
                 pass
 
         for d in ["after", "before", "patch", "commit"]:
@@ -148,8 +132,6 @@ class ProjectBuilder:
                 shutil.rmtree(dpath)
             os.makedirs(dpath, exist_ok=True)
 
-        repositories = find_repositories()
-        single_repo = len(repositories) == 1
         for repo_path, repo_name in repositories:
             original_cwd = os.getcwd()
             os.chdir(repo_path)
