@@ -8,27 +8,44 @@ set -e
 
 echo "--- Starting release process ---"
 
+# 检查是否为 test 模式
+if [ "$1" = "--test" ]; then
+    TEST_MODE=1
+    RELEASE_TYPE=${2:-"patch"}
+else
+    TEST_MODE=0
+    RELEASE_TYPE=${1:-"patch"}
+fi
+
+maybe_run() {
+    if [ "$TEST_MODE" = "1" ]; then
+        echo "[TEST MODE] $*"
+    else
+        eval "$*"
+    fi
+}
+
 # Configuration
 RELEASE_TYPE=${1:-"patch"}  # patch, minor, major
 
 # Get current version from pyproject.toml
-current_version=$(grep "version = " pyproject.toml | awk -F'"' '{print $2}')
+current_version=$(grep -E '^version = "' pyproject.toml | head -n1 | awk -F'"' '{print $2}')
 echo "Current version: $current_version"
 
 # Calculate new version based on release type
 if [ "$RELEASE_TYPE" = "major" ]; then
-    new_version=$(echo $current_version | awk -F. '{print $1 + 1 ".0.0"}')
+    new_version=$(echo $current_version | awk -F. '{printf "%d.0.0", $1+1}')
 elif [ "$RELEASE_TYPE" = "minor" ]; then
-    new_version=$(echo $current_version | awk -F. '{print $1 "." $2 + 1 ".0"}')
+    new_version=$(echo $current_version | awk -F. '{printf "%d.%d.0", $1, $2+1}')
 else  # patch (default)
-    new_version=$(echo $current_version | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+    new_version=$(echo $current_version | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')
 fi
 
 echo "New version will be: $new_version"
 
 # Update version in pyproject.toml
 echo "--> Updating version in pyproject.toml"
-sed -i "s/version = \"$current_version\"/version = \"$new_version\"/" pyproject.toml
+maybe_run "sed -i 's#^version = \".*\"#version = \"$new_version\"#' pyproject.toml"
 
 echo "--- Version updated. Committing changes and creating tag. ---"
 
@@ -37,35 +54,41 @@ current_branch=$(git branch --show-current)
 echo "Current branch: $current_branch"
 
 # Commit version update (skip pre-commit hooks for version bumps)
-git add pyproject.toml
-git commit -m "Bump version to $new_version"
+maybe_run "git add pyproject.toml"
+maybe_run "git commit -m \"Bump version to $new_version\""
 
 # Create tag (delete if exists)
-if git tag -l | grep -q "v$new_version"; then
+maybe_run "git tag -l | grep -q \"v$new_version\""
+TAG_EXISTS=$?
+
+if [ $TAG_EXISTS -eq 0 ]; then
     echo "Tag v$new_version already exists. Deleting and recreating..."
-    git tag -d v$new_version
-    git push --no-verify origin :refs/tags/v$new_version 2>/dev/null || true
+    maybe_run "git tag -d v$new_version"
+    maybe_run "git push --no-verify origin :refs/tags/v$new_version 2>/dev/null || true"
 fi
-git tag v$new_version
+maybe_run "git tag v$new_version"
 
 echo "--- Git operations complete. Pushing to remote. ---"
 
 # Push changes to current branch
 echo "--> Pushing changes to $current_branch"
-git push --no-verify origin $current_branch
+maybe_run "git push --no-verify origin $current_branch"
 
 # Push tag with verification
 echo "--> Pushing tag v$new_version"
-git push --no-verify origin v$new_version
+maybe_run "git push --no-verify origin v$new_version"
 
 # Verify tag was pushed successfully
 echo "--> Verifying tag push..."
-if git ls-remote --tags origin | grep -q "v$new_version"; then
+maybe_run "git ls-remote --tags origin | grep -q \"v$new_version\""
+TAG_PUSHED=$?
+
+if [ $TAG_PUSHED -eq 0 ]; then
     echo "✓ Tag v$new_version successfully pushed to remote"
 else
     echo "✗ Failed to push tag v$new_version"
     echo "Attempting to push tag again..."
-    git push origin v$new_version
+    maybe_run "git push origin v$new_version"
 fi
 
 echo "--- Release process complete for version $new_version! ---"

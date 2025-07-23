@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multi-project-manager"
-version = "0.0.5"
+version = "0.0.6"
 authors = [
   { name="wangguanran", email="elvans.wang@gmail.com" },
 ]
