@@ -74,7 +74,7 @@ def _load_all_projects(vprojects_path):
             config_dict = {k.upper(): v.value for k, v in config[project].items()}
             raw_configs[project] = config_dict
             projects[project] = {
-                "config": None,  # 占位，后面merge
+                "config": None,  # placeholder, will be merged later
                 "board_name": board_name,
                 "board_path": board_path,
                 "ini_file": ini_file,
@@ -213,6 +213,11 @@ def _parse_args_and_plugin_args(builtin_operations):
             if not flag_info[flag]["desc"]:
                 flag_info[flag]["desc"] = get_flag_description(doc, flag)
 
+    # Calculate the maximum length of operation names
+    op_max_len = (
+        max((len(op) for op in builtin_operations.keys()), default=0) + 2
+    )  # extra space
+
     builtin_help_lines = []
     for op, info in builtin_operations.items():
         func = info["func"]
@@ -221,28 +226,50 @@ def _parse_args_and_plugin_args(builtin_operations):
         flags = get_supported_flags(sig)
         if flags:
             flag_str = " ".join([f"--{f.replace('_','-')}" for f in flags])
-            builtin_help_lines.append(f"  {op:<15} {desc} {flag_str}")
+            builtin_help_lines.append(f"  {op:<{op_max_len}}{desc} {flag_str}")
         else:
-            builtin_help_lines.append(f"  {op:<15} {desc}")
+            builtin_help_lines.append(f"  {op:<{op_max_len}}{desc}")
 
     if flag_info:
         plugin_options_lines = []
+        # Calculate the maximum length of all flag_display and ops_display
+        flag_max_len = (
+            max(
+                (len(f"--{flag.replace('_','-')}") for flag in flag_info),
+                default=0,
+            )
+            + 4
+        )
+        ops_max_len = (
+            max(
+                (
+                    len(f"Supported by: {', '.join(meta['ops'])}")
+                    for meta in flag_info.values()
+                ),
+                default=0,
+            )
+            + 4
+        )
         for flag, meta in sorted(flag_info.items()):
             flag_display = f"--{flag.replace('_','-')}"
             ops_display = f"Supported by: {', '.join(meta['ops'])}"
             desc = meta["desc"]
-            flag_ops = f"  {flag_display:<10} {ops_display:<22}"
-            plugin_options_lines.append(f"{flag_ops}{desc}")
+            plugin_options_lines.append(
+                f"  {flag_display:<{flag_max_len}}{ops_display:<{ops_max_len}}{desc}"
+            )
         plugin_options = "\n".join(plugin_options_lines)
     else:
         plugin_options = ""
 
     # Only generate help/choices through plugin-registered operations
     help_text = "supported operations :\n" + "\n".join(builtin_help_lines)
-    choices = list(builtin_operations.keys())
+    choices = list(builtin_operations)
+    # No longer add plugin-related parameters to parser, only describe in epilog or help_text
     parser = argparse.ArgumentParser(
+        usage="__main__.py [options] operations name [args ...]",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=plugin_options if plugin_options else None,
+        add_help=True,
     )
     parser.add_argument("--version", action="version", version=get_version())
     parser.add_argument(
@@ -258,19 +285,8 @@ def _parse_args_and_plugin_args(builtin_operations):
         help="Enable cProfile performance analysis",
     )
 
-    if "--help" in sys.argv or "-h" in sys.argv:
-        for flag, meta in sorted(flag_info.items()):
-            flag_display = f"--{flag.replace('_','-')}"
-            ops_display = f"Supported by: {', '.join(meta['ops'])}."
-            desc = meta["desc"]
-            parser.add_argument(
-                flag_display,
-                action="store_true",
-                help=f"{ops_display} {desc}",
-            )
-        parser.epilog = None
-    else:
-        parser.epilog = plugin_options if plugin_options else None
+    # 不再将插件相关参数加到 parser，只在 epilog 或 help_text 里说明
+    parser.epilog = plugin_options if plugin_options else None
 
     args, unknown = parser.parse_known_args()
     args_dict = vars(args)

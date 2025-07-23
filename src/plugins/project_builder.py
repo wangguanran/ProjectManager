@@ -18,7 +18,7 @@ class ProjectBuilder:
         )
 
     @staticmethod
-    def pre_build(env, projects_info, project_name):
+    def project_pre_build(env, projects_info, project_name):
         """
         Pre-build stage for the specified project.
         """
@@ -30,7 +30,7 @@ class ProjectBuilder:
         return True
 
     @staticmethod
-    def do_build(env, projects_info, project_name):
+    def project_do_build(env, projects_info, project_name):
         """
         Build stage for the specified project.
         """
@@ -42,7 +42,7 @@ class ProjectBuilder:
         return True
 
     @staticmethod
-    def post_build(env, projects_info, project_name):
+    def project_post_build(env, projects_info, project_name):
         """
         Post-build stage for the specified project.
         """
@@ -54,19 +54,19 @@ class ProjectBuilder:
         return True
 
     @staticmethod
-    def build(env, projects_info, project_name):
+    def project_build(env, projects_info, project_name):
         """
         Build the specified project, including pre-build, build, and post-build stages.
         """
-        if not ProjectBuilder.pre_build(env, projects_info, project_name):
+        if not ProjectBuilder.project_pre_build(env, projects_info, project_name):
             log.error("Pre-build failed for project: %s", project_name)
             print(f"Pre-build failed for project: {project_name}")
             return False
-        if not ProjectBuilder.do_build(env, projects_info, project_name):
+        if not ProjectBuilder.project_do_build(env, projects_info, project_name):
             log.error("Build failed for project: %s", project_name)
             print(f"Build failed for project: {project_name}")
             return False
-        if not ProjectBuilder.post_build(env, projects_info, project_name):
+        if not ProjectBuilder.project_post_build(env, projects_info, project_name):
             log.error("Post-build failed for project: %s", project_name)
             print(f"Post-build failed for project: {project_name}")
             return False
