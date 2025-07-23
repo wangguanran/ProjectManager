@@ -18,15 +18,194 @@ class ProjectBuilder:
         )
 
     @staticmethod
+    def project_diff(env, projects_info, project_name):
+        """
+        Generate after, before, patch, commit directories for all repositories or current repo, under a timestamped diff directory.
+        Patch files are named changes_worktree.patch and changes_staged.patch.
+        If single repo, do not create root subdirectory, put files directly under after, before, etc.
+        Diff directory is .cache/build/{project_name}/{timestamp}/
+        """
+        import os
+        import shutil
+        import subprocess
+        from datetime import datetime
+        from pathlib import Path
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Only keep valid filename characters in project_name
+        safe_project_name = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_" for c in str(project_name)
+        )
+        diff_root = os.path.join(".cache", "build", safe_project_name, ts, "diff")
+        os.makedirs(diff_root, exist_ok=True)
+
+        def find_repositories():
+            current_dir = os.getcwd()
+            repo_manifest = os.path.join(current_dir, ".repo", "manifest.xml")
+            repositories = []
+            if os.path.exists(repo_manifest):
+                import xml.etree.ElementTree as ET
+
+                tree = ET.parse(repo_manifest)
+                root = tree.getroot()
+                for project in root.findall(".//project"):
+                    path = project.get("path")
+                    if path:
+                        repo_path = os.path.join(current_dir, path)
+                        if os.path.exists(os.path.join(repo_path, ".git")):
+                            repo_name = path if path != "." else "root"
+                            repositories.append((repo_path, repo_name))
+            elif os.path.exists(os.path.join(current_dir, ".git")):
+                repositories.append((current_dir, "root"))
+            return repositories
+
+        def safe_copy(src, dst):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+
+        def is_tracked(repo_path, file_path):
+            try:
+                result = subprocess.run(
+                    ["git", "ls-files", "--error-unmatch", file_path],
+                    cwd=repo_path,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return result.returncode == 0
+            except Exception:
+                return False
+
+        def save_file_snapshot(repo_path, file_path, out_dir, ref=None):
+            abs_file = os.path.join(repo_path, file_path)
+            out_file = os.path.join(out_dir, file_path)
+            os.makedirs(os.path.dirname(out_file), exist_ok=True)
+            if ref is None:
+                if os.path.exists(abs_file):
+                    shutil.copy2(abs_file, out_file)
+            else:
+                # Only save before for tracked files
+                if is_tracked(repo_path, file_path):
+                    with open(out_file, "wb") as f:
+                        subprocess.run(
+                            ["git", "show", f"{ref}:{file_path}"],
+                            cwd=repo_path,
+                            stdout=f,
+                            stderr=subprocess.DEVNULL,
+                        )
+
+        def save_patch(repo_path, file_paths, out_dir, patch_name, staged=False):
+            out_file = os.path.join(out_dir, patch_name)
+            os.makedirs(os.path.dirname(out_file), exist_ok=True)
+            if staged:
+                cmd = ["git", "diff", "--cached"] + file_paths
+            else:
+                cmd = ["git", "diff"] + file_paths
+            with open(out_file, "w", encoding="utf-8") as f:
+                subprocess.run(cmd, cwd=repo_path, stdout=f, stderr=subprocess.DEVNULL)
+
+        def save_commits(repo_path, out_dir):
+            try:
+                upstream = (
+                    subprocess.check_output(
+                        [
+                            "git",
+                            "rev-parse",
+                            "--abbrev-ref",
+                            "--symbolic-full-name",
+                            "@{u}",
+                        ],
+                        cwd=repo_path,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    .decode()
+                    .strip()
+                )
+                commits = (
+                    subprocess.check_output(
+                        ["git", "rev-list", f"{upstream}..HEAD"],
+                        cwd=repo_path,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    .decode()
+                    .strip()
+                    .splitlines()
+                )
+                if not commits:
+                    return
+                os.makedirs(out_dir, exist_ok=True)
+                subprocess.run(
+                    ["git", "format-patch", f"{upstream}..HEAD", "-o", out_dir],
+                    cwd=repo_path,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except subprocess.CalledProcessError:
+                pass
+
+        for d in ["after", "before", "patch", "commit"]:
+            dpath = os.path.join(diff_root, d)
+            if os.path.exists(dpath):
+                shutil.rmtree(dpath)
+            os.makedirs(dpath, exist_ok=True)
+
+        repositories = find_repositories()
+        single_repo = len(repositories) == 1
+        for repo_path, repo_name in repositories:
+            original_cwd = os.getcwd()
+            os.chdir(repo_path)
+            staged_files = (
+                subprocess.check_output(["git", "diff", "--name-only", "--cached"])
+                .decode()
+                .strip()
+                .splitlines()
+            )
+            working_files = (
+                subprocess.check_output(
+                    ["git", "ls-files", "--modified", "--others", "--exclude-standard"]
+                )
+                .decode()
+                .strip()
+                .splitlines()
+            )
+            all_files = set(staged_files) | set(working_files)
+            file_list = [f for f in all_files if f.strip()]
+            # Target directory: single repo put files directly under diff_root/after, etc.; multi-repo use repo_name subdirectory
+            if single_repo:
+                after_dir = os.path.join(diff_root, "after")
+                before_dir = os.path.join(diff_root, "before")
+                patch_dir = os.path.join(diff_root, "patch")
+                commit_dir = os.path.join(diff_root, "commit")
+            else:
+                after_dir = os.path.join(diff_root, "after", repo_name)
+                before_dir = os.path.join(diff_root, "before", repo_name)
+                patch_dir = os.path.join(diff_root, "patch", repo_name)
+                commit_dir = os.path.join(diff_root, "commit", repo_name)
+            for file_path in file_list:
+                save_file_snapshot(repo_path, file_path, after_dir)
+                save_file_snapshot(repo_path, file_path, before_dir, ref="HEAD")
+            if file_list:
+                save_patch(
+                    repo_path,
+                    file_list,
+                    patch_dir,
+                    "changes_worktree.patch",
+                    staged=False,
+                )
+                save_patch(
+                    repo_path, file_list, patch_dir, "changes_staged.patch", staged=True
+                )
+            save_commits(repo_path, commit_dir)
+            os.chdir(original_cwd)
+        return diff_root
+
+    @staticmethod
     def project_pre_build(env, projects_info, project_name):
         """
         Pre-build stage for the specified project.
         """
         log.info("Pre-build stage for project: %s", project_name)
         print(f"Pre-build stage for project: {project_name}")
-        # TODO: implement pre-build logic
-        _ = env
-        _ = projects_info
+        ProjectBuilder.project_diff(env, projects_info, project_name)
         return True
 
     @staticmethod
