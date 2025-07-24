@@ -66,9 +66,16 @@ check_curl() {
 # Function to check if jq is available
 check_jq() {
     if ! command -v jq &> /dev/null; then
-        echo "Error: jq is not installed. Please install jq first."
-        echo "You can install it with: sudo apt install jq"
-        exit 1
+        echo "jq not found. Installing jq to $HOME/.local/bin..." >&2
+        mkdir -p "$HOME/.local/bin"
+        curl -L -o "$HOME/.local/bin/jq" https://github.com/stedolan/jq/releases/latest/download/jq-linux64
+        chmod +x "$HOME/.local/bin/jq"
+        # 检查 ~/.local/bin 是否在 PATH 中
+        if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+            export PATH="$HOME/.local/bin:$PATH"
+            echo "Added $HOME/.local/bin to PATH. Please run: source ~/.bashrc" >&2
+        fi
     fi
 }
 
