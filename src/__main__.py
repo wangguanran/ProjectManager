@@ -179,11 +179,13 @@ def _load_platform_plugin_operations(vprojects_path):
             spec = importlib.util.spec_from_file_location(module_name, script_path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            class_name = os.path.splitext(file_name)[0].capitalize()
-            if hasattr(mod, class_name):
-                cls = getattr(mod, class_name)
-                if inspect.isclass(cls):
-                    plugin_classes.append(cls)
+            # 加载所有不以下划线开头的类
+            for attr_name in dir(mod):
+                if attr_name.startswith("_"):
+                    continue
+                attr = getattr(mod, attr_name)
+                if inspect.isclass(attr) and attr.__module__ == mod.__name__:
+                    plugin_classes.append(attr)
         except (ImportError, AttributeError) as e:
             log.error("Failed to load platform plugin from %s: %s", script_path, e)
     return _load_plugin_operations(plugin_classes)
