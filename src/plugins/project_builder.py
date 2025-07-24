@@ -29,6 +29,7 @@ class ProjectBuilder:
         Patch files are named changes_worktree.patch and changes_staged.patch.
         If single repo, do not create root subdirectory, put files directly under after, before, etc.
         Diff directory is .cache/build/{project_name}/{timestamp}/diff
+        @needs_repositories
         """
         _ = env
         _ = projects_info

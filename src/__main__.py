@@ -143,6 +143,11 @@ def _load_plugin_operations(plugin_classes):
                 for pname in params
                 if sig.parameters[pname].default == inspect.Parameter.empty
             ]
+            # Check if @needs_repositories is in docstring
+            docstring = getattr(func, "__doc__", "")
+            needs_repositories = (
+                "@needs_repositories" in docstring if docstring else False
+            )
             operations[method_name] = {
                 "func": func,
                 "desc": desc,
@@ -150,6 +155,7 @@ def _load_plugin_operations(plugin_classes):
                 "param_count": len(params),
                 "required_params": required_params,
                 "required_count": len(required_params),
+                "needs_repositories": needs_repositories,
             }
     return operations
 
@@ -316,7 +322,7 @@ def _parse_args_and_plugin_args(builtin_operations):
     return operate, name, parsed_args, parsed_kwargs, args_dict
 
 
-def find_repositories():
+def _find_repositories():
     """
     Return a list of (repo_path, repo_name) for all git repositories in current dir or .repo manifest.
     repo_name: relative path, root repo is 'root'.
@@ -341,17 +347,10 @@ def find_repositories():
     elif os.path.exists(os.path.join(current_dir, ".git")):
         # single repo mode
         repositories.append((current_dir, "root"))
-    else:
-        # recursively find all subdirectories with .git
-        for root_dir, dirs, _ in os.walk(current_dir):
-            if ".git" in dirs:
-                repo_path = root_dir
-                repo_name = os.path.relpath(repo_path, current_dir)
-                if repo_name == ".":
-                    repo_name = "root"
-                repositories.append((repo_path, repo_name))
-                # do not recurse into .git directory
-                dirs[:] = [d for d in dirs if d != ".git"]
+    # Print repositories for debug
+    log.debug(
+        "repositories found: %s", json.dumps(repositories, indent=2, ensure_ascii=False)
+    )
     return repositories
 
 
@@ -367,7 +366,7 @@ def main():
     env = {
         "root_path": root_path,
         "vprojects_path": vprojects_path,
-        "repositories": find_repositories(),
+        # "repositories": _find_repositories(),  # lazy loading
     }
     log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 
@@ -416,6 +415,9 @@ def main():
             )
             log.error("Required parameters: %s", ", ".join(required_cli_params))
             sys.exit(1)
+        # Lazy load repositories if needed
+        if op_info.get("needs_repositories"):
+            env["repositories"] = _find_repositories()
         func_args = [env, projects] + user_args
         func_kwargs = parsed_kwargs
         try:
