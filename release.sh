@@ -4,8 +4,6 @@
 # This script handles version management and Git operations
 # GitHub Actions will handle building and publishing to GitHub Releases
 
-set -e
-
 echo "--- Starting release process ---"
 
 # 检查是否为 test 模式
@@ -21,6 +19,7 @@ maybe_run() {
     if [ "$TEST_MODE" = "1" ]; then
         echo "[TEST MODE] $*"
     else
+        echo "$*"
         eval "$*"
     fi
 }
