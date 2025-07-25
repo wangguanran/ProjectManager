@@ -27,7 +27,7 @@ def _load_all_projects(vprojects_path):
     if not os.path.exists(vprojects_path):
         log.warning("vprojects directory does not exist: '%s'", vprojects_path)
         return {}
-    projects = {}
+    projects_info = {}
     raw_configs = {}
     invalid_projects = set()
     for item in os.listdir(vprojects_path):
@@ -74,7 +74,7 @@ def _load_all_projects(vprojects_path):
         for project in config.sections():
             config_dict = {k.upper(): v.value for k, v in config[project].items()}
             raw_configs[project] = config_dict
-            projects[project] = {
+            projects_info[project] = {
                 "config": None,  # placeholder, will be merged later
                 "board_name": board_name,
                 "board_path": board_path,
@@ -107,11 +107,11 @@ def _load_all_projects(vprojects_path):
         merged_configs[project] = merged
         return merged
 
-    for project, project_info in projects.items():
+    for project, project_info in projects_info.items():
         if project in invalid_projects:
             continue
         project_info["config"] = merge_config(project)
-    return projects
+    return projects_info
 
 
 def _load_plugin_operations(plugin_classes):
@@ -372,11 +372,11 @@ def main():
     }
     log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 
-    projects = _load_all_projects(env["vprojects_path"])
-    log.debug("Loaded %d projects.", len(projects))
+    projects_info = _load_all_projects(env["vprojects_path"])
+    log.debug("Loaded %d projects.", len(projects_info))
     log.debug(
         "Loaded projects info:\n%s",
-        json.dumps(projects, indent=4, ensure_ascii=False),
+        json.dumps(projects_info, indent=4, ensure_ascii=False),
     )
     platform_operations = _load_platform_plugin_operations(env["vprojects_path"])
     log.debug("Loaded %d platform operations.", len(platform_operations))
@@ -420,7 +420,7 @@ def main():
         # Lazy load repositories if needed
         if op_info.get("needs_repositories"):
             env["repositories"] = _find_repositories()
-        func_args = [env, projects] + user_args
+        func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
         try:
             func(*func_args, **func_kwargs)
