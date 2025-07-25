@@ -109,11 +109,11 @@ class ProjectManager:
             if isinstance(inherited_config.get("config", {}), dict)
             else {}
         )
-        board_platform = parent_config.get("BOARD_PLATFORM")
+        chip_name = parent_config.get("PROJECT_CHIP_NAME")
         project_customer = parent_config.get("PROJECT_CUSTOMER")
         project_name_parts = []
-        if board_platform:
-            project_name_parts.append(board_platform)
+        if chip_name:
+            project_name_parts.append(chip_name)
         project_name_parts.append(project_name)
         if project_customer:
             project_name_parts.append(project_customer)

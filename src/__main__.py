@@ -8,7 +8,9 @@ import importlib.util
 import inspect
 import json
 import os
+import pathlib
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
@@ -30,6 +32,27 @@ def _load_all_projects(vprojects_path):
     projects_info = {}
     raw_configs = {}
     invalid_projects = set()
+
+    # Load common config first
+    common_config_path = os.path.join(vprojects_path, "common", "common.ini")
+    common_configs = {}
+
+    def strip_comment(val):
+        # Remove inline comments after # or ;
+        return val.split("#", 1)[0].split(";", 1)[0].strip()
+
+    if os.path.exists(common_config_path):
+        common_updater = configupdater.ConfigUpdater()
+        common_updater.read(common_config_path, encoding="utf-8")
+        for section in common_updater.sections():
+            section_dict = {
+                k.upper(): strip_comment(v.value)
+                for k, v in common_updater[section].items()
+            }
+            common_configs[section] = section_dict
+    else:
+        log.warning("common config not found: '%s'", common_config_path)
+
     for item in os.listdir(vprojects_path):
         board_name = item
         board_path = os.path.join(vprojects_path, board_name)
@@ -72,7 +95,9 @@ def _load_all_projects(vprojects_path):
         config = configupdater.ConfigUpdater()
         config.read(ini_file, encoding="utf-8")
         for project in config.sections():
-            config_dict = {k.upper(): v.value for k, v in config[project].items()}
+            config_dict = {
+                k.upper(): strip_comment(v.value) for k, v in config[project].items()
+            }
             raw_configs[project] = config_dict
             projects_info[project] = {
                 "config": None,  # placeholder, will be merged later
@@ -95,10 +120,16 @@ def _load_all_projects(vprojects_path):
             return {}
         parent = find_parent(project)
         merged = {}
+        # Merge common configuration first
+        for section_dict in common_configs.values():
+            for k, v in section_dict.items():
+                merged[k] = v
+        # Then merge parent project configuration
         if parent and parent in raw_configs:
             parent_cfg = merge_config(parent)
             for k, v in parent_cfg.items():
                 merged[k] = v
+        # Finally merge current project configuration
         for k, v in raw_configs[project].items():
             if k == "PROJECT_PO_CONFIG" and k in merged:
                 merged[k] = merged[k].strip() + " " + v.strip()
@@ -356,6 +387,65 @@ def _find_repositories():
     return repositories
 
 
+def check_and_create_vprojects(vprojects_path):
+    """Check if vprojects directory exists, prompt user and create if needed."""
+    if not os.path.exists(vprojects_path):
+        answer = (
+            input(
+                "vprojects directory does not exist, create standard structure? [y/N]: "
+            )
+            .strip()
+            .lower()
+        )
+        if answer in ("y", "yes"):
+
+            def touch(path):
+                pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+                pathlib.Path(path).touch(exist_ok=True)
+
+            structure = {
+                "common/common.ini": None,
+                "common/po/.gitkeep": None,
+                "template/template.ini": None,
+                "template/po/po_template/overrides/.gitkeep": None,
+                "template/po/po_template/patches/.gitkeep": None,
+                "scripts/.gitkeep": None,
+            }
+            for rel_path in structure:
+                abs_path = os.path.join(vprojects_path, rel_path)
+                if abs_path.endswith(".ini"):
+                    touch(abs_path)
+                else:
+                    # .gitkeep placeholder
+                    pathlib.Path(abs_path).parent.mkdir(parents=True, exist_ok=True)
+                    with open(abs_path, "w", encoding="utf-8") as f:
+                        f.write("")
+            print(
+                f"vprojects directory and basic structure created at: {vprojects_path}"
+            )
+            # Initialize git repository in vprojects
+
+            try:
+                subprocess.run(["git", "init"], cwd=vprojects_path, check=True)
+                subprocess.run(["git", "add", "-A"], cwd=vprojects_path, check=True)
+                subprocess.run(
+                    ["git", "commit", "-m", "Initial vprojects structure"],
+                    cwd=vprojects_path,
+                    check=True,
+                )
+                print(
+                    "Initialized empty Git repository in vprojects directory and committed initial structure."
+                )
+                # TODO: Install git hooks here for file checking in the future
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"Failed to initialize git repository: {e}. Output: {e.output if hasattr(e, 'output') else ''}"
+                )
+        else:
+            print("vprojects directory not created, exiting.")
+            sys.exit(0)
+
+
 def main():
     """Main entry point for the CLI project manager."""
     log.debug("sys.argv: %s", sys.argv)
@@ -364,6 +454,8 @@ def main():
     root_path = os.getcwd()
     # Use vprojects path from current working directory
     vprojects_path = os.path.join(root_path, "vprojects")
+
+    check_and_create_vprojects(vprojects_path)
 
     env = {
         "root_path": root_path,
