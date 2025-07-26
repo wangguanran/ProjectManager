@@ -44,12 +44,13 @@ def _load_all_projects(vprojects_path):
     if os.path.exists(common_config_path):
         common_updater = configupdater.ConfigUpdater()
         common_updater.read(common_config_path, encoding="utf-8")
-        for section in common_updater.sections():
-            section_dict = {
-                k.upper(): strip_comment(v.value)
-                for k, v in common_updater[section].items()
-            }
-            common_configs[section] = section_dict
+        # Only load [common] section
+        if common_updater.has_section("common"):
+            section = common_updater["common"]
+            section_dict = {k.upper(): strip_comment(section[k].value) for k in section}
+            common_configs["common"] = section_dict
+        else:
+            log.warning("[common] section not found in: '%s'", common_config_path)
     else:
         log.warning("common config not found: '%s'", common_config_path)
 
@@ -94,22 +95,38 @@ def _load_all_projects(vprojects_path):
             continue
         config = configupdater.ConfigUpdater()
         config.read(ini_file, encoding="utf-8")
-        for project in config.sections():
+        for project_name in config.sections():
             config_dict = {
-                k.upper(): strip_comment(v.value) for k, v in config[project].items()
+                k.upper(): strip_comment(v.value)
+                for k, v in config[project_name].items()
             }
-            raw_configs[project] = config_dict
-            projects_info[project] = {
+            raw_configs[project_name] = config_dict
+            projects_info[project_name] = {
                 "config": None,  # placeholder, will be merged later
                 "board_name": board_name,
                 "board_path": board_path,
                 "ini_file": ini_file,
+                "parent": None,  # parent project name
+                "children": [],  # list of children project names
             }
 
-    def find_parent(project):
-        if "-" in project:
-            return project.rsplit("-", 1)[0]
+    # Build parent-child relationships
+    def find_parent(project_name):
+        if "-" in project_name:
+            return project_name.rsplit("-", 1)[0]
         return None
+
+    # First, assign parent for each project
+    for project_name, project_info in projects_info.items():
+        parent_name = find_parent(project_name)
+        project_info["parent"] = parent_name
+
+    # Then, assign children for each project
+    for project_name, project_info in projects_info.items():
+        parent_name = project_info["parent"]
+        if parent_name and parent_name in projects_info:
+            parent_project_info = projects_info[parent_name]
+            parent_project_info["children"].append(project_name)
 
     merged_configs = {}
 
@@ -210,7 +227,7 @@ def _load_platform_plugin_operations(vprojects_path):
             spec = importlib.util.spec_from_file_location(module_name, script_path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            # 加载所有不以下划线开头的类
+            # Load all classes that do not start with an underscore
             for attr_name in dir(mod):
                 if attr_name.startswith("_"):
                     continue
