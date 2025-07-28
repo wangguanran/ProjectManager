@@ -14,7 +14,11 @@ class TestMainFunction:
     """Test cases for main function."""
 
     def setup_method(self):
-        """Set up test environment."""
+        """
+        Prepare the test environment for each test case.
+        - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+        - Imports the main function from src.__main__ and assigns it to self.main for use in test cases.
+        """
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
@@ -23,7 +27,12 @@ class TestMainFunction:
         self.main = main
 
     def test_main_module_execution(self):
-        """Test that main module can be executed."""
+        """
+        Verify that importing the src.__main__ module does not trigger the execution of the main() function.
+        - Mocks the main function in src.__main__.
+        - Imports the module to simulate normal import behavior.
+        - Asserts that the main function is not called during import, ensuring correct __main__ guard usage.
+        """
         with patch("src.__main__.main") as mock_main:
             import src.__main__
 
@@ -31,7 +40,14 @@ class TestMainFunction:
             mock_main.assert_not_called()
 
     def test_main_module_direct_call(self):
-        """Test direct call to main function."""
+        """
+        Test the behavior when the main() function is called directly.
+        - Mocks the main function and the ArgumentParser to simulate command-line argument parsing.
+        - Sets up mock arguments to simulate a 'build' operation with a test project name.
+        - Mocks the ProjectManager class and its instance, including a dummy builtin_operations dict.
+        - Calls self.main() to simulate direct execution.
+        - Asserts that the mocked main function is not called recursively, ensuring correct entry point logic.
+        """
         with patch("src.__main__.main") as mock_project_main:
             with patch("src.__main__.argparse.ArgumentParser") as mock_parser_class:
                 mock_parser = MagicMock()

@@ -16,6 +16,12 @@ class ProjectManager:
     Project management utility class. All methods are static and stateless.
     """
 
+    OPERATION_META: dict[str, dict] = {
+        # Example: set to True if the operation needs repositories
+        # "some_operation": {"needs_repositories": True},
+        # Other operations...
+    }
+
     def __init__(self):
         raise NotImplementedError(
             "ProjectManager is a utility class and cannot be instantiated."

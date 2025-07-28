@@ -18,6 +18,14 @@ class PatchOverride:
     Patch and override utility class. All methods are static and stateless.
     """
 
+    OPERATION_META = {
+        "po_apply": {"needs_repositories": True},
+        "po_revert": {"needs_repositories": True},
+        "po_new": {"needs_repositories": True},
+        "po_del": {"needs_repositories": False},
+        "po_list": {"needs_repositories": False},
+    }
+
     def __init__(self):
         raise NotImplementedError(
             "PatchOverride is a utility class and cannot be instantiated."
@@ -33,7 +41,6 @@ class PatchOverride:
             project_name (str): Project name.
         Returns:
             bool: True if success, otherwise False.
-        @needs_repositories
         """
         vprojects_path = env["vprojects_path"]
         log.info("start po_apply for project: '%s'", project_name)
@@ -281,7 +288,6 @@ class PatchOverride:
             project_name (str): Project name.
         Returns:
             bool: True if success, otherwise False.
-        @needs_repositories
         """
         vprojects_path = env["vprojects_path"]
         log.info("start po_revert for project: '%s'", project_name)
@@ -606,7 +612,6 @@ class PatchOverride:
             force (bool): If True, skip confirmation prompt.
         Returns:
             bool: True if success, otherwise False.
-        @needs_repositories
         """
         log.info("start po_new for project: '%s', po_name: '%s'", project_name, po_name)
         if not re.match(r"^po[a-z0-9_]*$", po_name):

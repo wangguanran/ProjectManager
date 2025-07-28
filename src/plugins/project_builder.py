@@ -17,6 +17,14 @@ class ProjectBuilder:
     Project build utility class. All methods are static and stateless.
     """
 
+    OPERATION_META = {
+        "project_diff": {"needs_repositories": True},
+        "project_pre_build": {"needs_repositories": False},
+        "project_do_build": {"needs_repositories": False},
+        "project_post_build": {"needs_repositories": False},
+        "project_build": {"needs_repositories": False},
+    }
+
     def __init__(self):
         raise NotImplementedError(
             "ProjectBuilder is a utility class and cannot be instantiated."
@@ -29,7 +37,6 @@ class ProjectBuilder:
         Patch files are named changes_worktree.patch and changes_staged.patch.
         If single repo, do not create root subdirectory, put files directly under after, before, etc.
         Diff directory is .cache/build/{project_name}/{timestamp}/diff
-        @needs_repositories
         """
         _ = env
         _ = projects_info
@@ -133,7 +140,8 @@ class ProjectBuilder:
                 shutil.rmtree(dpath)
             os.makedirs(dpath, exist_ok=True)
 
-        for repo_path, repo_name in repositories:
+        for idx, (repo_path, repo_name) in enumerate(repositories):
+            print("Processing repo %d/%d: %s" % (idx + 1, len(repositories), repo_name))
             original_cwd = os.getcwd()
             os.chdir(repo_path)
             staged_files = (

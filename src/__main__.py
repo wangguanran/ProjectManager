@@ -463,6 +463,24 @@ def check_and_create_vprojects(vprojects_path):
             sys.exit(0)
 
 
+def get_operation_meta_flag(func, operate, key):
+    """
+    Retrieve a boolean flag from operation metadata for a given function, operation name, and config key.
+    Checks class and parent classes' OPERATION_META only.
+    """
+    cls = getattr(func, "__self__", None)
+    if cls is None:
+        return False
+    # For bound instance methods, get the class
+    if not isinstance(cls, type):
+        cls = cls.__class__
+    for base in cls.__mro__:
+        operation_meta = getattr(base, "OPERATION_META", None)
+        if operation_meta and operate in operation_meta:
+            return bool(operation_meta[operate].get(key, False))
+    return False
+
+
 def main():
     """Main entry point for the CLI project manager."""
     log.debug("sys.argv: %s", sys.argv)
@@ -526,8 +544,7 @@ def main():
             )
             log.error("Required parameters: %s", ", ".join(required_cli_params))
             sys.exit(1)
-        # Lazy load repositories if needed
-        if op_info.get("needs_repositories"):
+        if get_operation_meta_flag(func, operate, "needs_repositories"):
             env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
