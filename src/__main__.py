@@ -20,10 +20,13 @@ from src.log_manager import log
 from src.plugins.patch_override import PatchOverride
 from src.plugins.project_builder import ProjectBuilder
 from src.plugins.project_manager import ProjectManager
+from src.profiler import func_cprofile, func_time
 from src.utils import get_version
 
 
 # ===== Migration utility functions =====
+@func_time
+@func_cprofile
 def _load_all_projects(vprojects_path):
     exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
     if not os.path.exists(vprojects_path):
@@ -162,6 +165,8 @@ def _load_all_projects(vprojects_path):
     return projects_info
 
 
+@func_time
+@func_cprofile
 def _load_plugin_operations(plugin_classes):
     """
     Generic plugin loading function, only supports class plugins (only collects static methods and class methods).
@@ -211,11 +216,14 @@ def _load_plugin_operations(plugin_classes):
     return operations
 
 
+@func_time
 def _load_builtin_plugin_operations():
     plugin_classes = [ProjectManager, PatchOverride, ProjectBuilder]
     return _load_plugin_operations(plugin_classes)
 
 
+@func_time
+@func_cprofile
 def _load_platform_plugin_operations(vprojects_path):
     scripts_dir = os.path.join(vprojects_path, "scripts")
     plugin_classes = []
@@ -242,6 +250,7 @@ def _load_platform_plugin_operations(vprojects_path):
     return _load_plugin_operations(plugin_classes)
 
 
+@func_time
 def _parse_args_and_plugin_args(builtin_operations):
     def get_supported_flags(sig):
         return [
@@ -375,6 +384,8 @@ def _parse_args_and_plugin_args(builtin_operations):
     return operate, name, parsed_args, parsed_kwargs, args_dict
 
 
+@func_time
+@func_cprofile
 def _find_repositories():
     """
     Return a list of (repo_path, repo_name) for all git repositories in current dir or .repo manifest.
@@ -407,6 +418,7 @@ def _find_repositories():
     return repositories
 
 
+@func_time
 def check_and_create_vprojects(vprojects_path):
     """Check if vprojects directory exists, prompt user and create if needed."""
     if not os.path.exists(vprojects_path):
@@ -466,6 +478,7 @@ def check_and_create_vprojects(vprojects_path):
             sys.exit(0)
 
 
+@func_time
 def get_operation_meta_flag(func, operate, key):
     """
     Retrieve a boolean flag from operation metadata for a given function, operation name, and config key.
@@ -491,6 +504,8 @@ def get_operation_meta_flag(func, operate, key):
     return False
 
 
+@func_time
+@func_cprofile
 def main():
     """Main entry point for the CLI project manager."""
     log.debug("sys.argv: %s", sys.argv)
