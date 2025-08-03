@@ -196,6 +196,8 @@ def _load_plugin_operations(plugin_classes):
             needs_repositories = (
                 "@needs_repositories" in docstring if docstring else False
             )
+            # Attach plugin class to function for metadata access
+            setattr(func, "_plugin_class", plugin_cls)
             operations[method_name] = {
                 "func": func,
                 "desc": desc,
@@ -204,6 +206,7 @@ def _load_plugin_operations(plugin_classes):
                 "required_params": required_params,
                 "required_count": len(required_params),
                 "needs_repositories": needs_repositories,
+                "plugin_class": plugin_cls,  # Store the original plugin class for metadata access
             }
     return operations
 
@@ -463,6 +466,31 @@ def check_and_create_vprojects(vprojects_path):
             sys.exit(0)
 
 
+def get_operation_meta_flag(func, operate, key):
+    """
+    Retrieve a boolean flag from operation metadata for a given function, operation name, and config key.
+    Checks class and parent classes' OPERATION_META only.
+    """
+    # Try to get the plugin class from the function's metadata first
+    plugin_class = getattr(func, "_plugin_class", None)
+    if plugin_class is None:
+        # Fallback to the old method for backward compatibility
+        cls = getattr(func, "__self__", None)
+        if cls is None:
+            return False
+        # For bound instance methods, get the class
+        if not isinstance(cls, type):
+            cls = cls.__class__
+        plugin_class = cls
+
+    # Search through the class hierarchy for OPERATION_META
+    for base in plugin_class.__mro__:
+        operation_meta = getattr(base, "OPERATION_META", None)
+        if operation_meta and operate in operation_meta:
+            return bool(operation_meta[operate].get(key, False))
+    return False
+
+
 def main():
     """Main entry point for the CLI project manager."""
     log.debug("sys.argv: %s", sys.argv)
@@ -526,8 +554,10 @@ def main():
             )
             log.error("Required parameters: %s", ", ".join(required_cli_params))
             sys.exit(1)
-        # Lazy load repositories if needed
-        if op_info.get("needs_repositories"):
+        if get_operation_meta_flag(func, operate, "needs_repositories"):
+            log.info(
+                "Operation '%s' requires repositories, loading repositories...", operate
+            )
             env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
