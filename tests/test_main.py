@@ -689,3 +689,333 @@ LEVEL4_SETTING=level4_value
                 return True
 
         return AssertRaisesContext(exception_class)
+
+
+class TestPluginOperations:
+    """Test cases for plugin operation loading functions."""
+
+    def setup_method(self):
+        """Set up test environment for each test case."""
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.__main__ import (
+            _load_builtin_plugin_operations,
+            _load_platform_plugin_operations,
+            _load_plugin_operations,
+        )
+
+        self._load_plugin_operations = _load_plugin_operations
+        self._load_builtin_plugin_operations = _load_builtin_plugin_operations
+        self._load_platform_plugin_operations = _load_platform_plugin_operations
+        self.temp_dir = None
+
+    def teardown_method(self):
+        """Clean up test environment after each test case."""
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _create_temp_vprojects_structure(self):
+        """Create a temporary vprojects directory structure for testing."""
+        self.temp_dir = tempfile.mkdtemp()
+        vprojects_path = os.path.join(self.temp_dir, "vprojects")
+        os.makedirs(vprojects_path)
+        return vprojects_path
+
+    def _create_test_plugin_class(self):
+        """Create a test plugin class with various method types."""
+
+        class TestPlugin:
+            """Test plugin class for testing plugin loading functionality."""
+
+            def __init__(self):
+                pass  # pylint: disable=unnecessary-pass
+
+            @staticmethod
+            def static_method_no_doc(env, projects_info, project_name):
+                """Static method without detailed docstring."""
+                pass  # pylint: disable=unnecessary-pass
+
+            @staticmethod
+            def static_method_with_doc(
+                env, projects_info, project_name, flag1=False, flag2=True
+            ):
+                """
+                Static method with detailed docstring.
+                flag1 (bool): First flag description
+                flag2 (bool): Second flag description
+                """
+                pass  # pylint: disable=unnecessary-pass
+
+            @staticmethod
+            def static_method_needs_repos(env, projects_info, project_name):
+                """
+                Static method that needs repositories.
+                @needs_repositories
+                """
+                pass  # pylint: disable=unnecessary-pass
+
+            @classmethod
+            def class_method(cls, env, projects_info, project_name):
+                """Class method for testing."""
+                pass  # pylint: disable=unnecessary-pass
+
+            def instance_method(self, env, projects_info, project_name):
+                """Instance method that should be ignored."""
+                pass  # pylint: disable=unnecessary-pass
+
+            def _private_method(self, env, projects_info, project_name):
+                """Private method that should be ignored."""
+                pass  # pylint: disable=unnecessary-pass
+
+        return TestPlugin
+
+    def test_load_plugin_operations_empty_list(self):
+        """Test loading plugin operations from empty class list."""
+        result = self._load_plugin_operations([])
+        assert not result
+
+    def test_load_plugin_operations_single_class(self):
+        """Test loading plugin operations from a single class."""
+        test_plugin = self._create_test_plugin_class()
+        result = self._load_plugin_operations([test_plugin])
+
+        # Should load static and class methods, but not instance or private methods
+        assert len(result) == 4
+        assert "static_method_no_doc" in result
+        assert "static_method_with_doc" in result
+        assert "static_method_needs_repos" in result
+        assert "class_method" in result
+        assert "instance_method" not in result
+        assert "_private_method" not in result
+
+    def test_load_plugin_operations_method_metadata(self):
+        """Test that method metadata is correctly extracted."""
+        test_plugin = self._create_test_plugin_class()
+        result = self._load_plugin_operations([test_plugin])
+
+        # Test static_method_no_doc
+        static_no_doc = result["static_method_no_doc"]
+        assert static_no_doc["desc"] == "Static method without detailed docstring."
+        assert static_no_doc["params"] == ["env", "projects_info", "project_name"]
+        assert static_no_doc["param_count"] == 3
+        assert static_no_doc["required_params"] == [
+            "env",
+            "projects_info",
+            "project_name",
+        ]
+        assert static_no_doc["required_count"] == 3
+        assert not static_no_doc["needs_repositories"]
+        assert static_no_doc["plugin_class"] == test_plugin
+
+        # Test static_method_with_doc
+        static_with_doc = result["static_method_with_doc"]
+        assert static_with_doc["desc"] == "Static method with detailed docstring."
+        assert static_with_doc["params"] == [
+            "env",
+            "projects_info",
+            "project_name",
+            "flag1",
+            "flag2",
+        ]
+        assert static_with_doc["param_count"] == 5
+        assert static_with_doc["required_params"] == [
+            "env",
+            "projects_info",
+            "project_name",
+        ]
+        assert static_with_doc["required_count"] == 3
+        assert not static_with_doc["needs_repositories"]
+
+        # Test static_method_needs_repos
+        static_needs_repos = result["static_method_needs_repos"]
+        assert static_needs_repos["needs_repositories"] is True
+
+    def test_load_builtin_plugin_operations(self):
+        """Test loading builtin plugin operations."""
+        result = self._load_builtin_plugin_operations()
+
+        # Should load operations from ProjectManager, PatchOverride, and ProjectBuilder
+        assert len(result) > 0
+
+        # Check for some expected operations
+        expected_operations = [
+            "project_new",
+            "project_del",
+            "board_new",
+            "board_del",  # ProjectManager
+            "po_apply",
+            "po_revert",
+            "po_new",
+            "po_del",
+            "po_list",  # PatchOverride
+            "project_diff",
+            "project_pre_build",
+            "project_do_build",
+            "project_post_build",
+            "project_build",  # ProjectBuilder
+        ]
+
+        for operation in expected_operations:
+            if operation in result:
+                assert "func" in result[operation]
+                assert "desc" in result[operation]
+                assert "params" in result[operation]
+                assert "plugin_class" in result[operation]
+
+    def test_load_platform_plugin_operations_no_scripts_dir(self):
+        """Test loading platform plugin operations when scripts directory doesn't exist."""
+        vprojects_path = self._create_temp_vprojects_structure()
+        result = self._load_platform_plugin_operations(vprojects_path)
+        assert not result
+
+    def test_load_platform_plugin_operations_empty_scripts_dir(self):
+        """Test loading platform plugin operations from empty scripts directory."""
+        vprojects_path = self._create_temp_vprojects_structure()
+        scripts_dir = os.path.join(vprojects_path, "scripts")
+        os.makedirs(scripts_dir)
+
+        result = self._load_platform_plugin_operations(vprojects_path)
+        assert not result
+
+    def test_load_platform_plugin_operations_valid_script(self):
+        """Test loading platform plugin operations from valid script file."""
+        vprojects_path = self._create_temp_vprojects_structure()
+        scripts_dir = os.path.join(vprojects_path, "scripts")
+        os.makedirs(scripts_dir)
+
+        # Create a valid platform script
+        script_content = '''
+class PlatformPlugin:
+    """Test platform plugin class."""
+
+    @staticmethod
+    def platform_operation(env, projects_info, project_name):
+        """Platform operation for testing."""
+        pass
+
+    @staticmethod
+    def another_operation(env, projects_info, project_name, flag=False):
+        """Another platform operation."""
+        pass
+
+    def _private_method(self):
+        """Private method that should be ignored."""
+        pass
+'''
+        script_path = os.path.join(scripts_dir, "platform_builder.py")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script_content)
+
+        result = self._load_platform_plugin_operations(vprojects_path)
+
+        assert len(result) == 2
+        assert "platform_operation" in result
+        assert "another_operation" in result
+        assert "_private_method" not in result
+
+        # Check metadata
+        platform_op = result["platform_operation"]
+        assert platform_op["desc"] == "Platform operation for testing."
+        assert platform_op["params"] == ["env", "projects_info", "project_name"]
+        assert platform_op["required_count"] == 3
+
+        another_op = result["another_operation"]
+        assert another_op["desc"] == "Another platform operation."
+        assert another_op["params"] == ["env", "projects_info", "project_name", "flag"]
+        assert another_op["required_count"] == 3
+
+    def test_load_platform_plugin_operations_invalid_script(self):
+        """Test loading platform plugin operations with invalid script."""
+        vprojects_path = self._create_temp_vprojects_structure()
+        scripts_dir = os.path.join(vprojects_path, "scripts")
+        os.makedirs(scripts_dir)
+
+        # Create an invalid script that will cause import error
+        script_content = """
+import nonexistent_module
+
+class PlatformPlugin:
+    @staticmethod
+    def platform_operation(env, projects_info, project_name):
+        pass
+"""
+        script_path = os.path.join(scripts_dir, "invalid_script.py")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script_content)
+
+        result = self._load_platform_plugin_operations(vprojects_path)
+        # Should return empty dict due to import error
+        assert not result
+
+    def test_load_platform_plugin_operations_underscore_file(self):
+        """Test that files starting with underscore are ignored."""
+        vprojects_path = self._create_temp_vprojects_structure()
+        scripts_dir = os.path.join(vprojects_path, "scripts")
+        os.makedirs(scripts_dir)
+
+        # Create a script with underscore prefix
+        script_content = """
+class PlatformPlugin:
+    @staticmethod
+    def platform_operation(env, projects_info, project_name):
+        pass
+"""
+        script_path = os.path.join(scripts_dir, "_private_script.py")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script_content)
+
+        result = self._load_platform_plugin_operations(vprojects_path)
+        # Should return empty dict as underscore files are ignored
+        assert not result
+
+    def test_load_platform_plugin_operations_non_py_file(self):
+        """Test that non-Python files are ignored."""
+        vprojects_path = self._create_temp_vprojects_structure()
+        scripts_dir = os.path.join(vprojects_path, "scripts")
+        os.makedirs(scripts_dir)
+
+        # Create a non-Python file
+        script_path = os.path.join(scripts_dir, "config.txt")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("This is not a Python file")
+
+        result = self._load_platform_plugin_operations(vprojects_path)
+        # Should return empty dict as non-Python files are ignored
+        assert not result
+
+    def test_load_plugin_operations_needs_repositories_detection(self):
+        """Test detection of @needs_repositories in docstrings."""
+
+        class RepoPlugin:
+            """Test plugin class for testing @needs_repositories detection."""
+
+            @staticmethod
+            def needs_repos_method(env, projects_info, project_name):
+                """
+                Method that needs repositories.
+                @needs_repositories
+                """
+                pass  # pylint: disable=unnecessary-pass
+
+            @staticmethod
+            def no_repos_method(env, projects_info, project_name):
+                """
+                Method that doesn't need repositories.
+                """
+                pass  # pylint: disable=unnecessary-pass
+
+            @staticmethod
+            def partial_needs_repos_method(env, projects_info, project_name):
+                """
+                Method with @needs_repositories in middle of docstring.
+                Some description here.
+                @needs_repositories
+                More description.
+                """
+                pass  # pylint: disable=unnecessary-pass
+
+        result = self._load_plugin_operations([RepoPlugin])
+
+        assert len(result) == 3
+        assert result["needs_repos_method"]["needs_repositories"] is True
