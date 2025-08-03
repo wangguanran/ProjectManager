@@ -76,7 +76,14 @@ class ProjectBuilder:
                         # For directories, copy the entire directory tree
                         if os.path.exists(out_file):
                             shutil.rmtree(out_file)
-                        shutil.copytree(abs_file, out_file)
+
+                        # Exclude .git directory when copying
+                        def ignore_git(directory, files):
+                            _ = directory
+                            _ = files
+                            return [".git"]
+
+                        shutil.copytree(abs_file, out_file, ignore=ignore_git)
             else:
                 if is_tracked(repo_path, file_path):
                     with open(out_file, "wb") as f:
