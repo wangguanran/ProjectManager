@@ -70,7 +70,13 @@ class ProjectBuilder:
             os.makedirs(os.path.dirname(out_file), exist_ok=True)
             if ref is None:
                 if os.path.exists(abs_file):
-                    shutil.copy2(abs_file, out_file)
+                    if os.path.isfile(abs_file):
+                        shutil.copy2(abs_file, out_file)
+                    elif os.path.isdir(abs_file):
+                        # For directories, copy the entire directory tree
+                        if os.path.exists(out_file):
+                            shutil.rmtree(out_file)
+                        shutil.copytree(abs_file, out_file)
             else:
                 if is_tracked(repo_path, file_path):
                     with open(out_file, "wb") as f:
