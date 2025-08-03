@@ -86,14 +86,43 @@ class ProjectBuilder:
                         shutil.copytree(abs_file, out_file, ignore=ignore_git)
             else:
                 if is_tracked(repo_path, file_path):
-                    with open(out_file, "wb") as f:
-                        subprocess.run(
-                            ["git", "show", f"{ref}:{file_path}"],
+                    try:
+                        # Check if this is a submodule
+                        result = subprocess.run(
+                            ["git", "ls-files", "--stage", file_path],
                             cwd=repo_path,
-                            stdout=f,
+                            stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL,
                             check=True,
                         )
+                        mode = result.stdout.decode().split()[0]
+
+                        if mode == "160000":  # This is a submodule
+                            # For submodules, create a file with the commit hash
+                            commit_hash = (
+                                subprocess.check_output(
+                                    ["git", "rev-parse", f"{ref}:{file_path}"],
+                                    cwd=repo_path,
+                                    stderr=subprocess.DEVNULL,
+                                )
+                                .decode()
+                                .strip()
+                            )
+                            with open(out_file, "w", encoding="utf-8") as f:
+                                f.write(f"Subproject commit {commit_hash}\n")
+                        else:
+                            # Regular file
+                            with open(out_file, "wb") as f:
+                                subprocess.run(
+                                    ["git", "show", f"{ref}:{file_path}"],
+                                    cwd=repo_path,
+                                    stdout=f,
+                                    stderr=subprocess.DEVNULL,
+                                    check=True,
+                                )
+                    except subprocess.CalledProcessError:
+                        # File doesn't exist in the specified ref, skip it
+                        pass
 
         def save_patch(repo_path, file_paths, out_dir, patch_name, staged=False):
             out_file = os.path.join(out_dir, patch_name)
