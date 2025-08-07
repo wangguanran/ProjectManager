@@ -45,7 +45,12 @@ class ProjectBuilder:
         safe_project_name = "".join(
             c if c.isalnum() or c in ("-", "_") else "_" for c in str(project_name)
         )
-        diff_root = os.path.join(".cache", "build", safe_project_name, ts, "diff")
+
+        # Use absolute path to create diff_root in project root directory
+        root_dir = os.getcwd()  # Store project root directory
+        diff_root = os.path.join(
+            root_dir, ".cache", "build", safe_project_name, ts, "diff")
+        log.debug("Diff root directory: %s", diff_root)
         os.makedirs(diff_root, exist_ok=True)
 
         repositories = env.get("repositories", [])
