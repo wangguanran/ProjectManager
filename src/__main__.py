@@ -522,7 +522,7 @@ def main():
         "vprojects_path": vprojects_path,
         # "repositories": _find_repositories(),  # lazy loading
     }
-    log.debug("env:\n%s", json.dumps(env, indent=4, ensure_ascii=False))
+    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 
     projects_info = _load_all_projects(env["vprojects_path"])
     log.debug("Loaded %d projects.", len(projects_info))
