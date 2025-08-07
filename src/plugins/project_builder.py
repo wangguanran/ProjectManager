@@ -49,7 +49,8 @@ class ProjectBuilder:
         # Use absolute path to create diff_root in project root directory
         root_dir = os.getcwd()  # Store project root directory
         diff_root = os.path.join(
-            root_dir, ".cache", "build", safe_project_name, ts, "diff")
+            root_dir, ".cache", "build", safe_project_name, ts, "diff"
+        )
         log.debug("Diff root directory: %s", diff_root)
         os.makedirs(diff_root, exist_ok=True)
 
@@ -130,16 +131,27 @@ class ProjectBuilder:
                         pass
 
         def save_patch(repo_path, file_paths, out_dir, patch_name, staged=False):
-            out_file = os.path.join(out_dir, patch_name)
-            os.makedirs(os.path.dirname(out_file), exist_ok=True)
             if staged:
                 cmd = ["git", "diff", "--cached"] + file_paths
             else:
                 cmd = ["git", "diff"] + file_paths
-            with open(out_file, "w", encoding="utf-8") as f:
-                subprocess.run(
-                    cmd, cwd=repo_path, stdout=f, stderr=subprocess.DEVNULL, check=True
-                )
+
+            # Get diff content first
+            result = subprocess.run(
+                cmd,
+                cwd=repo_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            patch_content = result.stdout.decode("utf-8")
+
+            # Only create file if patch content is not empty
+            if patch_content.strip():
+                out_file = os.path.join(out_dir, patch_name)
+                os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                with open(out_file, "w", encoding="utf-8") as f:
+                    f.write(patch_content)
 
         def save_commits(repo_path, out_dir):
             try:
