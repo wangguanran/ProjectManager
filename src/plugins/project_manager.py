@@ -60,17 +60,63 @@ class ProjectManager:
                 lines = lines[:-1]
             return lines
 
-        project_cfg = projects_info.get(project_name, {})
-        board_name = project_cfg.get("board_name")
-        board_path = project_cfg.get("board_path")
-        ini_file = project_cfg.get("ini_file")
+        def find_board_for_project(project_name, projects_info):
+            """
+            Find the appropriate board for a new project based on parent project or project name pattern.
+            """
+            # First, try to find parent project to determine board
+            parent = find_parent_project(project_name)
+            if parent:
+                # If project name suggests a parent (contains "-"),
+                # the parent MUST exist in projects_info
+                if parent in projects_info:
+                    parent_cfg = projects_info[parent]
+                    return (
+                        parent_cfg.get("board_name"),
+                        parent_cfg.get("board_path"),
+                        parent_cfg.get("ini_file"),
+                    )
+                return None, None, None
+
+            # If no parent found, try to infer board from project name pattern
+            # Look for existing projects with similar naming patterns
+            for existing_project, project_info in projects_info.items():
+                if project_name.startswith(existing_project + "-"):
+                    return (
+                        project_info.get("board_name"),
+                        project_info.get("board_path"),
+                        project_info.get("ini_file"),
+                    )
+            # No fallback strategy - if we can't determine board, return None
+            return None, None, None
+
+        # Find board information for the new project
+        board_name, board_path, ini_file = find_board_for_project(
+            project_name, projects_info
+        )
         if not project_name:
             log.error("Project name must be provided.")
             print("Error: Project name must be provided.")
             return False
         if not board_name or not board_path:
-            log.error("Board info missing for project '%s'", project_name)
-            print(f"Error: Board info missing for project '{project_name}'.")
+            log.error(
+                "Cannot determine board for project '%s'. Please ensure:", project_name
+            )
+            print(
+                f"Error: Cannot determine board for project '{project_name}'. Please ensure:"
+            )
+            if "-" in project_name:
+                parent = find_parent_project(project_name)
+                print(f"  1. Parent project '{parent}' exists in projects_info")
+                print(
+                    "  2. The parent project is properly configured with board information"
+                )
+            else:
+                print(
+                    "  1. The project has a parent project that exists in projects_info"
+                )
+                print("  2. The project name follows the pattern 'parent-project'")
+                print("  3. There are available board directories in vprojects")
             return False
         if not os.path.isdir(board_path):
             log.error(
