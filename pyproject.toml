@@ -69,8 +69,10 @@ addopts = [
     "--strict-config",
     "--cov=src",
     "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
+    "--cov-branch",
+    "--verbose",
+    "--tb=short",
+    "--maxfail=5"
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
