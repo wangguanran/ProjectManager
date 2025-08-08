@@ -2,10 +2,9 @@
 Tests for project_manager functions.
 """
 
+import configparser
 import os
 import sys
-import tempfile
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -776,7 +775,7 @@ class TestProjectNew:
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
         ini_file = board_dir / "board01.ini"
-        ini_file.write_text("[board01]\n" "[parent_project]\n" "PROJECT_NAME=parent\n")
+        ini_file.write_text("[board01]\n[parent_project]\nPROJECT_NAME=parent\n")
 
         projects_info = {
             "parent_project": {
@@ -1253,7 +1252,7 @@ class TestProjectNew:
             )
             # Should handle config parser errors gracefully
             assert result is False
-        except Exception:
+        except (ValueError, TypeError, OSError, configparser.MissingSectionHeaderError):
             # Expected behavior when INI file is malformed
             pass
 
@@ -1933,7 +1932,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[test_board]\n")
 
         result = self.ProjectManager.project_new(env, projects_info, "test_board")
@@ -1953,7 +1954,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with existing project
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project-child]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -1995,7 +1998,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[existing-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2018,7 +2023,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write(
                 "# Section comment\n[parent-project]\n# Option comment\nPROJECT_NAME=test\n"
             )
@@ -2042,7 +2049,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with content that will trigger current_section logic
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write(
                 "[parent-project]\nPROJECT_NAME=test\n# Some content after section\n"
             )
@@ -2066,7 +2075,9 @@ class TestBoardNew:
 
         # Create board directory and empty ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("")  # Empty file
 
         result = self.ProjectManager.project_new(
@@ -2088,7 +2099,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with existing sections
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[existing-section]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2110,7 +2123,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2133,7 +2148,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\n# Comment\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2155,7 +2172,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with section comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("# Section comment\n[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2177,7 +2196,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with leading empty lines
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("\n\n\n[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2199,7 +2220,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[existing-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2222,7 +2245,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[test_board]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(env, projects_info, "test_board")
@@ -2242,7 +2267,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with option comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\n# Option comment\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2264,7 +2291,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with section comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("# Section comment\n[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2286,7 +2315,9 @@ class TestBoardNew:
 
         # Create board directory and empty ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("")  # Empty file
 
         result = self.ProjectManager.project_new(
@@ -2308,7 +2339,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2331,7 +2364,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with trailing empty lines
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n\n\n\n")
 
         result = self.ProjectManager.project_new(
@@ -2353,7 +2388,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[other-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2363,7 +2400,7 @@ class TestBoardNew:
         # Should fail because parent-project is not in projects_info
         assert result is False
 
-    def test_project_new_project_name_validation_error_messages(self, tmp_path):
+    def test_project_new_project_name_validation_error_messages(self):
         """Test project_new error messages for project name validation (lines 98-100)."""
         env = {}
         projects_info = {}
@@ -2372,7 +2409,7 @@ class TestBoardNew:
 
         assert result is False
 
-    def test_project_new_parent_project_error_messages(self, tmp_path):
+    def test_project_new_parent_project_error_messages(self):
         """Test project_new error messages for parent project validation (lines 109-111)."""
         env = {}
         projects_info = {}
@@ -2397,7 +2434,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2420,7 +2459,9 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(
@@ -2442,7 +2483,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with multiple sections
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[section1]\nPROJECT_NAME=test1\n[section2]\nPROJECT_NAME=test2\n")
 
         result = self.ProjectManager.project_new(
@@ -2464,7 +2507,9 @@ class TestBoardNew:
 
         # Create board directory and ini file with multiple sections
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[section1]\nPROJECT_NAME=test1\n[section2]\nPROJECT_NAME=test2\n")
 
         result = self.ProjectManager.project_new(
@@ -2622,14 +2667,16 @@ class TestBoardDel:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_del(env, projects_info, "parent-project")
 
         assert result is True
 
-    def test_project_del_empty_project_name_validation(self, tmp_path):
+    def test_project_del_empty_project_name_validation(self):
         """Test project_del empty project name validation (lines 278-280)."""
         env = {}
         projects_info = {}
@@ -2638,7 +2685,7 @@ class TestBoardDel:
 
         assert result is False
 
-    def test_project_del_missing_board_info_validation(self, tmp_path):
+    def test_project_del_missing_board_info_validation(self):
         """Test project_del missing board info validation (lines 282-284)."""
         env = {}
         projects_info = {
@@ -2677,7 +2724,9 @@ class TestBoardDel:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(str(tmp_path / "test_board" / "config.ini"), "w") as f:
+        with open(
+            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
+        ) as f:
             f.write("[test_board]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_del(env, projects_info, "test_board")
