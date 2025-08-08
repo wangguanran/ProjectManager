@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-class TestProjectNewParameterValidation:
-    """Test cases for project_new parameter validation."""
+class TestProjectNew:
+    """Test cases for project_new method - merged from multiple test classes."""
 
     def setup_method(self):
         """Set up test environment for each test case."""
@@ -91,19 +91,6 @@ class TestProjectNewParameterValidation:
             # Verify that AttributeError is raised for invalid projects_info type
             pass
 
-
-class TestProjectNewBoardNameConflict:
-    """Test cases for project_new board name conflict scenarios."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_same_as_board_name(self):
         """Test project_new when project name is same as board name."""
         env = {}
@@ -153,19 +140,6 @@ class TestProjectNewBoardNameConflict:
         result = self.ProjectManager.project_new(env, projects_info, "board-test")
 
         assert result is False
-
-
-class TestProjectNewBoardInfoLookup:
-    """Test cases for project_new board information lookup."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_new_parent_project_exists(self):
         """Test project_new when parent project exists."""
@@ -270,19 +244,6 @@ class TestProjectNewBoardInfoLookup:
         assert result is False
         # This should trigger the "no fallback strategy" path
 
-
-class TestProjectNewBoardDirectoryValidation:
-    """Test cases for project_new board directory validation."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_board_directory_exists(self, tmp_path):
         """Test project_new when board directory exists."""
         env = {}
@@ -312,19 +273,6 @@ class TestProjectNewBoardDirectoryValidation:
         assert "[parent_project-child]" in content
         assert "PROJECT_NAME = parent_project-child" in content
         # Verify that board directory validation worked correctly
-
-
-class TestProjectNewConfigInheritance:
-    """Test cases for project_new configuration inheritance."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_new_single_level_inheritance(self, tmp_path):
         """Test project_new with single level inheritance."""
@@ -543,19 +491,6 @@ class TestProjectNewConfigInheritance:
             # Restore file permissions for cleanup
             ini_file.chmod(0o644)
 
-
-class TestProjectNewDuplicateProject:
-    """Test cases for project_new duplicate project scenarios."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_project_already_exists(self, tmp_path):
         """Test project_new when project already exists in INI file."""
         env = {}
@@ -624,19 +559,6 @@ class TestProjectNewDuplicateProject:
         )
 
         assert result is True
-
-
-class TestProjectNewIniFileOperations:
-    """Test cases for project_new INI file operations."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_new_file_read_operation(self, tmp_path):
         """Test project_new file read operation."""
@@ -902,19 +824,6 @@ class TestProjectNewIniFileOperations:
         assert result is True
         # This should test the merged config value object handling
 
-
-class TestProjectNewProjectNameGeneration:
-    """Test cases for project_new project name generation."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_basic_project_name(self, tmp_path):
         """Test project_new with basic project name generation."""
         env = {}
@@ -1041,19 +950,6 @@ class TestProjectNewProjectNameGeneration:
         # Check that the project name includes both chip and customer names
         assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
 
-
-class TestProjectNewSuccessCreation:
-    """Test cases for project_new successful creation scenarios."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_complete_flow(self, tmp_path):
         """Test project_new complete successful flow."""
         env = {}
@@ -1169,19 +1065,6 @@ class TestProjectNewSuccessCreation:
         )
         assert result2 is True
 
-
-class TestProjectNewBoundaryConditions:
-    """Test cases for project_new boundary conditions."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_special_characters(self, tmp_path):
         """Test project_new with special characters in project name."""
         env = {}
@@ -1268,19 +1151,6 @@ class TestProjectNewBoundaryConditions:
         )
 
         assert result is True
-
-
-class TestProjectNewErrorHandling:
-    """Test cases for project_new error handling."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_new_file_operation_exception(self, tmp_path):
         """Test project_new with file operation exception."""
@@ -1386,19 +1256,6 @@ class TestProjectNewErrorHandling:
         except Exception:
             # Expected behavior when INI file is malformed
             pass
-
-
-class TestProjectNewIntegration:
-    """Test cases for project_new integration scenarios."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_new_with_existing_projects(self, tmp_path):
         """Test project_new with existing projects in environment."""
@@ -1523,19 +1380,6 @@ class TestProjectNewIntegration:
 
         assert result is True
 
-
-class TestProjectNewIniFileVerification:
-    """Test cases for verifying actual INI file content after project creation."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_verify_ini_file_content(self, tmp_path):
         """Test project_new and verify actual INI file content."""
         env = {}
@@ -1629,7 +1473,7 @@ class TestProjectNewIniFileVerification:
         # So it should have both PROJECT_CHIP_NAME and PROJECT_CUSTOMER
 
 
-class TestProjectDelParameterValidation:
+class TestProjectDel:
     """Test cases for project_del parameter validation."""
 
     def setup_method(self):
@@ -1698,19 +1542,6 @@ class TestProjectDelParameterValidation:
             # Expected behavior when invalid type is passed
             # Verify that AttributeError is raised for invalid projects_info type
             pass
-
-
-class TestProjectDelBoardValidation:
-    """Test cases for project_del board validation scenarios."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_del_board_name_conflict(self):
         """Test project_del when project name is the same as board name."""
@@ -1798,19 +1629,6 @@ class TestProjectDelBoardValidation:
 
         assert result is False
         # This should trigger the board name conflict error
-
-
-class TestProjectDelSuccessScenarios:
-    """Test cases for project_del successful deletion scenarios."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_del_single_project(self, tmp_path):
         """Test project_del with a single project."""
@@ -1975,7 +1793,7 @@ class TestProjectDelSuccessScenarios:
         assert "[board01]" in content
 
 
-class TestBoardNewMethod:
+class TestBoardNew:
     """Test cases for board_new method (currently TODO)."""
 
     def setup_method(self):
@@ -2045,134 +1863,6 @@ class TestBoardNewMethod:
             # Expected behavior for unimplemented method
             pass
 
-
-class TestBoardDelMethod:
-    """Test cases for board_del method (currently TODO)."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
-    def test_board_del_basic_call(self):
-        """Test board_del method basic call (currently TODO)."""
-        env = {}
-        projects_info = {}
-        board_name = "test_board"
-
-        # Currently board_del is not implemented (TODO)
-        # This test verifies that the method exists and can be called
-        # without raising exceptions
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            # Since it's not implemented, it should return None or raise NotImplementedError
-            # For now, we just verify the method can be called
-            assert result is None
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
-
-    def test_board_del_with_different_parameters(self):
-        """Test board_del method with different parameter types."""
-        env = {"test": "value"}
-        projects_info = {"existing": {"board_name": "existing_board"}}
-        board_name = "board_to_delete"
-
-        # Test with different parameter combinations
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is None
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
-
-    def test_board_del_empty_board_name(self):
-        """Test board_del method with empty board name."""
-        env = {}
-        projects_info = {}
-        board_name = ""
-
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is None
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
-
-    def test_board_del_none_board_name(self):
-        """Test board_del method with None board name."""
-        env = {}
-        projects_info = {}
-        board_name = None
-
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is None
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
-
-
-class TestProjectManagerClass:
-    """Test cases for ProjectManager class itself."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
-    def test_project_manager_instantiation(self):
-        """Test that ProjectManager cannot be instantiated."""
-        # ProjectManager should raise NotImplementedError when instantiated
-        with pytest.raises(NotImplementedError):
-            self.ProjectManager()
-
-    def test_project_manager_operation_meta(self):
-        """Test that OPERATION_META is accessible and has correct structure."""
-        # Verify that OPERATION_META is a dictionary
-        assert isinstance(self.ProjectManager.OPERATION_META, dict)
-
-        # Verify that it's empty or contains expected structure
-        # Currently it should be empty based on the implementation
-        assert len(self.ProjectManager.OPERATION_META) == 0
-
-    def test_project_manager_static_methods_exist(self):
-        """Test that all expected static methods exist."""
-        # Verify that all expected methods exist as static methods
-        assert hasattr(self.ProjectManager, "project_new")
-        assert hasattr(self.ProjectManager, "project_del")
-        assert hasattr(self.ProjectManager, "board_new")
-        assert hasattr(self.ProjectManager, "board_del")
-
-        # Verify they are static methods
-        import inspect
-
-        assert inspect.isfunction(self.ProjectManager.project_new)
-        assert inspect.isfunction(self.ProjectManager.project_del)
-        assert inspect.isfunction(self.ProjectManager.board_new)
-        assert inspect.isfunction(self.ProjectManager.board_del)
-
-
-class TestProjectManagerEdgeCases:
-    """Test cases for edge cases and boundary conditions."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
-
     def test_project_new_with_empty_projects_info(self):
         """Test project_new with empty projects_info."""
         env = {}
@@ -2198,31 +1888,6 @@ class TestProjectManagerEdgeCases:
             # Expected behavior when None is passed
             pass
 
-    def test_project_del_with_empty_projects_info(self):
-        """Test project_del with empty projects_info."""
-        env = {}
-        projects_info = {}
-        project_name = "test_project"
-
-        result = self.ProjectManager.project_del(env, projects_info, project_name)
-
-        assert result is False
-        # Verify that empty projects_info is handled gracefully
-        # This test validates that empty projects_info is rejected
-
-    def test_project_del_with_none_projects_info(self):
-        """Test project_del with None projects_info."""
-        env = {}
-        projects_info = None
-        project_name = "test_project"
-
-        try:
-            result = self.ProjectManager.project_del(env, projects_info, project_name)
-            assert result is False
-        except AttributeError:
-            # Expected behavior when None is passed
-            pass
-
     def test_project_new_with_very_long_project_name(self):
         """Test project_new with very long project name."""
         env = {}
@@ -2234,31 +1899,6 @@ class TestProjectManagerEdgeCases:
         assert result is False
         # Verify that very long project names are handled gracefully
         # This test validates that extremely long names are rejected
-
-    def test_project_del_with_very_long_project_name(self):
-        """Test project_del with very long project name."""
-        env = {}
-        projects_info = {}
-        project_name = "a" * 1000  # Very long project name
-
-        result = self.ProjectManager.project_del(env, projects_info, project_name)
-
-        assert result is False
-        # Verify that very long project names are handled gracefully
-        # This test validates that extremely long names are rejected
-
-
-class TestProjectManagerMissingCoverage:
-    """Test cases to cover missing code coverage in project_manager.py."""
-
-    def setup_method(self):
-        """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
-
-        self.ProjectManager = ProjectManager
 
     def test_project_new_ini_file_missing_in_project_new(self, tmp_path):
         """Test project_new when ini_file is missing (line 132-134)."""
@@ -2479,24 +2119,6 @@ class TestProjectManagerMissingCoverage:
 
         # The new project will be added to config, so project_name will be in config
         assert result is True
-
-    def test_project_del_ini_file_missing(self, tmp_path):
-        """Test project_del when ini_file is missing (line 296-298)."""
-        env = {}
-        projects_info = {
-            "test-project": {
-                "board_name": "test_board",
-                "board_path": str(tmp_path / "test_board"),
-                "ini_file": None,  # Missing ini file
-            }
-        }
-
-        # Create board directory
-        os.makedirs(str(tmp_path / "test_board"))
-
-        result = self.ProjectManager.project_del(env, projects_info, "test-project")
-
-        assert result is False
 
     def test_project_new_with_value_objects_that_have_comments(self, tmp_path):
         """Test project_new with config values that have comment attributes (line 216)."""
@@ -2851,6 +2473,132 @@ class TestProjectManagerMissingCoverage:
 
         assert result is True
 
+
+class TestBoardDel:
+    """Test cases for board_del method (currently TODO)."""
+
+    def setup_method(self):
+        """Set up test environment for each test case."""
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.plugins.project_manager import ProjectManager
+
+        self.ProjectManager = ProjectManager
+
+    def test_board_del_basic_call(self):
+        """Test board_del method basic call (currently TODO)."""
+        env = {}
+        projects_info = {}
+        board_name = "test_board"
+
+        # Currently board_del is not implemented (TODO)
+        # This test verifies that the method exists and can be called
+        # without raising exceptions
+        try:
+            result = self.ProjectManager.board_del(env, projects_info, board_name)
+            # Since it's not implemented, it should return None or raise NotImplementedError
+            # For now, we just verify the method can be called
+            assert result is None
+        except NotImplementedError:
+            # Expected behavior for unimplemented method
+            pass
+
+    def test_board_del_with_different_parameters(self):
+        """Test board_del method with different parameter types."""
+        env = {"test": "value"}
+        projects_info = {"existing": {"board_name": "existing_board"}}
+        board_name = "board_to_delete"
+
+        # Test with different parameter combinations
+        try:
+            result = self.ProjectManager.board_del(env, projects_info, board_name)
+            assert result is None
+        except NotImplementedError:
+            # Expected behavior for unimplemented method
+            pass
+
+    def test_board_del_empty_board_name(self):
+        """Test board_del method with empty board name."""
+        env = {}
+        projects_info = {}
+        board_name = ""
+
+        try:
+            result = self.ProjectManager.board_del(env, projects_info, board_name)
+            assert result is None
+        except NotImplementedError:
+            # Expected behavior for unimplemented method
+            pass
+
+    def test_board_del_none_board_name(self):
+        """Test board_del method with None board name."""
+        env = {}
+        projects_info = {}
+        board_name = None
+
+        try:
+            result = self.ProjectManager.board_del(env, projects_info, board_name)
+            assert result is None
+        except NotImplementedError:
+            # Expected behavior for unimplemented method
+            pass
+
+    def test_project_del_with_empty_projects_info(self):
+        """Test project_del with empty projects_info."""
+        env = {}
+        projects_info = {}
+        project_name = "test_project"
+
+        result = self.ProjectManager.project_del(env, projects_info, project_name)
+
+        assert result is False
+        # Verify that empty projects_info is handled gracefully
+        # This test validates that empty projects_info is rejected
+
+    def test_project_del_with_none_projects_info(self):
+        """Test project_del with None projects_info."""
+        env = {}
+        projects_info = None
+        project_name = "test_project"
+
+        try:
+            result = self.ProjectManager.project_del(env, projects_info, project_name)
+            assert result is False
+        except AttributeError:
+            # Expected behavior when None is passed
+            pass
+
+    def test_project_del_with_very_long_project_name(self):
+        """Test project_del with very long project name."""
+        env = {}
+        projects_info = {}
+        project_name = "a" * 1000  # Very long project name
+
+        result = self.ProjectManager.project_del(env, projects_info, project_name)
+
+        assert result is False
+        # Verify that very long project names are handled gracefully
+        # This test validates that extremely long names are rejected
+
+    def test_project_del_ini_file_missing(self, tmp_path):
+        """Test project_del when ini_file is missing (line 296-298)."""
+        env = {}
+        projects_info = {
+            "test-project": {
+                "board_name": "test_board",
+                "board_path": str(tmp_path / "test_board"),
+                "ini_file": None,  # Missing ini file
+            }
+        }
+
+        # Create board directory
+        os.makedirs(str(tmp_path / "test_board"))
+
+        result = self.ProjectManager.project_del(env, projects_info, "test-project")
+
+        assert result is False
+
     def test_project_del_find_all_subprojects_recursive(self, tmp_path):
         """Test project_del find_all_subprojects recursive logic (lines 263-271)."""
         env = {}
@@ -2935,3 +2683,47 @@ class TestProjectManagerMissingCoverage:
         result = self.ProjectManager.project_del(env, projects_info, "test_board")
 
         assert result is False
+
+
+class TestProjectManagerClass:
+    """Test cases for ProjectManager class itself."""
+
+    def setup_method(self):
+        """Set up test environment for each test case."""
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.plugins.project_manager import ProjectManager
+
+        self.ProjectManager = ProjectManager
+
+    def test_project_manager_instantiation(self):
+        """Test that ProjectManager cannot be instantiated."""
+        # ProjectManager should raise NotImplementedError when instantiated
+        with pytest.raises(NotImplementedError):
+            self.ProjectManager()
+
+    def test_project_manager_operation_meta(self):
+        """Test that OPERATION_META is accessible and has correct structure."""
+        # Verify that OPERATION_META is a dictionary
+        assert isinstance(self.ProjectManager.OPERATION_META, dict)
+
+        # Verify that it's empty or contains expected structure
+        # Currently it should be empty based on the implementation
+        assert len(self.ProjectManager.OPERATION_META) == 0
+
+    def test_project_manager_static_methods_exist(self):
+        """Test that all expected static methods exist."""
+        # Verify that all expected methods exist as static methods
+        assert hasattr(self.ProjectManager, "project_new")
+        assert hasattr(self.ProjectManager, "project_del")
+        assert hasattr(self.ProjectManager, "board_new")
+        assert hasattr(self.ProjectManager, "board_del")
+
+        # Verify they are static methods
+        import inspect
+
+        assert inspect.isfunction(self.ProjectManager.project_new)
+        assert inspect.isfunction(self.ProjectManager.project_del)
+        assert inspect.isfunction(self.ProjectManager.board_new)
+        assert inspect.isfunction(self.ProjectManager.board_del)
