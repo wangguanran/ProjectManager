@@ -10,8 +10,6 @@ import os
 import sys
 from unittest.mock import patch
 
-import pytest
-
 
 class TestPatchOverride:
     """Test cases for PatchOverride class."""
@@ -480,7 +478,7 @@ class TestPatchOverrideParseConfig:
         # Assert
         assert apply_pos == ["po1", "po2"]
         assert exclude_pos == set()
-        assert exclude_files == {}
+        assert not exclude_files
 
     def test_parse_po_config_with_exclusions(self):
         """Test parse_po_config with excluded POs."""
@@ -493,7 +491,7 @@ class TestPatchOverrideParseConfig:
         # Assert
         assert apply_pos == ["po1", "po2"]
         assert exclude_pos == {"po3"}
-        assert exclude_files == {}
+        assert not exclude_files
 
     def test_parse_po_config_with_file_exclusions(self):
         """Test parse_po_config with file exclusions."""
@@ -508,7 +506,7 @@ class TestPatchOverrideParseConfig:
         # It treats the entire token as the PO name
         assert apply_pos == ["po1[file1.txt file2.txt]"]
         assert exclude_pos == set()
-        assert exclude_files == {}
+        assert not exclude_files
 
     def test_parse_po_config_complex(self):
         """Test parse_po_config with complex config."""
@@ -535,6 +533,6 @@ class TestPatchOverrideParseConfig:
         apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(po_config)
 
         # Assert
-        assert apply_pos == []
+        assert not apply_pos
         assert exclude_pos == set()
-        assert exclude_files == {}
+        assert not exclude_files

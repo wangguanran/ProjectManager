@@ -11,10 +11,15 @@ from typing import Dict, List
 
 from src.log_manager import log
 from src.operations.registry import register
-from src.profiler import auto_profile
+
+# from src.profiler import auto_profile  # unused
 
 
 def parse_po_config(po_config):
+    """Parse PROJECT_PO_CONFIG string into components.
+
+    Returns a tuple of (apply_pos: list[str], exclude_pos: set[str], exclude_files: dict[str, set[str]]).
+    """
     apply_pos = []
     exclude_pos = set()
     exclude_files = {}
@@ -1345,7 +1350,7 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         apply_pos, exclude_pos, _ = parse_po_config(po_config)
         enabled_pos = {po for po in apply_pos if po not in exclude_pos}
     # Only list POs enabled in configuration
-    po_list = []
+    po_infos = []
     for po_name in sorted(enabled_pos):
         po_path = os.path.join(po_dir, po_name)
         if not os.path.isdir(po_path):
@@ -1373,16 +1378,16 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
             "patch_files": patch_files,
             "override_files": override_files,
         }
-        po_list.append(po_info)
+        po_infos.append(po_info)
     # Print summary
     print(f"\nConfigured PO list for project: {project_name} (board: {board_name})")
-    if not po_list:
+    if not po_infos:
         print("  No configured PO found.")
     elif short:
-        for po in po_list:
+        for po in po_infos:
             print(f"  {po['name']}")
     else:
-        for po in po_list:
+        for po in po_infos:
             print(f"\nPO: {po['name']}")
             print("  patches:")
             if po["patch_files"]:
@@ -1396,4 +1401,4 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
                     print(f"    - {of}")
             else:
                 print("    (none)")
-    return po_list
+    return po_infos

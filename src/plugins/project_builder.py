@@ -6,11 +6,12 @@ import os
 import shutil
 import subprocess
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict
 
 from src.log_manager import log
 from src.operations.registry import register
-from src.profiler import auto_profile
+
+# from src.profiler import auto_profile  # unused
 
 
 @register(
@@ -296,3 +297,32 @@ def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
     log.info("Build succeeded for project: %s", project_name)
     print(f"Build succeeded for project: {project_name}")
     return True
+
+
+class ProjectBuilder:
+    """Class wrapper exposing project build operations as static methods."""
+
+    @staticmethod
+    def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
+        """Wrapper for `project_diff`."""
+        return project_diff(env, projects_info, project_name)
+
+    @staticmethod
+    def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
+        """Wrapper for `project_pre_build`."""
+        return project_pre_build(env, projects_info, project_name)
+
+    @staticmethod
+    def project_do_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
+        """Wrapper for `project_do_build`."""
+        return project_do_build(env, projects_info, project_name)
+
+    @staticmethod
+    def project_post_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
+        """Wrapper for `project_post_build`."""
+        return project_post_build(env, projects_info, project_name)
+
+    @staticmethod
+    def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
+        """Wrapper for `project_build`."""
+        return project_build(env, projects_info, project_name)

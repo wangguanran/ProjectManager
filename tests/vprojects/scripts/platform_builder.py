@@ -3,7 +3,7 @@ PlatformBuilder module for platform-specific project build logic.
 """
 
 from src.log_manager import log
-from src.plugins.project_builder import ProjectBuilder
+from src.plugins.project_builder import ProjectBuilder  # type: ignore[attr-defined]
 
 
 class PlatformBuilder(ProjectBuilder):

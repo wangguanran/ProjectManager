@@ -6,8 +6,6 @@ import configparser
 import os
 import sys
 
-import pytest
-
 
 class TestProjectNew:
     """Test cases for project_new method - merged from multiple test classes."""
@@ -752,7 +750,13 @@ class TestProjectNew:
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
         ini_file = board_dir / "board01.ini"
-        ini_file.write_text("[board01]\n" "[parent_project]\n" "PROJECT_NAME=parent\n" "PROJECT_CHIP_NAME=chip123\n")
+        ini_file.write_text(
+            """[board01]
+[parent_project]
+PROJECT_NAME=parent
+PROJECT_CHIP_NAME=chip123
+"""
+        )
 
         projects_info = {
             "parent_project": {

@@ -3,13 +3,12 @@ Project management utility class for CLI operations.
 """
 
 import os
-from typing import Dict, List
+from typing import Dict
 
 from configupdater import ConfigUpdater
 
 from src.log_manager import log
 from src.operations.registry import register
-from src.profiler import auto_profile
 
 
 @register("project_new", needs_repositories=False, desc="Create a new project.")
