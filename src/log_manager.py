@@ -6,7 +6,7 @@ import logging
 import logging.config
 import os
 
-from src.utils import get_filename, organize_files
+from src.utils import get_filename
 
 LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
 
@@ -45,7 +45,6 @@ class LogManager:
 
     def __init__(self):
         self.logger = self._init_logger()
-        organize_files(LOG_PATH, "log_")
 
     @staticmethod
     def _init_logger():

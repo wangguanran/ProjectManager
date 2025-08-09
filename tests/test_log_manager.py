@@ -274,26 +274,6 @@ class TestLogManagerIntegration:
                 # Check log directory was created
                 assert os.path.exists(os.path.join(temp_dir, "logs"))
 
-    def test_logger_with_organize_files(self):
-        """Test logger with organize files."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with patch("src.log_manager.LOG_PATH", os.path.join(temp_dir, "logs")):
-                # Create some existing log files
-                os.makedirs(os.path.join(temp_dir, "logs"), exist_ok=True)
-                existing_log = os.path.join(temp_dir, "logs", "log_old.txt")
-                with open(existing_log, "w", encoding="utf-8") as f:
-                    f.write("Old log content")
-
-                # Initialize LogManager (should organize files)
-                lm = self.log_manager()
-                logger = lm.get_logger()
-
-                # Log a new message
-                logger.info("New log message")
-
-                # Should not raise exceptions
-                assert True
-
 
 class TestGlobalLog:
     """Test cases for global log instance."""

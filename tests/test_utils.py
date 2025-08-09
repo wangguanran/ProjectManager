@@ -29,7 +29,6 @@ def load_utils():
 utils = load_utils()
 path_from_root = utils.path_from_root
 get_filename = utils.get_filename
-organize_files = utils.organize_files
 get_version = utils.get_version
 list_file_path = utils.list_file_path
 
@@ -111,112 +110,6 @@ class TestGetFilename:
         assert fn.startswith(os.path.join(str(tmp_path), "logdir", "pre_"))
         assert fn.endswith(".suf")
         assert os.path.exists(os.path.dirname(fn))
-
-
-class TestOrganizeFiles:
-    """Test cases for organize_files function."""
-
-    def test_organize_files_empty_directory(self):
-        """Test organize_files with empty directory."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Should not raise any exception
-            organize_files(temp_dir, "log_")
-            assert True
-
-    def test_organize_files_nonexistent_directory(self):
-        """Test organize_files with nonexistent directory."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            nonexistent_dir = os.path.join(temp_dir, "nonexistent")
-            # Should not raise any exception
-            organize_files(nonexistent_dir, "log_")
-            assert True
-
-    def test_organize_files_with_files(self):
-        """Test organize_files with actual files."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create test files with expected naming pattern
-            test_files = [
-                "log_20230101_file1.txt",
-                "log_20230101_file2.txt",
-                "log_20230102_file3.txt",
-                "other_file.txt",  # Should also be moved
-            ]
-
-            for filename in test_files:
-                filepath = os.path.join(temp_dir, filename)
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write("test content")
-
-            # Organize files
-            organize_files(temp_dir, "log_")
-
-            # Check that directories were created
-            log_20230101_dir = os.path.join(temp_dir, "log_20230101")
-            log_20230102_dir = os.path.join(temp_dir, "log_20230102")
-
-            assert os.path.exists(log_20230101_dir)
-            assert os.path.exists(log_20230102_dir)
-
-            # Check that files were moved to correct directories
-            assert os.path.exists(
-                os.path.join(log_20230101_dir, "log_20230101_file1.txt")
-            )
-            assert os.path.exists(
-                os.path.join(log_20230101_dir, "log_20230101_file2.txt")
-            )
-            assert os.path.exists(
-                os.path.join(log_20230102_dir, "log_20230102_file3.txt")
-            )
-
-            # Check that other file was also moved (organize_files moves all files)
-            assert os.path.exists(os.path.join(temp_dir, "log_other", "other_file.txt"))
-
-    def test_organize_files_with_existing_destination(self):
-        """Test organize_files when destination file already exists."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create source file
-            source_file = os.path.join(temp_dir, "log_20230101_file.txt")
-            with open(source_file, "w", encoding="utf-8") as f:
-                f.write("source content")
-
-            # Create destination directory and file
-            dest_dir = os.path.join(temp_dir, "log_20230101")
-            os.makedirs(dest_dir)
-            dest_file = os.path.join(dest_dir, "log_20230101_file.txt")
-            with open(dest_file, "w", encoding="utf-8") as f:
-                f.write("existing content")
-
-            # Organize files
-            organize_files(temp_dir, "log_")
-
-            # Check that source file was moved and replaced destination
-            assert not os.path.exists(source_file)
-            assert os.path.exists(dest_file)
-
-            # Check content was replaced
-            with open(dest_file, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert content == "source content"
-
-    def test_organize_files_with_tmp_path(self, tmp_path, monkeypatch):
-        """Test organize_files with pytest tmp_path."""
-        monkeypatch.chdir(tmp_path)
-        logdir = tmp_path / "log"
-        logdir.mkdir()
-        # Create multiple files
-        files = []
-        for i in range(3):
-            f = logdir / f"LOG_20220101_{i}.txt"
-            f.write_text("test")
-            files.append(f)
-        organize_files(str(logdir), "LOG_")
-        # Check if files were moved to subdirectories
-        for f in files:
-            log_data = f.name.split("_")[1]
-            subdir = logdir / ("LOG_" + log_data)
-            assert subdir.exists()
-            dest_file = subdir / f.name
-            assert dest_file.exists()
 
 
 class TestGetVersion:

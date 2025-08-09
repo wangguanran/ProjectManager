@@ -3,7 +3,6 @@ Utility functions collection.
 """
 
 import os
-import shutil
 import sys
 import time
 
@@ -40,37 +39,6 @@ def get_filename(prefix, suffix, path):
         os.makedirs(path)
     date_str = time.strftime("%Y%m%d_%H%M%S")
     return os.path.join(path, "".join((prefix, date_str, suffix)))
-
-
-def organize_files(path, prefix):
-    """
-    Organizes files into subdirectories based on their date.
-
-    Args:
-        path (str): The path of the directory to organize.
-        prefix (str): The prefix to use for the subdirectories.
-    """
-    if os.path.exists(path):
-        file_list = os.listdir(path)
-        for file in file_list:
-            file_fullpath = os.path.join(path, file)
-            if os.path.isfile(file_fullpath):
-                # Extract date from filename (second part after underscore)
-                # Expected pattern: prefix_date_rest
-                parts = file.split("_")
-                if len(parts) >= 2 and file.startswith(prefix):
-                    # File matches expected pattern: prefix_date_rest
-                    log_data = parts[1]
-                else:
-                    # If no underscore pattern or doesn't match expected pattern, use "other" as category
-                    log_data = "other"
-                log_dir = os.path.join(path, prefix + log_data)
-                if not os.path.exists(log_dir):
-                    os.makedirs(log_dir)
-                dest_file = os.path.join(log_dir, os.path.basename(file_fullpath))
-                if os.path.exists(dest_file):
-                    os.remove(dest_file)
-                shutil.move(file_fullpath, log_dir)
 
 
 def get_version():
