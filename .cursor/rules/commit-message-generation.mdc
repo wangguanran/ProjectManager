@@ -1,0 +1,68 @@
+---
+description: Commit message generation guidelines - use git diff to analyze changes and create standardized commit messages
+alwaysApply: false
+---
+
+# Commit Message Generation Guidelines
+
+## Process for Generating Commit Messages
+
+1. **Analyze Changes**: Use `git diff --cached | cat` to view staged changes
+2. **Use English**: All commit messages must be written in English
+3. **Follow Standards**: Follow conventional commit format and best practices
+
+## Commit Message Format
+
+Follow the conventional commit format:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Types
+- `feat`: A new feature
+- `fix`: A bug fix
+- `docs`: Documentation only changes
+- `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+- `refactor`: A code change that neither fixes a bug nor adds a feature
+- `perf`: A code change that improves performance
+- `test`: Adding missing tests or correcting existing tests
+- `chore`: Changes to the build process or auxiliary tools and libraries
+
+### Examples
+- `feat: add user authentication system`
+- `fix: resolve memory leak in data processing`
+- `docs: update API documentation`
+- `refactor: simplify database query logic`
+- `test: add unit tests for user service`
+
+## Guidelines
+
+1. **Use imperative mood**: "add" not "added" or "adds"
+2. **Keep first line under 50 characters**
+3. **Use lowercase for the subject line**
+4. **No period at the end of the subject line**
+5. **Separate subject from body with blank line**
+6. **Use body to explain what and why vs. how**
+
+## Analysis Steps
+
+When analyzing changes with `git diff --cached | cat`:
+
+1. Identify the type of change (feature, fix, refactor, etc.)
+2. Determine the scope if applicable
+3. Write a clear, concise description
+4. Consider if additional body text is needed for complex changes
+
+## Common Patterns
+
+- **New files**: `feat: add [component/feature name]`
+- **Bug fixes**: `fix: resolve [issue description]`
+- **Documentation**: `docs: update [documentation type]`
+- **Refactoring**: `refactor: [what was changed]`
+- **Tests**: `test: add tests for [component/feature]`
+- **Dependencies**: `chore: update [dependency name]`

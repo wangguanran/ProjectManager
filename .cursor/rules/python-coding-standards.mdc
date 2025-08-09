@@ -1,0 +1,84 @@
+---
+globs: *.py
+description: Python coding standards - no Chinese comments, no f-strings
+---
+
+# Python Coding Standards
+
+## Code Style Requirements
+
+### 1. Comments and Documentation
+- **NO Chinese comments**: All comments must be written in English
+- Use clear, descriptive English comments for code documentation
+- Follow PEP 257 docstring conventions for function and class documentation
+
+### 2. String Formatting
+- **NO f-string expressions**: Avoid using f"" format strings
+- **NO .format() method**: Avoid using `.format()` method
+- **Use % operator only**: Use `%` operator for string formatting
+- Examples:
+  ```python
+  # ❌ Avoid f-strings
+  name = "John"
+  message = f"Hello {name}"
+  
+  # ❌ Avoid .format() method
+  name = "John"
+  message = "Hello {}".format(name)
+  
+  # ✅ Use % operator only
+  name = "John"
+  message = "Hello %s" % name
+  ```
+
+### 3. General Python Best Practices
+- Follow PEP 8 style guidelines
+- Use meaningful variable and function names
+- Keep functions small and focused
+- Add type hints where appropriate
+- Use proper exception handling
+
+### 4. Code Examples
+
+#### Correct Comment Style:
+```python
+# This function calculates the total price including tax
+def calculate_total(price, tax_rate):
+    """
+    Calculate total price with tax included.
+    
+    Args:
+        price (float): Base price
+        tax_rate (float): Tax rate as decimal
+        
+    Returns:
+        float: Total price with tax
+    """
+    tax_amount = price * tax_rate
+    total = price + tax_amount
+    return total
+```
+
+#### Correct String Formatting:
+```python
+# Using % operator for single variable
+user_name = "Alice"
+greeting = "Welcome, %s!" % user_name
+
+# Using % operator for numbers
+age = 25
+info = "User is %d years old" % age
+
+# Multiple variables with % operator
+name = "Bob"
+age = 30
+city = "New York"
+profile = "Name: %s, Age: %d, City: %s" % (name, age, city)
+```
+
+### 5. File Structure
+- All Python files should follow these standards
+- Import statements at the top
+- Constants defined after imports
+- Classes and functions with proper documentation
+- Main execution code in `if __name__ == "__main__":` block

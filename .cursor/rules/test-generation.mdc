@@ -1,0 +1,487 @@
+---
+globs: test_*.py
+alwaysApply: false
+---
+# Test File and Test Case Generation Guidelines
+
+## Incremental Test Development Strategy
+
+### One Interface at a Time Approach
+
+- **Strategy**: Generate test cases for one interface/function at a time
+- **Process**: 
+  1. Create basic test structure for single function
+  2. Implement minimal test cases to verify functionality
+  3. Run tests and ensure PASS status
+  4. Only after successful test execution, add additional test cases
+  5. Repeat for next interface/function
+
+### Test Development Workflow
+
+1. **Initial Setup**: Create test file with basic structure
+2. **Single Function Focus**: Generate tests for one function only
+3. **Minimal Coverage**: Start with basic happy path test
+4. **Verify Execution**: Ensure test runs and passes
+5. **Code Quality Check**: After test PASS, run formatting and linting:
+   - Execute `./format.sh` to format the code
+   - Run `pylint` to check code quality
+   - Fix any formatting or linting errors
+   - **Run complete test suite with `pytest`** - Validate against full test suite
+6. **Expand Coverage**: Add edge cases and error scenarios only after quality checks pass
+7. **Move to Next**: Proceed to next function only after current is complete
+
+### Test Case Priority Order
+
+When generating tests for a single function, follow this priority:
+
+1. **Basic Functionality Test** - Normal input, expected output
+2. **Simple Edge Case** - Empty/null input handling
+3. **Error Handling** - Invalid input exceptions
+4. **Additional Edge Cases** - Boundary conditions
+5. **Performance Tests** - Large input scenarios
+6. **Integration Tests** - Interaction with dependencies
+
+## Test File Structure
+
+When generating test files, follow this structure:
+
+1. **Import statements** - Import the module/class to test and testing framework
+2. **Test class definition** - One test class per source class
+3. **Setup and teardown methods** - **REQUIRED**: Every test class must have setup_method
+4. **Test methods** - One test method per source method
+5. **Edge cases and error scenarios** - Comprehensive coverage
+
+### Required setup_method Pattern
+
+Every test class must include a `setup_method` that:
+1. **Adds project root to sys.path** - Ensures modules can be imported correctly
+2. **Imports the module/function to test** - Imports the specific functionality being tested
+3. **Sets up test environment** - Prepares any necessary test fixtures
+
+### Example setup_method Structure:
+
+```python
+def setup_method(self):
+    """
+    Prepare the test environment for each test case.
+    - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+    - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
+    """
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from src.module_name import function_name, class_name
+
+    self.function_name = function_name
+    self.class_name = class_name
+```
+
+## Static Function Testing Rules
+
+### One Static Class Per Static Function
+
+- **Rule**: Each static function should have its own dedicated test class
+- **Naming**: Test class should be named `Test[FunctionName]` or `[FunctionName]Test`
+- **Organization**: Group related static functions in the same test file but separate classes
+
+### Test Method Naming Convention
+
+Use descriptive test method names:
+- `test_[function_name]_[scenario]`
+- `test_[function_name]_[input_type]_[expected_behavior]`
+- `test_[function_name]_[edge_case]`
+
+### Test Coverage Requirements
+
+1. **Happy path testing** - Normal input with expected output
+2. **Edge case testing** - Boundary conditions, null values, empty inputs
+3. **Error handling** - Invalid inputs, exceptions
+4. **Performance testing** - Large inputs, time complexity
+5. **Integration testing** - Interaction with other functions/modules
+
+## Test File Naming Convention
+
+- **Unit tests**: `test_[module_name].py` or `[module_name]_test.py`
+- **Integration tests**: `test_integration_[module_name].py`
+- **Performance tests**: `test_performance_[module_name].py`
+
+## Test File Path Organization
+
+### Directory Structure Consistency
+
+Test files must maintain the same directory structure as source files:
+
+- **Source**: `src/plugins/project_manager.py`
+- **Test**: `tests/plugins/test_project_manager.py`
+
+- **Source**: `src/utils.py`
+- **Test**: `tests/test_utils.py`
+
+- **Source**: `src/log_manager.py`
+- **Test**: `tests/test_log_manager.py`
+
+### Path Mapping Rules
+
+1. **Mirror src structure**: Test directories should mirror the src directory structure
+2. **Preserve subdirectories**: All subdirectories in src should exist in tests
+3. **Add 'test_' prefix**: Test files should be prefixed with 'test_'
+4. **Maintain relative paths**: Keep the same relative path structure
+
+### Examples
+
+#### Correct Structure:
+```
+src/
+├── plugins/
+│   ├── project_manager.py
+│   ├── project_builder.py
+│   └── patch_override.py
+├── utils.py
+└── log_manager.py
+
+tests/
+├── plugins/
+│   ├── test_project_manager.py
+│   ├── test_project_builder.py
+│   └── test_patch_override.py
+├── test_utils.py
+└── test_log_manager.py
+```
+
+#### Incorrect Structure:
+```
+tests/
+├── test_project_manager.py  # ❌ Should be in tests/plugins/
+├── test_patch_override.py   # ❌ Should be in tests/plugins/
+└── test_utils.py           # ✅ Correct
+```
+
+### File Naming Rules
+
+1. **Prefix with 'test_'**: All test files must start with 'test_'
+2. **Match source filename**: After 'test_', use the exact source filename
+3. **Preserve extension**: Keep the same file extension (.py)
+
+### Examples:
+- `src/plugins/project_manager.py` → `tests/plugins/test_project_manager.py`
+- `src/utils.py` → `tests/test_utils.py`
+- `src/log_manager.py` → `tests/test_log_manager.py`
+
+### Implementation Guidelines
+
+When creating new test files:
+
+1. **Identify source file path**: Locate the source file in the src directory
+2. **Create matching directory structure**: Ensure the same subdirectory structure exists in tests
+3. **Name test file correctly**: Use 'test_' prefix + source filename
+4. **Place in correct location**: Put the test file in the corresponding tests subdirectory
+
+### Directory Creation Process:
+
+```bash
+# Example: Creating test directory for src/plugins/
+mkdir -p tests/plugins
+
+# Example: Moving test file to correct location
+mv tests/test_project_manager.py tests/plugins/test_project_manager.py
+```
+
+## Incremental Test Development Example
+
+### Step 1: Start with Basic Test
+```python
+import unittest
+from module_name import function_name
+
+class TestFunctionName(unittest.TestCase):
+    """Test class for function_name static function"""
+    
+    def test_function_name_basic(self):
+        """Test function_name with basic input - START HERE"""
+        # Arrange
+        input_data = "test_input"
+        expected = "expected_output"
+        
+        # Act
+        result = function_name(input_data)
+        
+        # Assert
+        self.assertEqual(result, expected)
+```
+
+### Step 2: After PASS and Quality Check, Add Edge Case
+```python
+    def test_function_name_empty_input(self):
+        """Test function_name with empty input - ADD AFTER BASIC TEST PASSES AND QUALITY CHECKS"""
+        # Arrange
+        input_data = ""
+        expected = None
+        
+        # Act
+        result = function_name(input_data)
+        
+        # Assert
+        self.assertIsNone(result)
+```
+
+### Step 3: After PASS and Quality Check, Add Error Handling
+```python
+    def test_function_name_invalid_input(self):
+        """Test function_name with invalid input - ADD AFTER EDGE CASE PASSES AND QUALITY CHECKS"""
+        # Arrange
+        input_data = None
+        
+        # Act & Assert
+        with self.assertRaises(ValueError):
+            function_name(input_data)
+```
+
+### Complete Test Structure (After All Tests Pass)
+```python
+import unittest
+import os
+import sys
+from module_name import function_name
+
+class TestFunctionName(unittest.TestCase):
+    """Test class for function_name static function"""
+    
+    def setup_method(self):
+        """
+        Prepare the test environment for each test case.
+        - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+        - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
+        """
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.module_name import function_name
+
+        self.function_name = function_name
+    
+    def tearDown(self):
+        """Clean up after tests"""
+        pass
+    
+    def test_function_name_normal_input(self):
+        """Test function_name with normal input"""
+        # Arrange
+        input_data = "test_input"
+        expected = "expected_output"
+        
+        # Act
+        result = function_name(input_data)
+        
+        # Assert
+        self.assertEqual(result, expected)
+    
+    def test_function_name_edge_case(self):
+        """Test function_name with edge case input"""
+        # Arrange
+        input_data = ""
+        expected = None
+        
+        # Act
+        result = function_name(input_data)
+        
+        # Assert
+        self.assertIsNone(result)
+    
+    def test_function_name_error_handling(self):
+        """Test function_name with invalid input"""
+        # Arrange
+        input_data = None
+        
+        # Act & Assert
+        with self.assertRaises(ValueError):
+            function_name(input_data)
+```
+
+## Test Generation Guidelines
+
+### Mandatory setup_method Requirement
+
+**EVERY test class MUST include a setup_method** that follows this pattern:
+
+```python
+def setup_method(self):
+    """
+    Prepare the test environment for each test case.
+    - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+    - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
+    """
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from src.module_name import function_name, class_name
+
+    self.function_name = function_name
+    self.class_name = class_name
+```
+
+**Key Requirements:**
+1. **Must add project root to sys.path** - This ensures modules can be imported correctly
+2. **Must import the specific function/class being tested** - Assign to self for use in test methods
+3. **Must include proper docstring** - Explaining what the setup does
+4. **Must handle sys.path safely** - Check if already present before inserting
+
+### Incremental Test Creation Process:
+
+1. **Start with One Function** - Focus on testing one function at a time
+2. **Create Basic Test** - Generate minimal test case for happy path
+3. **Run and Verify** - Execute test and ensure it passes
+4. **Code Quality Check** - After test PASS:
+   - Run `./format.sh` to format the code
+   - Execute `pylint` to check code quality
+   - Fix any formatting or linting errors
+   - **Execute `pytest` to run complete test suite** - Validate against all tests
+5. **Expand Gradually** - Add more test cases only after quality checks pass
+6. **Move to Next** - Only proceed to next function after current is complete
+
+### Test Validation Commands:
+
+```bash
+# Step 1: Format code
+./format.sh
+
+# Step 2: Lint check
+pylint test_file.py
+
+# Step 3: Run complete test suite (CRITICAL)
+pytest
+
+# Step 4: If any issues found, fix and re-run complete suite
+pytest
+```
+
+### When Creating Test Files:
+
+1. **Analyze the source code** - Understand the function's purpose and behavior
+2. **Identify input types** - What types of inputs does the function accept?
+3. **Determine expected outputs** - What should the function return?
+4. **Find edge cases** - What happens with null, empty, or invalid inputs?
+5. **Check error conditions** - What exceptions should be raised?
+6. **Consider performance** - How does it handle large inputs?
+
+### Test Method Categories:
+
+1. **Basic functionality tests** - Normal operation
+2. **Input validation tests** - Invalid inputs
+3. **Boundary tests** - Edge cases and limits
+4. **Error handling tests** - Exception scenarios
+5. **Performance tests** - Large data sets
+6. **Integration tests** - Interaction with other components
+
+## Mock and Stub Guidelines
+
+- **Use mocks** for external dependencies (databases, APIs, file system)
+- **Use stubs** for simple return value substitution
+- **Isolate the unit under test** - Don't test dependencies
+- **Verify interactions** - Ensure correct method calls
+
+## Assertion Best Practices
+
+- **Use specific assertions** - `assertEqual`, `assertIsNone`, `assertRaises`
+- **Test one thing per method** - Single responsibility
+- **Use descriptive assertion messages** - Help with debugging
+- **Test both positive and negative cases**
+
+## Test Data Management
+
+- **Use fixtures** for complex test data
+- **Create helper methods** for common setup
+- **Use parameterized tests** for multiple input combinations
+- **Keep test data realistic** - Use real-world examples
+
+## Code Quality Check Process
+
+### After Each Test PASS:
+
+1. **Format Code**: Run `./format.sh` to ensure consistent code formatting
+2. **Lint Check**: Execute `pylint` to identify code quality issues
+3. **Fix Issues**: Address any formatting or linting errors
+4. **Re-run Tests**: **Run complete test suite with `pytest`** - Do NOT run individual test files
+5. **Continue Development**: Only proceed with additional test cases after quality checks pass
+
+### Complete Test Suite Execution
+
+**CRITICAL**: When validating tests, always run the complete test suite:
+
+```bash
+# ✅ CORRECT - Run complete test suite
+pytest
+
+# ❌ INCORRECT - Running individual test files
+python -m pytest test_file.py
+python -m pytest tests/test_specific.py
+```
+
+**Why run complete test suite:**
+1. **Integration testing** - Ensures new tests don't break existing functionality
+2. **Dependency validation** - Verifies changes don't affect other modules
+3. **Regression prevention** - Catches issues that might be missed with isolated testing
+4. **Full coverage validation** - Ensures overall test coverage is maintained
+
+### Quality Check Commands:
+```bash
+# Format the code
+./format.sh
+
+# Run pylint for code quality
+pylint test_file.py
+
+# Fix any issues found, then re-run tests
+pytest
+```
+
+## Code Coverage Goals
+
+- **Minimum 80% line coverage**
+- **100% branch coverage for critical paths**
+- **Test all public methods**
+- **Include integration tests for complex workflows**
+
+## Test Class Validation Checklist
+
+### Before Creating Test Classes:
+
+- [ ] **setup_method is included** - Every test class must have setup_method
+- [ ] **sys.path is properly set** - Project root added to sys.path
+- [ ] **Imports are correct** - Function/class imported from src.module
+- [ ] **Self assignment** - Imported functions/classes assigned to self
+- [ ] **Docstring included** - setup_method has proper documentation
+- [ ] **Path safety check** - Check if project_root already in sys.path before inserting
+
+### After Creating Test Classes:
+
+- [ ] **Run complete test suite** - Execute `pytest` to validate against full test suite
+- [ ] **Format code** - Run `./format.sh` to ensure consistent formatting
+- [ ] **Lint check** - Execute `pylint` to identify code quality issues
+- [ ] **Fix any issues** - Address formatting or linting errors
+- [ ] **Re-run complete suite** - Execute `pytest` again after fixes
+- [ ] **Verify all tests pass** - Ensure no regressions in existing tests
+
+### setup_method Template:
+
+```python
+def setup_method(self):
+    """
+    Prepare the test environment for each test case.
+    - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+    - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
+    """
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from src.module_name import function_name, class_name
+
+    self.function_name = function_name
+    self.class_name = class_name
+```
+
+### Common Import Patterns:
+
+- **Single function**: `from src.module import function_name`
+- **Multiple functions**: `from src.module import func1, func2, func3`
+- **Class**: `from src.module import ClassName`
+- **Module**: `import src.module as module_name`
