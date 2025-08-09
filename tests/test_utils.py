@@ -16,9 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 
 def load_utils():
     """Dynamically load the utils module from src/utils.py for testing."""
-    utils_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../src/utils.py")
-    )
+    utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/utils.py"))
     spec = importlib.util.spec_from_file_location("utils", utils_path)
     utils_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(utils_mod)
@@ -272,9 +270,7 @@ class TestListFilePath:
             # Create files at different levels
             level1_file = os.path.join(temp_dir, "level1", "file1.txt")
             level2_file = os.path.join(temp_dir, "level1", "level2", "file2.txt")
-            level3_file = os.path.join(
-                temp_dir, "level1", "level2", "level3", "file3.txt"
-            )
+            level3_file = os.path.join(temp_dir, "level1", "level2", "level3", "file3.txt")
 
             for filepath in [level1_file, level2_file, level3_file]:
                 with open(filepath, "w", encoding="utf-8") as f:

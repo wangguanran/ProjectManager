@@ -152,9 +152,7 @@ class TestProjectNew:
         }
 
         # This should fail due to missing board directory, not due to parent lookup
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         # Should fail because board directory doesn't exist
         assert result is False
@@ -172,9 +170,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "nonexistent_parent-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "nonexistent_parent-child")
 
         assert result is False
         # Verify that project creation fails when parent project doesn't exist
@@ -210,9 +206,7 @@ class TestProjectNew:
         }
 
         # This should fail due to missing board directory, not due to pattern matching
-        result = self.ProjectManager.project_new(
-            env, projects_info, "base_project-variant"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "base_project-variant")
 
         assert result is False
         # Verify that project creation fails due to missing board directory, not pattern matching
@@ -236,9 +230,7 @@ class TestProjectNew:
         }
 
         # Test with a project name that doesn't match any pattern
-        result = self.ProjectManager.project_new(
-            env, projects_info, "completely_different_project"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "completely_different_project")
 
         assert result is False
         # This should trigger the "no fallback strategy" path
@@ -260,9 +252,7 @@ class TestProjectNew:
         }
 
         # This should succeed because board directory exists and project name is different
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         # Should succeed because all conditions are met
         assert result is True
@@ -293,9 +283,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -330,9 +318,7 @@ class TestProjectNew:
             },
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "grandparent-parent-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "grandparent-parent-child")
 
         assert result is True
 
@@ -364,9 +350,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -395,9 +379,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -420,9 +402,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is False
         # Verify that project creation fails when board directory doesn't exist
@@ -443,9 +423,7 @@ class TestProjectNew:
         }
 
         try:
-            result = self.ProjectManager.project_new(
-                env, projects_info, "parent_project-child"
-            )
+            result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
             # Should fail due to missing INI file
             assert result is False
             # Verify that project creation fails when INI file is missing
@@ -475,9 +453,7 @@ class TestProjectNew:
         }
 
         try:
-            result = self.ProjectManager.project_new(
-                env, projects_info, "parent_project-child"
-            )
+            result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
             # Should fail due to file permission or other reasons
             assert result is False
             # Verify that project creation fails when INI file is not readable
@@ -496,9 +472,7 @@ class TestProjectNew:
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
         ini_file = board_dir / "board01.ini"
-        ini_file.write_text(
-            "[board01]\n[existing_project]\nPROJECT_NAME=existing_project\n"
-        )
+        ini_file.write_text("[board01]\n[existing_project]\nPROJECT_NAME=existing_project\n")
 
         projects_info = {
             "parent_project": {
@@ -530,9 +504,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-new"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-new")
 
         assert result is True
 
@@ -553,9 +525,7 @@ class TestProjectNew:
         }
 
         # Project exists in different board, should be able to create in this board
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-existing"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-existing")
 
         assert result is True
 
@@ -575,9 +545,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -606,9 +574,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         # Verify that the new project was added to the INI file
         assert result is True
@@ -634,9 +600,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -665,9 +629,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -705,9 +667,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
         # This should test the comment handling in config processing
@@ -734,9 +694,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
         # This should test the section comment handling
@@ -762,9 +720,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
         # This should test the option comment handling
@@ -785,9 +741,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
         # This should test the config value object handling
@@ -798,12 +752,7 @@ class TestProjectNew:
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
         ini_file = board_dir / "board01.ini"
-        ini_file.write_text(
-            "[board01]\n"
-            "[parent_project]\n"
-            "PROJECT_NAME=parent\n"
-            "PROJECT_CHIP_NAME=chip123\n"
-        )
+        ini_file.write_text("[board01]\n" "[parent_project]\n" "PROJECT_NAME=parent\n" "PROJECT_CHIP_NAME=chip123\n")
 
         projects_info = {
             "parent_project": {
@@ -816,9 +765,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
         # This should test the merged config value object handling
@@ -839,9 +786,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -870,9 +815,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -902,9 +845,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -937,9 +878,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -969,9 +908,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -1003,9 +940,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -1030,9 +965,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -1053,15 +986,11 @@ class TestProjectNew:
         }
 
         # Create first project
-        result1 = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child1"
-        )
+        result1 = self.ProjectManager.project_new(env, projects_info, "parent_project-child1")
         assert result1 is True
 
         # Create second project
-        result2 = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child2"
-        )
+        result2 = self.ProjectManager.project_new(env, projects_info, "parent_project-child2")
         assert result2 is True
 
     def test_project_new_special_characters(self, tmp_path):
@@ -1080,9 +1009,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-special@#$%"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-special@#$%")
 
         assert result is True
 
@@ -1123,9 +1050,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-中文测试"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-中文测试")
 
         assert result is True
 
@@ -1145,9 +1070,7 @@ class TestProjectNew:
             }
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-12345"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-12345")
 
         assert result is True
 
@@ -1168,9 +1091,7 @@ class TestProjectNew:
         }
 
         # This should handle file operation exceptions gracefully
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -1194,9 +1115,7 @@ class TestProjectNew:
         }
 
         try:
-            result = self.ProjectManager.project_new(
-                env, projects_info, "parent_project-child"
-            )
+            result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
             # Should handle permission errors gracefully
             assert result is False
         except PermissionError:
@@ -1223,9 +1142,7 @@ class TestProjectNew:
         }
 
         # This should handle encoding errors gracefully
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -1247,9 +1164,7 @@ class TestProjectNew:
         }
 
         try:
-            result = self.ProjectManager.project_new(
-                env, projects_info, "parent_project-child"
-            )
+            result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
             # Should handle config parser errors gracefully
             assert result is False
         except (ValueError, TypeError, OSError, configparser.MissingSectionHeaderError):
@@ -1262,9 +1177,7 @@ class TestProjectNew:
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
         ini_file = board_dir / "board01.ini"
-        ini_file.write_text(
-            "[board01]\n[existing_project]\nPROJECT_NAME=existing_project\n"
-        )
+        ini_file.write_text("[board01]\n[existing_project]\nPROJECT_NAME=existing_project\n")
 
         projects_info = {
             "parent_project": {
@@ -1279,9 +1192,7 @@ class TestProjectNew:
             },
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
 
@@ -1344,9 +1255,7 @@ class TestProjectNew:
             },
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "base-feature1-feature2-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "base-feature1-feature2-child")
 
         assert result is True
 
@@ -1373,9 +1282,7 @@ class TestProjectNew:
             },
         }
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "chip123-customer456-variant1"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "chip123-customer456-variant1")
 
         assert result is True
 
@@ -1400,9 +1307,7 @@ class TestProjectNew:
         }
 
         # Create project
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent_project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
         assert result is True
 
         # Read and verify the actual INI file content
@@ -1416,9 +1321,7 @@ class TestProjectNew:
         assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
 
         # Verify no duplicate sections
-        sections = [
-            line.strip() for line in content.split("\n") if line.strip().startswith("[")
-        ]
+        sections = [line.strip() for line in content.split("\n") if line.strip().startswith("[")]
         assert sections.count("[parent_project-child]") == 1
 
         # Verify proper formatting (no extra blank lines)
@@ -1451,9 +1354,7 @@ class TestProjectNew:
         }
 
         # Create project with inheritance
-        result = self.ProjectManager.project_new(
-            env, projects_info, "base-feature-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "base-feature-child")
         assert result is True
 
         # Read and verify the actual INI file content
@@ -1724,9 +1625,7 @@ class TestProjectDel:
             }
         }
 
-        result = self.ProjectManager.project_del(
-            env, projects_info, "nonexistent_project"
-        )
+        result = self.ProjectManager.project_del(env, projects_info, "nonexistent_project")
 
         assert result is True
         # Verify that ini file content remains unchanged
@@ -1913,9 +1812,7 @@ class TestBoardNew:
         # Create board directory
         os.makedirs(str(tmp_path / "test_board"))
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is False
 
@@ -1932,9 +1829,7 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[test_board]\n")
 
         result = self.ProjectManager.project_new(env, projects_info, "test_board")
@@ -1954,14 +1849,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with existing project
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project-child]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is False
 
@@ -1978,9 +1869,7 @@ class TestBoardNew:
 
         # This test will exercise the strip_empty_lines function with empty lines
         # The function is called internally during ini file parsing
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         # Should fail due to missing board directory, but strip_empty_lines will be called
         assert result is False
@@ -1998,14 +1887,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[existing-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "existing-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "existing-project-child")
 
         # Should succeed and use pattern matching to find board
         assert result is True
@@ -2023,16 +1908,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
-            f.write(
-                "# Section comment\n[parent-project]\n# Option comment\nPROJECT_NAME=test\n"
-            )
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
+            f.write("# Section comment\n[parent-project]\n# Option comment\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2049,16 +1928,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with content that will trigger current_section logic
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
-            f.write(
-                "[parent-project]\nPROJECT_NAME=test\n# Some content after section\n"
-            )
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
+            f.write("[parent-project]\nPROJECT_NAME=test\n# Some content after section\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2075,14 +1948,10 @@ class TestBoardNew:
 
         # Create board directory and empty ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("")  # Empty file
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2099,14 +1968,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with existing sections
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[existing-section]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2123,14 +1988,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         # The new project will be added to config, so project_name will be in config
         assert result is True
@@ -2148,14 +2009,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\n# Comment\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2172,14 +2029,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with section comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("# Section comment\n[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2196,14 +2049,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with leading empty lines
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("\n\n\n[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2220,14 +2069,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[existing-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "existing-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "existing-project-child")
 
         # Should succeed and use pattern matching to find board
         assert result is True
@@ -2245,9 +2090,7 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[test_board]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_new(env, projects_info, "test_board")
@@ -2267,14 +2110,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with option comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\n# Option comment\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2291,14 +2130,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with section comments
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("# Section comment\n[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2315,14 +2150,10 @@ class TestBoardNew:
 
         # Create board directory and empty ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("")  # Empty file
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2339,14 +2170,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         # The new project will be added to config, so project_name will be in config
         assert result is True
@@ -2364,14 +2191,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with trailing empty lines
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n\n\n\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2388,14 +2211,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[other-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         # Should fail because parent-project is not in projects_info
         assert result is False
@@ -2414,9 +2233,7 @@ class TestBoardNew:
         env = {}
         projects_info = {}
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is False
 
@@ -2434,14 +2251,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2459,14 +2272,10 @@ class TestBoardNew:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2483,14 +2292,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with multiple sections
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[section1]\nPROJECT_NAME=test1\n[section2]\nPROJECT_NAME=test2\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2507,14 +2312,10 @@ class TestBoardNew:
 
         # Create board directory and ini file with multiple sections
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[section1]\nPROJECT_NAME=test1\n[section2]\nPROJECT_NAME=test2\n")
 
-        result = self.ProjectManager.project_new(
-            env, projects_info, "parent-project-child"
-        )
+        result = self.ProjectManager.project_new(env, projects_info, "parent-project-child")
 
         assert result is True
 
@@ -2667,9 +2468,7 @@ class TestBoardDel:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[parent-project]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_del(env, projects_info, "parent-project")
@@ -2688,9 +2487,7 @@ class TestBoardDel:
     def test_project_del_missing_board_info_validation(self):
         """Test project_del missing board info validation (lines 282-284)."""
         env = {}
-        projects_info = {
-            "test-project": {"board_name": None, "board_path": None, "ini_file": None}
-        }
+        projects_info = {"test-project": {"board_name": None, "board_path": None, "ini_file": None}}
 
         result = self.ProjectManager.project_del(env, projects_info, "test-project")
 
@@ -2724,9 +2521,7 @@ class TestBoardDel:
 
         # Create board directory and ini file
         os.makedirs(str(tmp_path / "test_board"))
-        with open(
-            str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8"
-        ) as f:
+        with open(str(tmp_path / "test_board" / "config.ini"), "w", encoding="utf-8") as f:
             f.write("[test_board]\nPROJECT_NAME=test\n")
 
         result = self.ProjectManager.project_del(env, projects_info, "test_board")

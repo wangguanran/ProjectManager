@@ -31,12 +31,7 @@ def register(
             "_operation_meta",
             {
                 "needs_repositories": bool(needs_repositories),
-                "desc": desc
-                or (
-                    func.__doc__.strip().splitlines()[0]
-                    if func.__doc__
-                    else "plugin operation"
-                ),
+                "desc": desc or (func.__doc__.strip().splitlines()[0] if func.__doc__ else "plugin operation"),
             },
         )
         REGISTRY[op_name] = func

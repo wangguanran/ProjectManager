@@ -36,9 +36,7 @@ def parse_po_config(po_config):
     return apply_pos, exclude_pos, exclude_files
 
 
-@register(
-    "po_apply", needs_repositories=True, desc="Apply patch and override for a project"
-)
+@register("po_apply", needs_repositories=True, desc="Apply patch and override for a project")
 def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     """
     Apply patch and override for the specified project.
@@ -95,9 +93,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             for fname in files:
                 if fname == ".gitkeep":
                     continue
-                rel_path = os.path.relpath(
-                    os.path.join(current_dir, fname), po_patch_dir
-                )
+                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) < 2:
                     log.error("Invalid patch file path: '%s'", rel_path)
@@ -167,9 +163,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     patch_applied_dirs.add(patch_target)
                     log.info("patch applied and flag set for repo: '%s'", patch_target)
                 except subprocess.SubprocessError as e:
-                    log.error(
-                        "Subprocess error applying patch '%s': '%s'", patch_file, e
-                    )
+                    log.error("Subprocess error applying patch '%s': '%s'", patch_file, e)
                     return False
                 except OSError as e:
                     log.error("OS error applying patch '%s': '%s'", patch_file, e)
@@ -189,9 +183,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if fname == ".gitkeep":
                     # log.debug("ignore .gitkeep file in '%s'", current_dir)
                     continue
-                rel_path = os.path.relpath(
-                    os.path.join(current_dir, fname), po_override_dir
-                )
+                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
                 log.debug("override rel_path: '%s'", rel_path)
                 # Exclude override files configured in exclude_files
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
@@ -242,9 +234,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     if len(rel_path.split(os.sep)) > 1
                     else os.path.join(override_target, fname)
                 )
-                log.debug(
-                    "override src_file: '%s', dest_file: '%s'", src_file, dest_file
-                )
+                log.debug("override src_file: '%s', dest_file: '%s'", src_file, dest_file)
                 os.makedirs(os.path.dirname(dest_file), exist_ok=True)
                 try:
                     shutil.copy2(src_file, dest_file)
@@ -335,9 +325,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if fname == ".gitkeep":
                     continue
                 log.debug("current_dir: '%s', fname: '%s'", current_dir, fname)
-                rel_path = os.path.relpath(
-                    os.path.join(current_dir, fname), po_patch_dir
-                )
+                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
                 log.debug("patch rel_path: '%s'", rel_path)
                 # Exclude patch files configured in exclude_files
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
@@ -382,9 +370,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     patch_flag,
                 )
                 if not os.path.exists(patch_flag):
-                    log.debug(
-                        "No patch flag found for dir: '%s', skipping", patch_target
-                    )
+                    log.debug("No patch flag found for dir: '%s', skipping", patch_target)
                     continue
                 try:
                     with open(patch_flag, "r", encoding="utf-8") as f:
@@ -403,9 +389,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     )
                     continue
                 patch_file = os.path.join(current_dir, fname)
-                log.info(
-                    "reverting patch: '%s' from dir: '%s'", patch_file, patch_target
-                )
+                log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
                 try:
                     result = subprocess.run(
                         ["git", "apply", "--reverse", patch_file],
@@ -440,9 +424,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         patch_target,
                     )
                 except subprocess.SubprocessError as e:
-                    log.error(
-                        "Subprocess error reverting patch '%s': '%s'", patch_file, e
-                    )
+                    log.error("Subprocess error reverting patch '%s': '%s'", patch_file, e)
                     return False
                 except OSError as e:
                     log.error("OS error reverting patch '%s': '%s'", patch_file, e)
@@ -460,9 +442,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
             for fname in files:
                 if fname == ".gitkeep":
                     continue
-                rel_path = os.path.relpath(
-                    os.path.join(current_dir, fname), po_override_dir
-                )
+                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
                 log.debug("override rel_path: '%s'", rel_path)
                 # Exclude override files configured in exclude_files
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
@@ -602,9 +582,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
 
 @register("po_new", needs_repositories=True, desc="Create a new PO for a project")
-def po_new(
-    env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False
-) -> bool:
+def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False) -> bool:
     """
     Create a new PO (patch and override) directory structure for the specified project.
     Args:
@@ -665,11 +643,7 @@ def po_new(
         print("  2. Option to select modified files to include in the PO")
 
         while True:
-            response = (
-                input(f"\nDo you want to create PO '{po_name}'? (yes/no): ")
-                .strip()
-                .lower()
-            )
+            response = input(f"\nDo you want to create PO '{po_name}'? (yes/no): ").strip().lower()
             if response in ["yes", "y"]:
                 return True
             if response in ["no", "n"]:
@@ -751,12 +725,8 @@ def po_new(
             os.chdir(original_cwd)
 
         except (OSError, subprocess.SubprocessError) as e:
-            log.error(
-                "Failed to get modified files for repository %s: %s", repo_name, e
-            )
-            print(
-                f"Warning: Failed to get modified files for repository {repo_name}: {e}"
-            )
+            log.error("Failed to get modified files for repository %s: %s", repo_name, e)
+            print(f"Warning: Failed to get modified files for repository {repo_name}: {e}")
 
         return modified_files
 
@@ -816,9 +786,7 @@ def po_new(
             # Ask user for custom patch name
             default_filename = os.path.basename(file_path)
             print(f"    Default patch name: {default_filename}.patch")
-            custom_name = input(
-                "    Enter custom patch name (or press Enter for default): "
-            ).strip()
+            custom_name = input("    Enter custom patch name (or press Enter for default): ").strip()
 
             if custom_name:
                 # Remove .patch extension if user included it
@@ -834,9 +802,7 @@ def po_new(
                 patch_file_path = os.path.join(patches_dir, f"{filename}.patch")
             else:
                 # For other repositories, patch is based on repo root directory, use only filename
-                patch_file_path = os.path.join(
-                    patches_dir, repo_name, f"{filename}.patch"
-                )
+                patch_file_path = os.path.join(patches_dir, repo_name, f"{filename}.patch")
 
             # Create patches directory and subdirectories if they don't exist
             os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
@@ -926,9 +892,7 @@ def po_new(
         while True:
             choice = input("Choice (1/2/3): ").strip()
             if choice == "1":
-                if __create_patch_for_file(
-                    repo_name, file_path, patches_dir, force=False
-                ):
+                if __create_patch_for_file(repo_name, file_path, patches_dir, force=False):
                     print(f"  ✓ Created patch for {file_path}")
                     return True
                 print(f"  ✗ Failed to create patch for {file_path}")
@@ -969,9 +933,7 @@ def po_new(
         remaining_files = all_modified_files.copy()
 
         while True:
-            print(
-                f"\n=== File Selection (Remaining: {len(remaining_files)}/{len(all_modified_files)}) ==="
-            )
+            print(f"\n=== File Selection (Remaining: {len(remaining_files)}/{len(all_modified_files)}) ===")
 
             # Show remaining files
             if remaining_files:
@@ -1027,9 +989,7 @@ def po_new(
         if project_cfg:
             po_ignore_config = project_cfg.get("PROJECT_PO_IGNORE", "").strip()
             if po_ignore_config:
-                config_patterns = [
-                    p.strip() for p in po_ignore_config.split() if p.strip()
-                ]
+                config_patterns = [p.strip() for p in po_ignore_config.split() if p.strip()]
                 patterns.extend(config_patterns)
 
                 # Add enhanced patterns for path containment matching
@@ -1116,9 +1076,7 @@ def po_new(
 
 
 @register("po_del", needs_repositories=False, desc="Delete a PO for a project")
-def po_del(
-    env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False
-) -> bool:
+def po_del(env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False) -> bool:
     """
     Delete the specified PO directory and remove it from all project configurations.
     Args:
@@ -1183,11 +1141,7 @@ def po_del(
         print("  3. This action cannot be undone!")
 
         while True:
-            response = (
-                input(f"\nAre you sure you want to delete PO '{po_name}'? (yes/no): ")
-                .strip()
-                .lower()
-            )
+            response = input(f"\nAre you sure you want to delete PO '{po_name}'? (yes/no): ").strip().lower()
             if response in ["yes", "y"]:
                 return True
             if response in ["no", "n"]:
@@ -1210,9 +1164,7 @@ def po_del(
                 if os.path.isdir(item_path):
                     print(f"{current_prefix}{item}/")
                     next_prefix = prefix + ("    " if is_last else "│   ")
-                    __print_directory_tree(
-                        item_path, next_prefix, max_depth, current_depth + 1
-                    )
+                    __print_directory_tree(item_path, next_prefix, max_depth, current_depth + 1)
                 else:
                     size = os.path.getsize(item_path)
                     print(f"{current_prefix}{item} ({size} bytes)")
@@ -1283,14 +1235,10 @@ def po_del(
                     continue
 
                 # If we're in a project section and this is a PROJECT_PO_CONFIG line
-                if in_project_section and stripped_line.replace(" ", "").startswith(
-                    "PROJECT_PO_CONFIG="
-                ):
+                if in_project_section and stripped_line.replace(" ", "").startswith("PROJECT_PO_CONFIG="):
                     # Parse the current config and remove the PO
                     config_value = line.split("=", 1)[1].strip()
-                    updated_config = __remove_po_from_config_string(
-                        config_value, po_name
-                    )
+                    updated_config = __remove_po_from_config_string(config_value, po_name)
                     # Update the line
                     updated_lines.append(f"PROJECT_PO_CONFIG={updated_config}\n")
                     log.debug(
@@ -1368,9 +1316,7 @@ def po_del(
 
 
 @register("po_list", needs_repositories=False, desc="List configured POs for a project")
-def po_list(
-    env: Dict, projects_info: Dict, project_name: str, short: bool = False
-) -> List[dict]:
+def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = False) -> List[dict]:
     """
     List all enabled PO (patch/override) directories for the specified project.
     Args:

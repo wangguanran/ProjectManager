@@ -645,13 +645,9 @@ LEVEL4_SETTING=level4_value
 
             def __exit__(self, exc_type, exc_val, exc_tb):
                 if exc_type is None:
-                    raise AssertionError(
-                        f"Expected {self.exception_class} to be raised"
-                    )
+                    raise AssertionError(f"Expected {self.exception_class} to be raised")
                 if not issubclass(exc_type, self.exception_class):
-                    raise AssertionError(
-                        f"Expected {self.exception_class}, got {exc_type}"
-                    )
+                    raise AssertionError(f"Expected {self.exception_class}, got {exc_type}")
                 return True
 
         return AssertRaisesContext(exception_class)
@@ -703,9 +699,7 @@ class TestPluginOperations:
                 pass  # pylint: disable=unnecessary-pass
 
             @staticmethod
-            def static_method_with_doc(
-                env, projects_info, project_name, flag1=False, flag2=True
-            ):
+            def static_method_with_doc(env, projects_info, project_name, flag1=False, flag2=True):
                 """
                 Static method with detailed docstring.
                 flag1 (bool): First flag description

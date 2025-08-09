@@ -29,9 +29,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
     _ = projects_info
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_project_name = "".join(
-        c if c.isalnum() or c in ("-", "_") else "_" for c in str(project_name)
-    )
+    safe_project_name = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in str(project_name))
 
     # Use absolute path to create diff_root in project root directory
     root_dir = os.getcwd()  # Store project root directory
@@ -188,16 +186,9 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
         print(f"Processing repo {idx + 1}/{len(repositories)}: {repo_name}")
         original_cwd = os.getcwd()
         os.chdir(repo_path)
-        staged_files = (
-            subprocess.check_output(["git", "diff", "--name-only", "--cached"])
-            .decode()
-            .strip()
-            .splitlines()
-        )
+        staged_files = subprocess.check_output(["git", "diff", "--name-only", "--cached"]).decode().strip().splitlines()
         working_files = (
-            subprocess.check_output(
-                ["git", "ls-files", "--modified", "--others", "--exclude-standard"]
-            )
+            subprocess.check_output(["git", "ls-files", "--modified", "--others", "--exclude-standard"])
             .decode()
             .strip()
             .splitlines()
@@ -226,9 +217,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 "changes_worktree.patch",
                 staged=False,
             )
-            save_patch(
-                repo_path, file_list, patch_dir, "changes_staged.patch", staged=True
-            )
+            save_patch(repo_path, file_list, patch_dir, "changes_staged.patch", staged=True)
         save_commits(repo_path, commit_dir)
         os.chdir(original_cwd)
     return diff_root

@@ -70,9 +70,7 @@ def _load_all_projects(vprojects_path):
         if not ini_files:
             log.warning("No ini file found in board directory: '%s'", board_path)
             continue
-        assert (
-            len(ini_files) == 1
-        ), f"Multiple ini files found in {board_path}: {ini_files}"
+        assert len(ini_files) == 1, f"Multiple ini files found in {board_path}: {ini_files}"
         ini_file = os.path.join(board_path, ini_files[0])
         has_duplicate = False
         with open(ini_file, "r", encoding="utf-8") as f:
@@ -103,10 +101,7 @@ def _load_all_projects(vprojects_path):
         config = configupdater.ConfigUpdater()
         config.read(ini_file, encoding="utf-8")
         for project_name in config.sections():
-            config_dict = {
-                k.upper(): strip_comment(v.value)
-                for k, v in config[project_name].items()
-            }
+            config_dict = {k.upper(): strip_comment(v.value) for k, v in config[project_name].items()}
             raw_configs[project_name] = config_dict
             projects_info[project_name] = {
                 "config": None,  # placeholder, will be merged later
@@ -195,16 +190,10 @@ def _load_plugin_operations(plugin_classes):
                 desc = "plugin operation"
             sig = inspect.signature(func)
             params = list(sig.parameters.keys())
-            required_params = [
-                pname
-                for pname in params
-                if sig.parameters[pname].default == inspect.Parameter.empty
-            ]
+            required_params = [pname for pname in params if sig.parameters[pname].default == inspect.Parameter.empty]
             # Check if @needs_repositories is in docstring
             docstring = getattr(func, "__doc__", "")
-            needs_repositories = (
-                "@needs_repositories" in docstring if docstring else False
-            )
+            needs_repositories = "@needs_repositories" in docstring if docstring else False
             # Attach plugin class to function for metadata access
             setattr(func, "_plugin_class", plugin_cls)
             operations[method_name] = {
@@ -232,11 +221,7 @@ def _load_builtin_plugin_operations():
         )
         sig = inspect.signature(func)
         params = list(sig.parameters.keys())
-        required_params = [
-            pname
-            for pname in params
-            if sig.parameters[pname].default == inspect.Parameter.empty
-        ]
+        required_params = [pname for pname in params if sig.parameters[pname].default == inspect.Parameter.empty]
         func_ops[name] = {
             "func": func,
             "desc": desc,
@@ -244,9 +229,7 @@ def _load_builtin_plugin_operations():
             "param_count": len(params),
             "required_params": required_params,
             "required_count": len(required_params),
-            "needs_repositories": bool(
-                getattr(func, "_operation_meta", {}).get("needs_repositories", False)
-            ),
+            "needs_repositories": bool(getattr(func, "_operation_meta", {}).get("needs_repositories", False)),
             "plugin_class": None,
         }
     # function ops override class ops if name clashes
@@ -287,8 +270,7 @@ def _parse_args_and_plugin_args(builtin_operations):
         return [
             name
             for name, param in sig.parameters.items()
-            if name not in ("self", "project_name")
-            and param.default is not inspect.Parameter.empty
+            if name not in ("self", "project_name") and param.default is not inspect.Parameter.empty
         ]
 
     def get_flag_description(docstring, flag):
@@ -314,9 +296,7 @@ def _parse_args_and_plugin_args(builtin_operations):
                 flag_info[flag]["desc"] = get_flag_description(doc, flag)
 
     # Calculate the maximum length of operation names
-    op_max_len = (
-        max((len(op) for op in builtin_operations.keys()), default=0) + 2
-    )  # extra space
+    op_max_len = max((len(op) for op in builtin_operations.keys()), default=0) + 2  # extra space
 
     builtin_help_lines = []
     for op, info in builtin_operations.items():
@@ -342,10 +322,7 @@ def _parse_args_and_plugin_args(builtin_operations):
         )
         ops_max_len = (
             max(
-                (
-                    len(f"Supported by: {', '.join(meta['ops'])}")
-                    for meta in flag_info.values()
-                ),
+                (len(f"Supported by: {', '.join(meta['ops'])}") for meta in flag_info.values()),
                 default=0,
             )
             + 4
@@ -354,9 +331,7 @@ def _parse_args_and_plugin_args(builtin_operations):
             flag_display = f"--{flag.replace('_','-')}"
             ops_display = f"Supported by: {', '.join(meta['ops'])}"
             desc = meta["desc"]
-            plugin_options_lines.append(
-                f"  {flag_display:<{flag_max_len}}{ops_display:<{ops_max_len}}{desc}"
-            )
+            plugin_options_lines.append(f"  {flag_display:<{flag_max_len}}{ops_display:<{ops_max_len}}{desc}")
         plugin_options = "\n".join(plugin_options_lines)
     else:
         plugin_options = ""
@@ -372,13 +347,9 @@ def _parse_args_and_plugin_args(builtin_operations):
         add_help=True,
     )
     parser.add_argument("--version", action="version", version=get_version())
-    parser.add_argument(
-        "operate", choices=choices, help=help_text, metavar="operations"
-    )
+    parser.add_argument("operate", choices=choices, help=help_text, metavar="operations")
     parser.add_argument("name", help="project or board name")
-    parser.add_argument(
-        "args", nargs="*", help="additional arguments for plugin operations"
-    )
+    parser.add_argument("args", nargs="*", help="additional arguments for plugin operations")
     parser.add_argument(
         "--perf-analyze",
         action="store_true",
@@ -398,9 +369,7 @@ def _parse_args_and_plugin_args(builtin_operations):
         arg = additional_args[i]
         if arg.startswith("--"):
             key = arg[2:].replace("-", "_")
-            if i + 1 < len(additional_args) and not additional_args[i + 1].startswith(
-                "--"
-            ):
+            if i + 1 < len(additional_args) and not additional_args[i + 1].startswith("--"):
                 value = additional_args[i + 1]
                 parsed_kwargs[key] = value
                 i += 2
@@ -443,9 +412,7 @@ def _find_repositories():
         # single repo mode
         repositories.append((current_dir, "root"))
     # Print repositories for debug
-    log.debug(
-        "repositories found: %s", json.dumps(repositories, indent=2, ensure_ascii=False)
-    )
+    log.debug("repositories found: %s", json.dumps(repositories, indent=2, ensure_ascii=False))
     return repositories
 
 
@@ -453,13 +420,7 @@ def _find_repositories():
 def check_and_create_vprojects(vprojects_path):
     """Check if vprojects directory exists, prompt user and create if needed."""
     if not os.path.exists(vprojects_path):
-        answer = (
-            input(
-                "vprojects directory does not exist, create standard structure? [y/N]: "
-            )
-            .strip()
-            .lower()
-        )
+        answer = input("vprojects directory does not exist, create standard structure? [y/N]: ").strip().lower()
         if answer in ("y", "yes"):
 
             def touch(path):
@@ -483,9 +444,7 @@ def check_and_create_vprojects(vprojects_path):
                     pathlib.Path(abs_path).parent.mkdir(parents=True, exist_ok=True)
                     with open(abs_path, "w", encoding="utf-8") as f:
                         f.write("")
-            print(
-                f"vprojects directory and basic structure created at: {vprojects_path}"
-            )
+            print(f"vprojects directory and basic structure created at: {vprojects_path}")
             # Initialize git repository in vprojects
 
             try:
@@ -496,14 +455,10 @@ def check_and_create_vprojects(vprojects_path):
                     cwd=vprojects_path,
                     check=True,
                 )
-                print(
-                    "Initialized empty Git repository in vprojects directory and committed initial structure."
-                )
+                print("Initialized empty Git repository in vprojects directory and committed initial structure.")
                 # TODO: Install git hooks here for file checking in the future
             except subprocess.CalledProcessError as e:
-                print(
-                    f"Failed to initialize git repository: {e}. Output: {e.output if hasattr(e, 'output') else ''}"
-                )
+                print(f"Failed to initialize git repository: {e}. Output: {e.output if hasattr(e, 'output') else ''}")
         else:
             print("vprojects directory not created, exiting.")
             sys.exit(0)
@@ -560,9 +515,7 @@ def main():
     # Merge all operations
     all_operations = {**builtin_operations, **platform_operations}
 
-    operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(
-        all_operations
-    )
+    operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(all_operations)
     builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
 
     # Only execute operations registered through plugins
@@ -573,11 +526,7 @@ def main():
         sig = inspect.signature(func)
         # Only count CLI parameters that users need to input (remove env, projects_info)
         cli_params = [p for p in params if p not in ("env", "projects_info")]
-        required_cli_params = [
-            p
-            for p in cli_params
-            if sig.parameters[p].default == inspect.Parameter.empty
-        ]
+        required_cli_params = [p for p in cli_params if sig.parameters[p].default == inspect.Parameter.empty]
         # name + parsed_args are the actual parameters input by the user
         user_args = [name] + parsed_args
         if len(user_args) < len(required_cli_params):
@@ -590,9 +539,7 @@ def main():
             log.error("Required parameters: %s", ", ".join(required_cli_params))
             sys.exit(1)
         if get_operation_meta_flag(func, operate, "needs_repositories"):
-            log.info(
-                "Operation '%s' requires repositories, loading repositories...", operate
-            )
+            log.info("Operation '%s' requires repositories, loading repositories...", operate)
             env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs

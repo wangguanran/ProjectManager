@@ -76,26 +76,18 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
         return None, None, None
 
     # Find board information for the new project
-    board_name, board_path, ini_file = find_board_for_project(
-        project_name, projects_info
-    )
+    board_name, board_path, ini_file = find_board_for_project(project_name, projects_info)
     if not project_name:
         log.error("Project name must be provided.")
         print("Error: Project name must be provided.")
         return False
     if not board_name or not board_path:
-        log.error(
-            "Cannot determine board for project '%s'. Please ensure:", project_name
-        )
-        print(
-            f"Error: Cannot determine board for project '{project_name}'. Please ensure:"
-        )
+        log.error("Cannot determine board for project '%s'. Please ensure:", project_name)
+        print(f"Error: Cannot determine board for project '{project_name}'. Please ensure:")
         if "-" in project_name:
             parent = find_parent_project(project_name)
             print(f"  1. Parent project '{parent}' exists in projects_info")
-            print(
-                "  2. The parent project is properly configured with board information"
-            )
+            print("  2. The parent project is properly configured with board information")
         else:
             print("  1. The project has a parent project that exists in projects_info")
             print("  2. The project name follows the pattern 'parent-project'")
@@ -107,9 +99,7 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
             board_name,
             project_name,
         )
-        print(
-            f"Error: Board directory '{board_name}' does not exist for project '{project_name}'."
-        )
+        print(f"Error: Board directory '{board_name}' does not exist for project '{project_name}'.")
         return False
     if not ini_file:
         log.error("No ini file found for board: '%s'", board_name)
@@ -127,19 +117,13 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     config.optionxform = str
     config.read(ini_file, encoding="utf-8")
     if project_name in config.sections():
-        log.error(
-            "Project '%s' already exists in board '%s'.", project_name, board_name
-        )
+        log.error("Project '%s' already exists in board '%s'.", project_name, board_name)
         print(f"Project '{project_name}' already exists in board '{board_name}'.")
         return False
 
     # Recursively inherit configuration
     inherited_config = get_inherited_config(projects_info, project_name)
-    parent_config = (
-        inherited_config.get("config", {})
-        if isinstance(inherited_config.get("config", {}), dict)
-        else {}
-    )
+    parent_config = inherited_config.get("config", {}) if isinstance(inherited_config.get("config", {}), dict) else {}
     chip_name = parent_config.get("PROJECT_CHIP_NAME")
     project_customer = parent_config.get("PROJECT_CUSTOMER")
     project_name_parts = []
@@ -168,9 +152,7 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
         line_strip = line.strip()
         if line_strip.startswith("[") and line_strip.endswith("]"):
             if current_section is not None:
-                section_blocks.append(
-                    (current_section, strip_empty_lines(current_lines))
-                )
+                section_blocks.append((current_section, strip_empty_lines(current_lines)))
             current_section = line_strip[1:-1]
             current_lines = [line]
         else:
@@ -211,11 +193,7 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     log.debug("Created new project '%s' in board '%s'.", project_name, board_name)
     print(f"Created new project '{project_name}' in board '{board_name}'.")
     # Print all config for the new project (merged: ini section + inherited config['config'])
-    parent_config = (
-        inherited_config.get("config", {})
-        if isinstance(inherited_config.get("config", {}), dict)
-        else {}
-    )
+    parent_config = inherited_config.get("config", {}) if isinstance(inherited_config.get("config", {}), dict) else {}
     merged_config = dict(parent_config)
     if project_name in config:
         for key, value in config[project_name].items():
@@ -268,9 +246,7 @@ def project_del(env: Dict, projects_info: Dict, project_name: str) -> bool:
             board_name,
             project_name,
         )
-        print(
-            f"Error: Board directory '{board_name}' does not exist for project '{project_name}'."
-        )
+        print(f"Error: Board directory '{board_name}' does not exist for project '{project_name}'.")
         return False
     if not ini_file:
         log.error("No ini file found for board: '%s'", board_name)

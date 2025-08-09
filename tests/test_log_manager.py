@@ -319,7 +319,4 @@ class TestGlobalLog:
 
         # Check handler types
         handler_types = [type(handler) for handler in self.log.handlers]
-        assert (
-            logging.StreamHandler in handler_types
-            or logging.FileHandler in handler_types
-        )
+        assert logging.StreamHandler in handler_types or logging.FileHandler in handler_types

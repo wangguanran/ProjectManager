@@ -56,12 +56,8 @@ def main():
         total_branches += branches
         total_branch_missing += branch_missing
 
-        coverage_percent = (
-            ((statements - missing) / statements * 100) if statements > 0 else 0
-        )
-        branch_coverage_percent = (
-            ((branches - branch_missing) / branches * 100) if branches > 0 else 0
-        )
+        coverage_percent = ((statements - missing) / statements * 100) if statements > 0 else 0
+        branch_coverage_percent = ((branches - branch_missing) / branches * 100) if branches > 0 else 0
 
         file_reports.append(
             {
@@ -79,41 +75,25 @@ def main():
     file_reports.sort(key=lambda x: x["coverage"])
 
     # Overall statistics
-    overall_coverage = (
-        ((total_statements - total_missing) / total_statements * 100)
-        if total_statements > 0
-        else 0
-    )
+    overall_coverage = ((total_statements - total_missing) / total_statements * 100) if total_statements > 0 else 0
     overall_branch_coverage = (
-        ((total_branches - total_branch_missing) / total_branches * 100)
-        if total_branches > 0
-        else 0
+        ((total_branches - total_branch_missing) / total_branches * 100) if total_branches > 0 else 0
     )
 
     print("\n📊 OVERALL COVERAGE:")
-    print(
-        f"   Statements: {total_statements - total_missing} / {total_statements} ({overall_coverage:.1f}%)"
-    )
-    print(
-        f"   Branches: {total_branches - total_branch_missing} / {total_branches} ({overall_branch_coverage:.1f}%)"
-    )
+    print(f"   Statements: {total_statements - total_missing} / {total_statements} ({overall_coverage:.1f}%)")
+    print(f"   Branches: {total_branches - total_branch_missing} / {total_branches} ({overall_branch_coverage:.1f}%)")
     print(f"   Missing statements: {total_missing}")
     print(f"   Missing branches: {total_branch_missing}")
 
     # File breakdown
     print("\n📁 FILE BREAKDOWN:")
     print("-" * 100)
-    print(
-        f"{'File': <40} | {'Stmts': >6} | {'Miss': >4} | {'Cover': >6} | {'Branch': >6} | {'BrMiss': >6}"
-    )
+    print(f"{'File': <40} | {'Stmts': >6} | {'Miss': >4} | {'Cover': >6} | {'Branch': >6} | {'BrMiss': >6}")
     print("-" * 100)
 
     for report in file_reports:
-        status = (
-            "🟢"
-            if report["coverage"] >= 80
-            else "🟡" if report["coverage"] >= 50 else "🔴"
-        )
+        status = "🟢" if report["coverage"] >= 80 else "🟡" if report["coverage"] >= 50 else "🔴"
         print(
             f"{status} {report['file']:<37} | "
             f"{report['statements']:>6} | "
@@ -136,9 +116,7 @@ def main():
     print("-" * 30)
 
     if overall_coverage < 80:
-        print(
-            f"   ⚠️  Overall coverage is {overall_coverage:.1f}%, below the 80% target"
-        )
+        print(f"   ⚠️  Overall coverage is {overall_coverage:.1f}%, below the 80% target")
         print("      Consider adding more tests for uncovered code")
 
     if total_missing > 0:
