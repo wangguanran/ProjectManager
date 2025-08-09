@@ -13,15 +13,19 @@ import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from importlib import import_module
 
 import configupdater
 
 from src.log_manager import log
-from src.plugins.patch_override import PatchOverride
-from src.plugins.project_builder import ProjectBuilder
-from src.plugins.project_manager import ProjectManager
+from src.operations.registry import get_registered_operations
 from src.profiler import func_cprofile, func_time
 from src.utils import get_version
+
+# Ensure function-based operations are registered by importing modules that use @register
+import_module("src.plugins.project_manager")
+import_module("src.plugins.project_builder")
+import_module("src.plugins.patch_override")
 
 
 # ===== Migration utility functions =====
@@ -218,8 +222,35 @@ def _load_plugin_operations(plugin_classes):
 
 @func_time
 def _load_builtin_plugin_operations():
-    plugin_classes = [ProjectManager, PatchOverride, ProjectBuilder]
-    return _load_plugin_operations(plugin_classes)
+    # Merge with function-registered operations (function-first precedence)
+    func_ops_min = get_registered_operations()
+    func_ops = {}
+    for name, info in func_ops_min.items():
+        func = info["func"]
+        desc = getattr(func, "_operation_meta", {}).get("desc") or (
+            func.__doc__.strip().splitlines()[0] if func.__doc__ else "plugin operation"
+        )
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+        required_params = [
+            pname
+            for pname in params
+            if sig.parameters[pname].default == inspect.Parameter.empty
+        ]
+        func_ops[name] = {
+            "func": func,
+            "desc": desc,
+            "params": params,
+            "param_count": len(params),
+            "required_params": required_params,
+            "required_count": len(required_params),
+            "needs_repositories": bool(
+                getattr(func, "_operation_meta", {}).get("needs_repositories", False)
+            ),
+            "plugin_class": None,
+        }
+    # function ops override class ops if name clashes
+    return {**func_ops}
 
 
 @func_time
@@ -485,22 +516,11 @@ def get_operation_meta_flag(func, operate, key):
     Checks class and parent classes' OPERATION_META only.
     """
     # Try to get the plugin class from the function's metadata first
-    plugin_class = getattr(func, "_plugin_class", None)
-    if plugin_class is None:
-        # Fallback to the old method for backward compatibility
-        cls = getattr(func, "__self__", None)
-        if cls is None:
-            return False
-        # For bound instance methods, get the class
-        if not isinstance(cls, type):
-            cls = cls.__class__
-        plugin_class = cls
-
-    # Search through the class hierarchy for OPERATION_META
-    for base in plugin_class.__mro__:
-        operation_meta = getattr(base, "OPERATION_META", None)
-        if operation_meta and operate in operation_meta:
-            return bool(operation_meta[operate].get(key, False))
+    # Prefer function-based metadata first
+    meta = getattr(func, "_operation_meta", None)
+    if meta is not None and key in meta:
+        return bool(meta[key])
+    log.error("Failed to get operation meta flag for '%s' with key '%s'", operate, key)
     return False
 
 
