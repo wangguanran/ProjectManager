@@ -14,7 +14,7 @@ from src.operations.registry import register
 from src.profiler import auto_profile
 
 
-def __parse_po_config(po_config):
+def parse_po_config(po_config):
     apply_pos = []
     exclude_pos = set()
     exclude_files = {}
@@ -62,7 +62,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     if not po_config:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
-    apply_pos, exclude_pos, exclude_files = __parse_po_config(po_config)
+    apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
     apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
@@ -308,7 +308,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
     if not po_config:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
-    apply_pos, exclude_pos, exclude_files = __parse_po_config(po_config)
+    apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
     apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
@@ -1396,7 +1396,7 @@ def po_list(
     po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
     enabled_pos = set()
     if po_config:
-        apply_pos, exclude_pos, _ = __parse_po_config(po_config)
+        apply_pos, exclude_pos, _ = parse_po_config(po_config)
         enabled_pos = {po for po in apply_pos if po not in exclude_pos}
     # Only list POs enabled in configuration
     po_list = []

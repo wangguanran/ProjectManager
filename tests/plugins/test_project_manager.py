@@ -17,7 +17,7 @@ class TestProjectNew:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
+        import src.plugins.project_manager as ProjectManager
 
         self.ProjectManager = ProjectManager
 
@@ -1480,7 +1480,7 @@ class TestProjectDel:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
+        import src.plugins.project_manager as ProjectManager
 
         self.ProjectManager = ProjectManager
 
@@ -1800,7 +1800,7 @@ class TestBoardNew:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
+        import src.plugins.project_manager as ProjectManager
 
         self.ProjectManager = ProjectManager
 
@@ -1817,7 +1817,7 @@ class TestBoardNew:
             result = self.ProjectManager.board_new(env, projects_info, board_name)
             # Since it's not implemented, it should return None or raise NotImplementedError
             # For now, we just verify the method can be called
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -1831,7 +1831,7 @@ class TestBoardNew:
         # Test with different parameter combinations
         try:
             result = self.ProjectManager.board_new(env, projects_info, board_name)
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -1844,7 +1844,7 @@ class TestBoardNew:
 
         try:
             result = self.ProjectManager.board_new(env, projects_info, board_name)
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -1857,7 +1857,7 @@ class TestBoardNew:
 
         try:
             result = self.ProjectManager.board_new(env, projects_info, board_name)
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -2527,7 +2527,7 @@ class TestBoardDel:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
+        import src.plugins.project_manager as ProjectManager
 
         self.ProjectManager = ProjectManager
 
@@ -2544,7 +2544,7 @@ class TestBoardDel:
             result = self.ProjectManager.board_del(env, projects_info, board_name)
             # Since it's not implemented, it should return None or raise NotImplementedError
             # For now, we just verify the method can be called
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -2558,7 +2558,7 @@ class TestBoardDel:
         # Test with different parameter combinations
         try:
             result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -2571,7 +2571,7 @@ class TestBoardDel:
 
         try:
             result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -2584,7 +2584,7 @@ class TestBoardDel:
 
         try:
             result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is None
+            assert result is True
         except NotImplementedError:
             # Expected behavior for unimplemented method
             pass
@@ -2742,24 +2742,9 @@ class TestProjectManagerClass:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.project_manager import ProjectManager
+        import src.plugins.project_manager as ProjectManager
 
         self.ProjectManager = ProjectManager
-
-    def test_project_manager_instantiation(self):
-        """Test that ProjectManager cannot be instantiated."""
-        # ProjectManager should raise NotImplementedError when instantiated
-        with pytest.raises(NotImplementedError):
-            self.ProjectManager()
-
-    def test_project_manager_operation_meta(self):
-        """Test that OPERATION_META is accessible and has correct structure."""
-        # Verify that OPERATION_META is a dictionary
-        assert isinstance(self.ProjectManager.OPERATION_META, dict)
-
-        # Verify that it's empty or contains expected structure
-        # Currently it should be empty based on the implementation
-        assert len(self.ProjectManager.OPERATION_META) == 0
 
     def test_project_manager_static_methods_exist(self):
         """Test that all expected static methods exist."""

@@ -25,17 +25,9 @@ class TestPatchOverride:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.patch_override import PatchOverride
+        import src.plugins.patch_override as PatchOverride
 
         self.PatchOverride = PatchOverride
-
-    def test_patch_override_instantiation_error(self):
-        """Test that PatchOverride cannot be instantiated."""
-        with pytest.raises(
-            NotImplementedError,
-            match="PatchOverride is a utility class and cannot be instantiated.",
-        ):
-            self.PatchOverride()
 
     def test_po_apply_basic_success(self):
         """Test po_apply with basic successful case."""
@@ -177,7 +169,7 @@ class TestPatchOverrideRevert:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.patch_override import PatchOverride
+        import src.plugins.patch_override as PatchOverride
 
         self.PatchOverride = PatchOverride
 
@@ -266,7 +258,7 @@ class TestPatchOverrideNew:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.patch_override import PatchOverride
+        import src.plugins.patch_override as PatchOverride
 
         self.PatchOverride = PatchOverride
 
@@ -365,7 +357,7 @@ class TestPatchOverrideDelete:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.patch_override import PatchOverride
+        import src.plugins.patch_override as PatchOverride
 
         self.PatchOverride = PatchOverride
 
@@ -429,7 +421,7 @@ class TestPatchOverrideList:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.patch_override import PatchOverride
+        import src.plugins.patch_override as PatchOverride
 
         self.PatchOverride = PatchOverride
 
@@ -506,7 +498,7 @@ class TestPatchOverrideList:
 
 
 class TestPatchOverrideParseConfig:
-    """Test cases for __parse_po_config method."""
+    """Test cases for parse_po_config method."""
 
     def setup_method(self):
         """
@@ -517,18 +509,18 @@ class TestPatchOverrideParseConfig:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.plugins.patch_override import PatchOverride
+        import src.plugins.patch_override as PatchOverride
 
         self.PatchOverride = PatchOverride
 
     def test_parse_po_config_simple(self):
-        """Test __parse_po_config with simple config."""
+        """Test parse_po_config with simple config."""
         # Arrange
         po_config = "po1 po2"
 
         # Act
-        apply_pos, exclude_pos, exclude_files = (
-            self.PatchOverride._PatchOverride__parse_po_config(po_config)
+        apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(
+            po_config
         )
 
         # Assert
@@ -537,13 +529,13 @@ class TestPatchOverrideParseConfig:
         assert exclude_files == {}
 
     def test_parse_po_config_with_exclusions(self):
-        """Test __parse_po_config with excluded POs."""
+        """Test parse_po_config with excluded POs."""
         # Arrange
         po_config = "po1 po2 -po3"
 
         # Act
-        apply_pos, exclude_pos, exclude_files = (
-            self.PatchOverride._PatchOverride__parse_po_config(po_config)
+        apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(
+            po_config
         )
 
         # Assert
@@ -552,13 +544,13 @@ class TestPatchOverrideParseConfig:
         assert exclude_files == {}
 
     def test_parse_po_config_with_file_exclusions(self):
-        """Test __parse_po_config with file exclusions."""
+        """Test parse_po_config with file exclusions."""
         # Arrange
         po_config = "po1[file1.txt file2.txt]"
 
         # Act
-        apply_pos, exclude_pos, exclude_files = (
-            self.PatchOverride._PatchOverride__parse_po_config(po_config)
+        apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(
+            po_config
         )
 
         # Assert
@@ -569,13 +561,13 @@ class TestPatchOverrideParseConfig:
         assert exclude_files == {}
 
     def test_parse_po_config_complex(self):
-        """Test __parse_po_config with complex config."""
+        """Test parse_po_config with complex config."""
         # Arrange
         po_config = "po1[file1.txt] po2 -po3[file2.txt file3.txt]"
 
         # Act
-        apply_pos, exclude_pos, exclude_files = (
-            self.PatchOverride._PatchOverride__parse_po_config(po_config)
+        apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(
+            po_config
         )
 
         # Assert
@@ -587,13 +579,13 @@ class TestPatchOverrideParseConfig:
         assert exclude_files == {"po3": {"file2.txt", "file3.txt"}}
 
     def test_parse_po_config_empty(self):
-        """Test __parse_po_config with empty config."""
+        """Test parse_po_config with empty config."""
         # Arrange
         po_config = ""
 
         # Act
-        apply_pos, exclude_pos, exclude_files = (
-            self.PatchOverride._PatchOverride__parse_po_config(po_config)
+        apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(
+            po_config
         )
 
         # Assert
