@@ -1,6 +1,6 @@
 ---
 globs: *.py
-description: Python coding standards - no Chinese comments, no f-strings
+description: Python coding standards - no Chinese comments, use f-strings
 ---
 
 # Python Coding Standards
@@ -13,12 +13,12 @@ description: Python coding standards - no Chinese comments, no f-strings
 - Follow PEP 257 docstring conventions for function and class documentation
 
 ### 2. String Formatting
-- **NO f-string expressions**: Avoid using f"" format strings
-- **NO .format() method**: Avoid using `.format()` method
-- **Use % operator only**: Use `%` operator for string formatting
+- **Use f-string expressions**: Prefer using f"" format strings
+- **Avoid .format() method**: Avoid using `.format()` method when possible
+- **Avoid % operator**: Avoid using `%` operator for string formatting
 - Examples:
   ```python
-  # ❌ Avoid f-strings
+  # ✅ Use f-strings (preferred)
   name = "John"
   message = f"Hello {name}"
   
@@ -26,7 +26,7 @@ description: Python coding standards - no Chinese comments, no f-strings
   name = "John"
   message = "Hello {}".format(name)
   
-  # ✅ Use % operator only
+  # ❌ Avoid % operator
   name = "John"
   message = "Hello %s" % name
   ```
@@ -61,22 +61,33 @@ def calculate_total(price, tax_rate):
 
 #### Correct String Formatting:
 ```python
-# Using % operator for single variable
+# Using f-string for single variable
 user_name = "Alice"
-greeting = "Welcome, %s!" % user_name
+greeting = f"Welcome, {user_name}!"
 
-# Using % operator for numbers
+# Using f-string for numbers
 age = 25
-info = "User is %d years old" % age
+info = f"User is {age} years old"
 
-# Multiple variables with % operator
+# Multiple variables with f-string
 name = "Bob"
 age = 30
 city = "New York"
-profile = "Name: %s, Age: %d, City: %s" % (name, age, city)
+profile = f"Name: {name}, Age: {age}, City: {city}"
+
+# Complex expressions in f-string
+price = 19.99
+tax_rate = 0.08
+total = f"Total: ${price * (1 + tax_rate):.2f}"
 ```
 
-### 5. File Structure
+### 5. Code Formatting
+- **Always run format.sh after modifying Python code**: Execute `./format.sh` to format code
+- This ensures consistent code style across the project
+- Formatting should be done before committing changes
+- The format.sh script applies consistent indentation, spacing, and style rules
+
+### 6. File Structure
 - All Python files should follow these standards
 - Import statements at the top
 - Constants defined after imports
