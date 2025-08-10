@@ -275,7 +275,7 @@ class TestProjectNew:
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
                 "config": {
-                    "PROJECT_CHIP_NAME": "chip123",
+                    "PROJECT_PLATFORM": "platform",
                     "PROJECT_CUSTOMER": "customer456",
                 },
             }
@@ -288,9 +288,9 @@ class TestProjectNew:
         # Verify actual INI file content with inheritance
         content = ini_file.read_text()
         assert "[parent_project-child]" in content
-        assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
+        assert "PROJECT_NAME = platform_parent_project-child_customer456" in content
         # Verify inheritance worked correctly
-        assert "PROJECT_CHIP_NAME" not in content  # Should not be written to INI
+        assert "PROJECT_PLATFORM" not in content  # Should not be written to INI
         assert "PROJECT_CUSTOMER" not in content  # Should not be written to INI
 
     def test_project_new_multi_level_inheritance(self, tmp_path):
@@ -306,7 +306,7 @@ class TestProjectNew:
                 "board_name": "board01",
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
-                "config": {"PROJECT_CHIP_NAME": "chip123"},
+                "config": {"PROJECT_PLATFORM": "platform"},
             },
             "grandparent-parent": {
                 "board_name": "board01",
@@ -324,7 +324,7 @@ class TestProjectNew:
         content = ini_file.read_text()
         assert "[grandparent-parent-child]" in content
         # Check that the project name includes inherited customer name (from direct parent)
-        # Note: chip123 from grandparent is not inherited in current implementation
+        # Note: platform from grandparent is not inherited in current implementation
         assert "PROJECT_NAME = grandparent-parent-child_customer456" in content
 
     def test_project_new_config_merge(self, tmp_path):
@@ -341,7 +341,7 @@ class TestProjectNew:
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
                 "config": {
-                    "PROJECT_CHIP_NAME": "chip123",
+                    "PROJECT_PLATFORM": "platform",
                     "PROJECT_CUSTOMER": "customer456",
                     "SOME_CONFIG": "parent_value",
                 },
@@ -355,9 +355,9 @@ class TestProjectNew:
         # Verify actual INI file content with config merge
         content = ini_file.read_text()
         assert "[parent_project-child]" in content
-        assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
+        assert "PROJECT_NAME = platform_parent_project-child_customer456" in content
         # Verify config merge worked correctly
-        assert "PROJECT_CHIP_NAME" not in content  # Should not be written to INI
+        assert "PROJECT_PLATFORM" not in content  # Should not be written to INI
         assert "PROJECT_CUSTOMER" not in content  # Should not be written to INI
         assert "SOME_CONFIG" not in content  # Should not be written to INI
 
@@ -386,7 +386,7 @@ class TestProjectNew:
         assert "[parent_project-child]" in content
         assert "PROJECT_NAME = parent_project-child" in content
         # Verify no inheritance config was added
-        assert "PROJECT_CHIP_NAME" not in content
+        assert "PROJECT_PLATFORM" not in content
         assert "PROJECT_CUSTOMER" not in content
 
     def test_project_new_board_directory_not_exists(self):
@@ -651,7 +651,7 @@ class TestProjectNew:
             "[parent_project]\n"
             "PROJECT_NAME=parent\n"
             "# This is a comment\n"
-            "PROJECT_CHIP_NAME=chip123\n"
+            "PROJECT_PLATFORM=platform\n"
         )
 
         projects_info = {
@@ -707,7 +707,7 @@ class TestProjectNew:
             "[board01]\n"
             "[parent_project]\n"
             "PROJECT_NAME=parent  # Project name comment\n"
-            "PROJECT_CHIP_NAME=chip123  # Chip name comment\n"
+            "PROJECT_PLATFORM=platform  # Chip name comment\n"
         )
 
         projects_info = {
@@ -754,7 +754,7 @@ class TestProjectNew:
             """[board01]
 [parent_project]
 PROJECT_NAME=parent
-PROJECT_CHIP_NAME=chip123
+PROJECT_PLATFORM=platform
 """
         )
 
@@ -799,11 +799,11 @@ PROJECT_CHIP_NAME=chip123
         assert "[parent_project-child]" in content
         assert "PROJECT_NAME = parent_project-child" in content
         # Verify no extra config was added
-        assert "PROJECT_CHIP_NAME" not in content
+        assert "PROJECT_PLATFORM" not in content
         assert "PROJECT_CUSTOMER" not in content
 
-    def test_project_new_with_chip_name(self, tmp_path):
-        """Test project_new with chip name in config."""
+    def test_project_new_with_platform_name(self, tmp_path):
+        """Test project_new with platform name in config."""
         env = {}
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
@@ -815,7 +815,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_name": "board01",
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
-                "config": {"PROJECT_CHIP_NAME": "chip123"},
+                "config": {"PROJECT_PLATFORM": "platform"},
             }
         }
 
@@ -823,12 +823,12 @@ PROJECT_CHIP_NAME=chip123
 
         assert result is True
 
-        # Verify actual INI file content with chip name
+        # Verify actual INI file content with platform name
         content = ini_file.read_text()
         assert "[parent_project-child]" in content
-        assert "PROJECT_NAME = chip123_parent_project-child" in content
-        # Verify chip name was inherited
-        assert "PROJECT_CHIP_NAME" not in content  # Should not be written to INI
+        assert "PROJECT_NAME = platform_parent_project-child" in content
+        # Verify platform name was inherited
+        assert "PROJECT_PLATFORM" not in content  # Should not be written to INI
         # Verify no customer name
         assert "PROJECT_CUSTOMER" not in content
 
@@ -859,11 +859,11 @@ PROJECT_CHIP_NAME=chip123
         assert "PROJECT_NAME = parent_project-child_customer456" in content
         # Verify customer name was inherited
         assert "PROJECT_CUSTOMER" not in content  # Should not be written to INI
-        # Verify no chip name
-        assert "PROJECT_CHIP_NAME" not in content
+        # Verify no platform name
+        assert "PROJECT_PLATFORM" not in content
 
-    def test_project_new_with_chip_and_customer(self, tmp_path):
-        """Test project_new with both chip name and customer name."""
+    def test_project_new_with_platform_and_customer(self, tmp_path):
+        """Test project_new with both platform name and customer name."""
         env = {}
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
@@ -876,7 +876,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
                 "config": {
-                    "PROJECT_CHIP_NAME": "chip123",
+                    "PROJECT_PLATFORM": "platform",
                     "PROJECT_CUSTOMER": "customer456",
                 },
             }
@@ -889,8 +889,8 @@ PROJECT_CHIP_NAME=chip123
         # Verify the actual project name generation in INI file
         content = ini_file.read_text()
         assert "[parent_project-child]" in content
-        # Check that the project name includes both chip and customer names
-        assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
+        # Check that the project name includes both platform and customer names
+        assert "PROJECT_NAME = platform_parent_project-child_customer456" in content
 
     def test_project_new_complete_flow(self, tmp_path):
         """Test project_new complete successful flow."""
@@ -906,7 +906,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
                 "config": {
-                    "PROJECT_CHIP_NAME": "chip123",
+                    "PROJECT_PLATFORM": "platform",
                     "PROJECT_CUSTOMER": "customer456",
                 },
             }
@@ -919,9 +919,9 @@ PROJECT_CHIP_NAME=chip123
         # Verify complete flow success
         content = ini_file.read_text()
         assert "[parent_project-child]" in content
-        assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
+        assert "PROJECT_NAME = platform_parent_project-child_customer456" in content
         # Verify inheritance worked
-        assert "PROJECT_CHIP_NAME" not in content
+        assert "PROJECT_PLATFORM" not in content
         assert "PROJECT_CUSTOMER" not in content
 
     def test_project_new_config_output(self, tmp_path, capsys):
@@ -938,7 +938,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
                 "config": {
-                    "PROJECT_CHIP_NAME": "chip123",
+                    "PROJECT_PLATFORM": "platform",
                     "PROJECT_CUSTOMER": "customer456",
                 },
             }
@@ -951,7 +951,7 @@ PROJECT_CHIP_NAME=chip123
         # Check that config output was printed
         captured = capsys.readouterr()
         assert "All config for project 'parent_project-child':" in captured.out
-        assert "PROJECT_NAME = chip123_parent_project-child_customer456" in captured.out
+        assert "PROJECT_NAME = platform_parent_project-child_customer456" in captured.out
 
     def test_project_new_logging(self, tmp_path):
         """Test project_new logging functionality."""
@@ -1243,7 +1243,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_name": "board01",
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
-                "config": {"PROJECT_CHIP_NAME": "chip123"},
+                "config": {"PROJECT_PLATFORM": "platform"},
             },
             "base-feature1": {
                 "board_name": "board01",
@@ -1272,13 +1272,13 @@ PROJECT_CHIP_NAME=chip123
         ini_file.write_text("[board01]\n")
 
         projects_info = {
-            "chip123": {
+            "platform": {
                 "board_name": "board01",
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
-                "config": {"PROJECT_CHIP_NAME": "chip123"},
+                "config": {"PROJECT_PLATFORM": "platform"},
             },
-            "chip123-customer456": {
+            "platform-customer456": {
                 "board_name": "board01",
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
@@ -1286,7 +1286,7 @@ PROJECT_CHIP_NAME=chip123
             },
         }
 
-        result = self.ProjectManager.project_new(env, projects_info, "chip123-customer456-variant1")
+        result = self.ProjectManager.project_new(env, projects_info, "platform-customer456-variant1")
 
         assert result is True
 
@@ -1304,7 +1304,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
                 "config": {
-                    "PROJECT_CHIP_NAME": "chip123",
+                    "PROJECT_PLATFORM": "platform",
                     "PROJECT_CUSTOMER": "customer456",
                 },
             }
@@ -1322,7 +1322,7 @@ PROJECT_CHIP_NAME=chip123
         assert "[parent_project-child]" in content
 
         # Verify project name was generated correctly
-        assert "PROJECT_NAME = chip123_parent_project-child_customer456" in content
+        assert "PROJECT_NAME = platform_parent_project-child_customer456" in content
 
         # Verify no duplicate sections
         sections = [line.strip() for line in content.split("\n") if line.strip().startswith("[")]
@@ -1347,7 +1347,7 @@ PROJECT_CHIP_NAME=chip123
                 "board_name": "board01",
                 "board_path": str(board_dir),
                 "ini_file": str(ini_file),
-                "config": {"PROJECT_CHIP_NAME": "chip123"},
+                "config": {"PROJECT_PLATFORM": "platform"},
             },
             "base-feature": {
                 "board_name": "board01",
@@ -1369,12 +1369,12 @@ PROJECT_CHIP_NAME=chip123
         assert "[base-feature-child]" in content
 
         # Verify inherited project name includes customer (from direct parent)
-        # Note: chip123 from grandparent is not inherited in current implementation
+        # Note: platform from grandparent is not inherited in current implementation
         assert "PROJECT_NAME = base-feature-child_customer456" in content
 
         # Verify the inheritance chain worked correctly
         # The project should inherit from base-feature, which inherits from base
-        # So it should have both PROJECT_CHIP_NAME and PROJECT_CUSTOMER
+        # So it should have both PROJECT_PLATFORM and PROJECT_CUSTOMER
 
 
 class TestProjectDel:
@@ -2241,15 +2241,15 @@ class TestBoardNew:
 
         assert result is False
 
-    def test_project_new_with_chip_name_config(self, tmp_path):
-        """Test project_new with chip name in config (line 168)."""
+    def test_project_new_with_platform_name_config(self, tmp_path):
+        """Test project_new with platform name in config (line 168)."""
         env = {}
         projects_info = {
             "parent-project": {
                 "board_name": "test_board",
                 "board_path": str(tmp_path / "test_board"),
                 "ini_file": str(tmp_path / "test_board" / "config.ini"),
-                "config": {"PROJECT_CHIP_NAME": "test_chip"},
+                "config": {"PROJECT_PLATFORM": "test_platform"},
             }
         }
 

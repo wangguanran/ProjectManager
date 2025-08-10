@@ -166,7 +166,7 @@ class TestLoadAllProjects:
         # Create board with single project
         ini_content = """[testproject]
 PROJECT_NAME=test_project
-PROJECT_CHIP_NAME=test_chip
+PROJECT_PLATFORM=test_platform
 PROJECT_CUSTOMER=test_customer
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
@@ -189,14 +189,14 @@ PROJECT_CUSTOMER=test_customer
         # Create common config
         common_content = """[common]
 COMMON_SETTING=common_value
-DEFAULT_CHIP=default_chip
+DEFAULT_CHIP=default_platform
 """
         self._create_common_config(vprojects_path, common_content)
 
         # Create board with project
         ini_content = """[test-project]
 PROJECT_NAME=test_project
-PROJECT_CHIP_NAME=test_chip
+PROJECT_PLATFORM=test_platform
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
@@ -206,8 +206,8 @@ PROJECT_CHIP_NAME=test_chip
         project_info = result["test-project"]
         # Should inherit common settings
         assert project_info["config"]["COMMON_SETTING"] == "common_value"
-        assert project_info["config"]["DEFAULT_CHIP"] == "default_chip"
-        assert project_info["config"]["PROJECT_CHIP_NAME"] == "test_chip"
+        assert project_info["config"]["DEFAULT_CHIP"] == "default_platform"
+        assert project_info["config"]["PROJECT_PLATFORM"] == "test_platform"
 
     def test_load_all_projects_parent_child_relationship(self):
         """Test loading projects with parent-child relationships."""
@@ -312,7 +312,7 @@ PROJECT_NAME=duplicate_key
 
         ini_content = """[test-project]
 PROJECT_NAME=test_project # inline comment
-PROJECT_CHIP_NAME=test_chip ; another comment
+PROJECT_PLATFORM=test_platform ; another comment
 PROJECT_CUSTOMER=test_customer
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
@@ -322,7 +322,7 @@ PROJECT_CUSTOMER=test_customer
         assert len(result) == 1
         project_info = result["test-project"]
         assert project_info["config"]["PROJECT_NAME"] == "test_project"
-        assert project_info["config"]["PROJECT_CHIP_NAME"] == "test_chip"
+        assert project_info["config"]["PROJECT_PLATFORM"] == "test_platform"
         assert project_info["config"]["PROJECT_CUSTOMER"] == "test_customer"
 
     def test_load_all_projects_po_config_concatenation(self):
@@ -398,7 +398,7 @@ PROJECT_NAME=invalid_project
         # Create common config
         common_content = """[common]
 BASE_SETTING=base_value
-COMMON_CHIP=common_chip
+COMMON_CHIP=common_platform
 """
         self._create_common_config(vprojects_path, common_content)
 
@@ -426,12 +426,12 @@ CHILD_SETTING=child_value
 
         # Parent should inherit from common
         assert parent_info["config"]["BASE_SETTING"] == "base_value"
-        assert parent_info["config"]["COMMON_CHIP"] == "common_chip"
+        assert parent_info["config"]["COMMON_CHIP"] == "common_platform"
         assert parent_info["config"]["PARENT_SETTING"] == "parent_value"
 
         # Child should inherit from parent and common
         assert child_info["config"]["BASE_SETTING"] == "base_value"
-        assert child_info["config"]["COMMON_CHIP"] == "common_chip"
+        assert child_info["config"]["COMMON_CHIP"] == "common_platform"
         assert child_info["config"]["PARENT_SETTING"] == "parent_value"
         assert child_info["config"]["CHILD_SETTING"] == "child_value"
 
@@ -542,7 +542,7 @@ PROJECT_NAME=valid_project
 
         ini_content = """[testproject]
 PROJECT_NAME=  test_project
-PROJECT_CHIP_NAME=  test_chip
+PROJECT_PLATFORM=  test_platform
 PROJECT_CUSTOMER=test_customer
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
@@ -553,7 +553,7 @@ PROJECT_CUSTOMER=test_customer
         project_info = result["testproject"]
         # Whitespace should be stripped
         assert project_info["config"]["PROJECT_NAME"] == "test_project"
-        assert project_info["config"]["PROJECT_CHIP_NAME"] == "test_chip"
+        assert project_info["config"]["PROJECT_PLATFORM"] == "test_platform"
         assert project_info["config"]["PROJECT_CUSTOMER"] == "test_customer"
 
     def test_load_all_projects_po_config_with_whitespace(self):

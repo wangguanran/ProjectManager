@@ -444,6 +444,8 @@ disable=raw-checker-failed,
         invalid-name,
         import-outside-toplevel,
         too-many-public-methods,
+        too-many-arguments,
+        too-many-positional-arguments,
         C0301 # Ignore 'Line too long' warning
         ,R0914 # Too many local variables
         ,R0912 # Too many branches

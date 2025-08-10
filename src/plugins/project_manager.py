@@ -123,11 +123,11 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Recursively inherit configuration
     inherited_config = get_inherited_config(projects_info, project_name)
     parent_config = inherited_config.get("config", {}) if isinstance(inherited_config.get("config", {}), dict) else {}
-    chip_name = parent_config.get("PROJECT_CHIP_NAME")
+    platform_name = parent_config.get("PROJECT_PLATFORM")
     project_customer = parent_config.get("PROJECT_CUSTOMER")
     project_name_parts = []
-    if chip_name:
-        project_name_parts.append(chip_name)
+    if platform_name:
+        project_name_parts.append(platform_name)
     project_name_parts.append(project_name)
     if project_customer:
         project_name_parts.append(project_customer)

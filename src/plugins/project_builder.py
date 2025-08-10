@@ -6,8 +6,9 @@ import os
 import shutil
 import subprocess
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
+from src.hooks import HookType, execute_hooks_with_fallback
 from src.log_manager import log
 from src.operations.registry import register
 
@@ -26,8 +27,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
     If single repo, do not create root subdirectory, put files directly under after, before, etc.
     Diff directory is .cache/build/{project_name}/{timestamp}/diff
     """
-    _ = env
-    _ = projects_info
+    _ = projects_info  # Mark as intentionally unused
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_project_name = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in str(project_name))
@@ -221,7 +221,8 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
             save_patch(repo_path, file_list, patch_dir, "changes_staged.patch", staged=True)
         save_commits(repo_path, commit_dir)
         os.chdir(original_cwd)
-    return diff_root
+
+    return True
 
 
 @register(
@@ -234,7 +235,6 @@ def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool
     Pre-build stage for the specified project.
     """
     log.info("Pre-build stage for project: %s", project_name)
-    print(f"Pre-build stage for project: {project_name}")
     project_diff(env, projects_info, project_name)
     return True
 
@@ -249,7 +249,6 @@ def project_do_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
     Build stage for the specified project.
     """
     log.info("Build stage for project: %s", project_name)
-    print(f"Build stage for project: {project_name}")
     # TODO: implement build logic
     _ = env
     _ = projects_info
@@ -266,7 +265,6 @@ def project_post_build(env: Dict, projects_info: Dict, project_name: str) -> boo
     Post-build stage for the specified project.
     """
     log.info("Post-build stage for project: %s", project_name)
-    print(f"Post-build stage for project: {project_name}")
     # TODO: implement post-build logic
     _ = env
     _ = projects_info
@@ -281,48 +279,78 @@ def project_post_build(env: Dict, projects_info: Dict, project_name: str) -> boo
 def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
     """
     Build the specified project, including pre-build, build, and post-build stages.
+
+    Args:
+        env: Environment variables and configuration
+        projects_info: Project information dictionary
+        project_name: Name of the project to build
     """
+    # Get platform from project_info
+    project_info = projects_info.get(project_name, {})
+    platform = project_info.get("config", {}).get("PROJECT_PLATFORM")
+
+    def create_context(env: Dict, projects_info: Dict, project_name: str, platform: Optional[str] = None) -> Dict:
+        """Create context dictionary for hooks."""
+        return {
+            "env": env,
+            "projects_info": projects_info,
+            "project_name": project_name,
+            "platform": platform,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def has_platform_hooks(hook_type: HookType, platform: str) -> bool:
+        """Check if there are any hooks registered for the specified platform and hook type."""
+        from src.hooks.registry import _platform_hooks
+
+        return platform in _platform_hooks and hook_type.value in _platform_hooks[platform]
+
+    # Execute validation hooks if platform is specified and has hooks
+    if platform and has_platform_hooks(HookType.VALIDATION, platform):
+        context = create_context(env, projects_info, project_name, platform)
+        validation_result = execute_hooks_with_fallback(HookType.VALIDATION, context, platform)
+        if not validation_result:
+            log.error("Validation hooks failed, aborting build")
+            return False
+
+    # Execute pre-build hooks if platform is specified and has hooks
+    if platform and has_platform_hooks(HookType.PRE_BUILD, platform):
+        context = create_context(env, projects_info, project_name, platform)
+        pre_build_result = execute_hooks_with_fallback(HookType.PRE_BUILD, context, platform)
+        if not pre_build_result:
+            log.error("Pre-build hooks failed, aborting build")
+            return False
+
+    # Execute pre-build stage
     if not project_pre_build(env, projects_info, project_name):
         log.error("Pre-build failed for project: %s", project_name)
-        print(f"Pre-build failed for project: {project_name}")
         return False
+
+    # Execute build hooks if platform is specified and has hooks
+    if platform and has_platform_hooks(HookType.BUILD, platform):
+        context = create_context(env, projects_info, project_name, platform)
+        build_result = execute_hooks_with_fallback(HookType.BUILD, context, platform)
+        if not build_result:
+            log.error("Build hooks failed, aborting build")
+            return False
+
+    # Execute build stage
     if not project_do_build(env, projects_info, project_name):
         log.error("Build failed for project: %s", project_name)
-        print(f"Build failed for project: {project_name}")
         return False
+
+    # Execute post-build hooks if platform is specified and has hooks
+    if platform and has_platform_hooks(HookType.POST_BUILD, platform):
+        context = create_context(env, projects_info, project_name, platform)
+        post_build_result = execute_hooks_with_fallback(HookType.POST_BUILD, context, platform)
+        if not post_build_result:
+            log.error("Post-build hooks failed, aborting build")
+            return False
+
+    # Execute post-build stage
     if not project_post_build(env, projects_info, project_name):
         log.error("Post-build failed for project: %s", project_name)
-        print(f"Post-build failed for project: {project_name}")
         return False
+
     log.info("Build succeeded for project: %s", project_name)
-    print(f"Build succeeded for project: {project_name}")
     return True
-
-
-class ProjectBuilder:
-    """Class wrapper exposing project build operations as static methods."""
-
-    @staticmethod
-    def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
-        """Wrapper for `project_diff`."""
-        return project_diff(env, projects_info, project_name)
-
-    @staticmethod
-    def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
-        """Wrapper for `project_pre_build`."""
-        return project_pre_build(env, projects_info, project_name)
-
-    @staticmethod
-    def project_do_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
-        """Wrapper for `project_do_build`."""
-        return project_do_build(env, projects_info, project_name)
-
-    @staticmethod
-    def project_post_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
-        """Wrapper for `project_post_build`."""
-        return project_post_build(env, projects_info, project_name)
-
-    @staticmethod
-    def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
-        """Wrapper for `project_build`."""
-        return project_build(env, projects_info, project_name)
