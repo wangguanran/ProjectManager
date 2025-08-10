@@ -106,9 +106,10 @@ class TestLoadAllProjects:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.__main__ import _load_all_projects
+        from src.__main__ import _load_all_projects, _load_common_config
 
         self._load_all_projects = _load_all_projects
+        self._load_common_config = _load_common_config
         self.temp_dir = None
 
     def teardown_method(self):
@@ -141,16 +142,21 @@ class TestLoadAllProjects:
             f.write(common_content)
         return common_ini
 
+    def _load_projects_with_config(self, vprojects_path):
+        """Load projects with common configuration."""
+        common_configs, _ = self._load_common_config(vprojects_path)
+        return self._load_all_projects(vprojects_path, common_configs)
+
     def test_load_all_projects_empty_directory(self):
         """Test loading projects from an empty vprojects directory."""
         vprojects_path = self._create_temp_vprojects_structure()
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
         assert not result
 
     def test_load_all_projects_nonexistent_directory(self):
         """Test loading projects from a non-existent directory."""
         nonexistent_path = "/nonexistent/path"
-        result = self._load_all_projects(nonexistent_path)
+        result = self._load_projects_with_config(nonexistent_path)
         assert not result
 
     def test_load_all_projects_single_board_single_project(self):
@@ -165,7 +171,7 @@ PROJECT_CUSTOMER=test_customer
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         assert "testproject" in result
@@ -194,7 +200,7 @@ PROJECT_CHIP_NAME=test_chip
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         project_info = result["test-project"]
@@ -218,7 +224,7 @@ PROJECT_NAME=parent_project_child_grandchild
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 3
 
@@ -250,7 +256,7 @@ PROJECT_NAME=test_project
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         # Should only load the valid board, not excluded directories
         assert len(result) == 1
@@ -270,7 +276,7 @@ PROJECT_NAME=test_project
 
         # Should raise AssertionError
         with self.assert_raises(AssertionError):
-            self._load_all_projects(vprojects_path)
+            self._load_projects_with_config(vprojects_path)
 
     def test_load_all_projects_no_ini_file(self):
         """Test handling of board directory without ini file."""
@@ -280,7 +286,7 @@ PROJECT_NAME=test_project
         board_path = os.path.join(vprojects_path, "board01")
         os.makedirs(board_path)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         # Should return empty dict when no ini file found
         assert not result
@@ -295,7 +301,7 @@ PROJECT_NAME=duplicate_key
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         # Should skip projects with duplicate keys
         assert not result
@@ -311,7 +317,7 @@ PROJECT_CUSTOMER=test_customer
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         project_info = result["test-project"]
@@ -336,7 +342,7 @@ PROJECT_PO_CONFIG=po_test01
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         project_info = result["test-project"]
@@ -358,7 +364,7 @@ PROJECT_NAME=project2
         self._create_board_structure(vprojects_path, "board01", board1_content)
         self._create_board_structure(vprojects_path, "board02", board2_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 2
         assert "project1" in result
@@ -378,7 +384,7 @@ PROJECT_NAME=invalid_project
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         # Both projects should be loaded (invalid_projects set is empty in this test)
         assert len(result) == 2
@@ -410,7 +416,7 @@ CHILD_SETTING=child_value
 """
         self._create_board_structure(vprojects_path, "board02", child_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 2
 
@@ -444,7 +450,7 @@ PROJECT_NAME=base_project_variant2
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 3
 
@@ -480,7 +486,7 @@ PROJECT_NAME=test_project
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         project_info = result["testproject"]
@@ -499,7 +505,7 @@ PROJECT_NAME=valid_project
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         # Empty sections are still loaded but with empty config
         assert len(result) == 2
@@ -521,7 +527,7 @@ PROJECT_NAME=valid_project
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         # Comment-only sections are still loaded but with empty config
         assert len(result) == 2
@@ -541,7 +547,7 @@ PROJECT_CUSTOMER=test_customer
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         project_info = result["testproject"]
@@ -567,7 +573,7 @@ PROJECT_PO_CONFIG=  po_test01
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 1
         project_info = result["testproject"]
@@ -599,7 +605,7 @@ LEVEL4_SETTING=level4_value
 """
         self._create_board_structure(vprojects_path, "board01", ini_content)
 
-        result = self._load_all_projects(vprojects_path)
+        result = self._load_projects_with_config(vprojects_path)
 
         assert len(result) == 4
 

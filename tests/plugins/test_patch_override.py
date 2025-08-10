@@ -34,7 +34,7 @@ class TestPatchOverride:
             "vprojects_path": "/tmp/vprojects",
             "repositories": [("/tmp/repo1", "repo1"), ("/tmp/repo2", "repo2")],
         }
-        projects_info = {"test_project": {"board_name": "test_board", "PROJECT_PO_CONFIG": "po1"}}
+        projects_info = {"test_project": {"board_name": "test_board", "config": {"PROJECT_PO_CONFIG": "po1"}}}
         project_name = "test_project"
 
         with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
@@ -75,7 +75,7 @@ class TestPatchOverride:
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
-                "PROJECT_PO_CONFIG": "",  # Empty config
+                "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
             }
         }
         project_name = "test_project"
@@ -98,7 +98,7 @@ class TestPatchOverride:
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
-                "PROJECT_PO_CONFIG": "po1 -po1",  # po1 is excluded
+                "config": {"PROJECT_PO_CONFIG": "po1 -po1"},  # po1 is excluded
             }
         }
         project_name = "test_project"
@@ -121,8 +121,10 @@ class TestPatchOverride:
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
-                # Exclude specific files
-                "PROJECT_PO_CONFIG": "po1[file1.txt file2.txt]",
+                "config": {
+                    # Exclude specific files
+                    "PROJECT_PO_CONFIG": "po1[file1.txt file2.txt]",
+                },
             }
         }
         project_name = "test_project"
@@ -167,7 +169,7 @@ class TestPatchOverrideRevert:
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
-                "PROJECT_PO_CONFIG": "po1",
+                "config": {"PROJECT_PO_CONFIG": "po1"},
             }
         }
         project_name = "test_project"
@@ -208,7 +210,7 @@ class TestPatchOverrideRevert:
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
-                "PROJECT_PO_CONFIG": "",  # Empty config
+                "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
             }
         }
         project_name = "test_project"

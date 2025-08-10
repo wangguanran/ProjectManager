@@ -29,9 +29,57 @@ import_module("src.plugins.patch_override")
 
 
 # ===== Migration utility functions =====
+def _strip_comment(val):
+    """Remove inline comments after # or ;"""
+    return val.split("#", 1)[0].split(";", 1)[0].strip()
+
+
 @func_time
 @func_cprofile
-def _load_all_projects(vprojects_path):
+def _load_common_config(vprojects_path):
+    """
+    Load common.ini configuration file.
+
+    Args:
+        vprojects_path (str): Path to vprojects directory
+
+    Returns:
+        tuple: (common_configs, po_configs)
+            - common_configs: dict containing [common] section config
+            - po_configs: dict containing all po-* sections config
+    """
+    common_config_path = os.path.join(vprojects_path, "common", "common.ini")
+    common_configs = {}
+    po_configs = {}
+
+    if os.path.exists(common_config_path):
+        common_updater = configupdater.ConfigUpdater()
+        common_updater.read(common_config_path, encoding="utf-8")
+
+        # Load all sections from common.ini
+        for section_name in common_updater.sections():
+            section = common_updater[section_name]
+            section_dict = {k.upper(): _strip_comment(section[k].value) for k in section}
+
+            if section_name == "common":
+                common_configs[section_name] = section_dict
+            elif section_name.startswith("po-"):
+                po_configs[section_name] = section_dict
+            else:
+                # Other sections are also stored in common_configs for backward compatibility
+                common_configs[section_name] = section_dict
+
+        if "common" not in common_configs:
+            log.warning("[common] section not found in: '%s'", common_config_path)
+    else:
+        log.warning("common config not found: '%s'", common_config_path)
+
+    return common_configs, po_configs
+
+
+@func_time
+@func_cprofile
+def _load_all_projects(vprojects_path, common_configs):
     exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
     if not os.path.exists(vprojects_path):
         log.warning("vprojects directory does not exist: '%s'", vprojects_path)
@@ -40,26 +88,7 @@ def _load_all_projects(vprojects_path):
     raw_configs = {}
     invalid_projects = set()
 
-    # Load common config first
-    common_config_path = os.path.join(vprojects_path, "common", "common.ini")
-    common_configs = {}
-
-    def strip_comment(val):
-        # Remove inline comments after # or ;
-        return val.split("#", 1)[0].split(";", 1)[0].strip()
-
-    if os.path.exists(common_config_path):
-        common_updater = configupdater.ConfigUpdater()
-        common_updater.read(common_config_path, encoding="utf-8")
-        # Only load [common] section
-        if common_updater.has_section("common"):
-            section = common_updater["common"]
-            section_dict = {k.upper(): strip_comment(section[k].value) for k in section}
-            common_configs["common"] = section_dict
-        else:
-            log.warning("[common] section not found in: '%s'", common_config_path)
-    else:
-        log.warning("common config not found: '%s'", common_config_path)
+    # Use the passed common_configs parameter
 
     for item in os.listdir(vprojects_path):
         board_name = item
@@ -101,7 +130,7 @@ def _load_all_projects(vprojects_path):
         config = configupdater.ConfigUpdater()
         config.read(ini_file, encoding="utf-8")
         for project_name in config.sections():
-            config_dict = {k.upper(): strip_comment(v.value) for k, v in config[project_name].items()}
+            config_dict = {k.upper(): _strip_comment(v.value) for k, v in config[project_name].items()}
             raw_configs[project_name] = config_dict
             projects_info[project_name] = {
                 "config": None,  # placeholder, will be merged later
@@ -139,9 +168,9 @@ def _load_all_projects(vprojects_path):
             return {}
         parent = find_parent(project)
         merged = {}
-        # Merge common configuration first
-        for section_dict in common_configs.values():
-            for k, v in section_dict.items():
+        # Merge common configuration first (only [common] section)
+        if "common" in common_configs:
+            for k, v in common_configs["common"].items():
                 merged[k] = v
         # Then merge parent project configuration
         if parent and parent in raw_configs:
@@ -497,9 +526,15 @@ def main():
         "vprojects_path": vprojects_path,
         # "repositories": _find_repositories(),  # lazy loading
     }
-    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
 
-    projects_info = _load_all_projects(env["vprojects_path"])
+    # Load common configurations
+    common_configs, po_configs = _load_common_config(env["vprojects_path"])
+    env["po_configs"] = po_configs
+    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
+    log.debug("Loaded %d po configurations.", len(po_configs))
+    log.debug("Po configurations: %s", list(po_configs.keys()))
+
+    projects_info = _load_all_projects(env["vprojects_path"], common_configs)
     log.debug("Loaded %d projects.", len(projects_info))
     log.debug(
         "Loaded projects info:\n%s",

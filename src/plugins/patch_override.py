@@ -54,8 +54,9 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     """
     vprojects_path = env["vprojects_path"]
     log.info("start po_apply for project: '%s'", project_name)
-    project_cfg = projects_info.get(project_name, {})
-    board_name = project_cfg.get("board_name")
+    project_info = projects_info.get(project_name, {})
+    project_cfg = project_info.get("config", {})
+    board_name = project_info.get("board_name")
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return False
@@ -78,6 +79,100 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
     # Use repositories from env
     repositories = env.get("repositories", [])
+
+    def __apply_custom_po(po_name, po_custom_dir, po_config_dict):
+        """Apply custom po configuration for the specified po."""
+        log.debug("po_name: '%s', po_custom_dir: '%s'", po_name, po_custom_dir)
+
+        file_copy_config = po_config_dict.get("PROJECT_PO_FILE_COPY", "")
+        if not file_copy_config:
+            log.warning("No PROJECT_PO_FILE_COPY configuration found for po: '%s'", po_name)
+            return True
+
+        log.debug("File copy config for po '%s': '%s'", po_name, file_copy_config)
+
+        # Parse file copy configuration
+        copy_rules = []
+        for line in file_copy_config.split("\\"):
+            line = line.strip()
+            if not line:
+                continue
+            if ":" in line:
+                source, target = line.split(":", 1)
+                copy_rules.append((source.strip(), target.strip()))
+
+        # Execute file copy operations
+        for source_pattern, target_path in copy_rules:
+            if not __execute_file_copy(po_name, po_custom_dir, source_pattern, target_path):
+                log.error(
+                    "Failed to execute file copy for po: '%s', source: '%s', target: '%s'",
+                    po_name,
+                    source_pattern,
+                    target_path,
+                )
+                return False
+
+        return True
+
+    def __execute_file_copy(po_name, po_custom_dir, source_pattern, target_path):
+        """Execute a single file copy operation."""
+        log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
+
+        # Handle wildcard patterns
+        if "*" in source_pattern:
+            if source_pattern == "*":
+                # Copy all files in the custom directory
+                for item in os.listdir(po_custom_dir):
+                    item_path = os.path.join(po_custom_dir, item)
+                    if os.path.isfile(item_path):
+                        if not __copy_single_file(item_path, target_path, item):
+                            return False
+                return True
+            if source_pattern.endswith("/*"):
+                # Copy all files in a subdirectory
+                subdir = source_pattern[:-2]
+                subdir_path = os.path.join(po_custom_dir, subdir)
+                if os.path.isdir(subdir_path):
+                    for item in os.listdir(subdir_path):
+                        item_path = os.path.join(subdir_path, item)
+                        if os.path.isfile(item_path):
+                            target_file = os.path.join(target_path, item)
+                            if not __copy_single_file(item_path, target_file):
+                                return False
+                    return True
+                log.warning("Subdirectory '%s' not found in po: '%s'", subdir_path, po_name)
+                return True
+        # Copy specific file
+        source_file = os.path.join(po_custom_dir, source_pattern)
+        if os.path.isfile(source_file):
+            return __copy_single_file(source_file, target_path)
+        log.warning("Source file '%s' not found in po: '%s'", source_file, po_name)
+        return True
+
+    def __copy_single_file(source_file, target_path, filename=None):
+        """Copy a single file to target location."""
+        try:
+            if os.path.isdir(target_path):
+                # Target is a directory, use original filename
+                if filename:
+                    target_file = os.path.join(target_path, filename)
+                else:
+                    target_file = os.path.join(target_path, os.path.basename(source_file))
+            else:
+                # Target is a file path
+                target_file = target_path
+
+            # Create target directory if it doesn't exist
+            os.makedirs(os.path.dirname(target_file), exist_ok=True)
+
+            # Copy the file
+            shutil.copy2(source_file, target_file)
+            log.info("Copied file '%s' to '%s'", source_file, target_file)
+            return True
+
+        except OSError as e:
+            log.error("Failed to copy file '%s' to '%s': '%s'", source_file, target_path, e)
+            return False
 
     def __apply_patch(po_name, po_patch_dir, exclude_files):
         """Apply patches for the specified po."""
@@ -261,7 +356,11 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     return False
         return True
 
+    # Get po configurations from env
+    po_configs = env.get("po_configs", {})
+
     for po_name in apply_pos:
+        # Always process standard patches and overrides
         po_patch_dir = os.path.join(po_dir, po_name, "patches")
         if not __apply_patch(po_name, po_patch_dir, exclude_files):
             log.error("po apply aborted due to patch error in po: '%s'", po_name)
@@ -270,6 +369,24 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         if not __apply_override(po_name, po_override_dir, exclude_files):
             log.error("po apply aborted due to override error in po: '%s'", po_name)
             return False
+
+        # Check for custom po configurations in common.ini
+        for section_name, section_config in po_configs.items():
+            po_config_dict = section_config
+            po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
+            if po_subdir:
+                po_custom_dir = os.path.join(po_dir, po_name, po_subdir)
+                if os.path.isdir(po_custom_dir):
+                    log.info(
+                        "Processing custom po '%s' with directory '%s' (from section '%s')",
+                        po_name,
+                        po_subdir,
+                        section_name,
+                    )
+                    if not __apply_custom_po(po_name, po_custom_dir, po_config_dict):
+                        log.error("po apply aborted due to custom po error in po: '%s'", po_name)
+                        return False
+
         log.info("po '%s' has been processed", po_name)
     log.info("po apply finished for project: '%s'", project_name)
     return True
@@ -292,8 +409,9 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
     """
     vprojects_path = env["vprojects_path"]
     log.info("start po_revert for project: '%s'", project_name)
-    project_cfg = projects_info.get(project_name, {})
-    board_name = project_cfg.get("board_name")
+    project_info = projects_info.get(project_name, {})
+    project_cfg = project_info.get("config", {})
+    board_name = project_info.get("board_name")
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return False
@@ -572,7 +690,40 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     log.debug("Override file '%s' does not exist, skipping", dest_file)
         return True
 
+    def __revert_custom_po(po_name, po_custom_dir, po_config_dict):
+        """Revert custom po configuration for the specified po."""
+        log.debug("po_name: '%s', po_custom_dir: '%s'", po_name, po_custom_dir)
+
+        file_copy_config = po_config_dict.get("PROJECT_PO_FILE_COPY", "")
+        if not file_copy_config:
+            log.warning("No PROJECT_PO_FILE_COPY configuration found for po: '%s'", po_name)
+            return True
+
+        log.debug("File copy config for po '%s': '%s'", po_name, file_copy_config)
+
+        # Parse file copy configuration to get target paths
+        target_paths = set()
+        for line in file_copy_config.split("\\"):
+            line = line.strip()
+            if not line:
+                continue
+            if ":" in line:
+                _, target = line.split(":", 1)
+                target_paths.add(target.strip())
+
+        # For custom po, we can't easily revert file copies
+        # Just log a warning that manual cleanup may be needed
+        log.warning("Custom po '%s' files were copied to multiple locations. Manual cleanup may be required:", po_name)
+        for target_path in target_paths:
+            log.warning("  - Target: %s", target_path)
+
+        return True
+
+    # Get po configurations from env
+    po_configs = env.get("po_configs", {})
+
     for po_name in apply_pos:
+        # Always process standard patches and overrides
         po_patch_dir = os.path.join(po_dir, po_name, "patches")
         if not __revert_patch(po_name, po_patch_dir, exclude_files):
             log.error("po revert aborted due to patch error in po: '%s'", po_name)
@@ -581,6 +732,28 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
         if not __revert_override(po_name, po_override_dir, exclude_files):
             log.error("po revert aborted due to override error in po: '%s'", po_name)
             return False
+
+        # Check for custom po configurations in common.ini
+        for section_name, section_config in po_configs.items():
+            if section_name.startswith("po-"):
+                # Only apply configurations that match the current po_name
+                expected_po_name = section_name[3:]  # Remove "po-" prefix
+                if expected_po_name == po_name:
+                    po_config_dict = section_config
+                    po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
+                    if po_subdir:
+                        po_custom_dir = os.path.join(po_dir, po_name, po_subdir)
+                        if os.path.isdir(po_custom_dir):
+                            log.info(
+                                "Processing custom po '%s' with directory '%s' (from section '%s')",
+                                po_name,
+                                po_subdir,
+                                section_name,
+                            )
+                            if not __revert_custom_po(po_name, po_custom_dir, po_config_dict):
+                                log.error("po revert aborted due to custom po error in po: '%s'", po_name)
+                                return False
+
         log.info("po '%s' has been reverted", po_name)
     log.info("po revert finished for project: '%s'", project_name)
     return True
@@ -1333,28 +1506,37 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         list: List of dicts with PO info (name, patch_files, override_files)
     """
     log.info("start po_list for project: '%s'", project_name)
-    project_cfg = projects_info.get(project_name, {})
-    board_name = project_cfg.get("board_name")
+    project_info = projects_info.get(project_name, {})
+    project_cfg = project_info.get("config", {})
+    board_name = project_info.get("board_name")
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return []
+
     board_path = os.path.join(env["vprojects_path"], board_name)
     po_dir = os.path.join(board_path, "po")
     if not os.path.isdir(po_dir):
         log.warning("No po directory found for '%s'", project_name)
         return []
+
+    # Get po configurations from env
+    po_configs = env.get("po_configs", {})
+
     # Get enabled pos from config
     po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
     enabled_pos = set()
     if po_config:
         apply_pos, exclude_pos, _ = parse_po_config(po_config)
         enabled_pos = {po for po in apply_pos if po not in exclude_pos}
+
     # Only list POs enabled in configuration
     po_infos = []
     for po_name in sorted(enabled_pos):
         po_path = os.path.join(po_dir, po_name)
         if not os.path.isdir(po_path):
             continue
+
+        # Always check standard patches and overrides
         patches_dir = os.path.join(po_path, "patches")
         overrides_dir = os.path.join(po_path, "overrides")
         patch_files = []
@@ -1373,10 +1555,39 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
                         continue
                     rel_path = os.path.relpath(os.path.join(root, f), overrides_dir)
                     override_files.append(rel_path)
+
+        # Check for custom po configurations in common.ini
+        custom_dirs = []
+        for section_name, section_config in po_configs.items():
+            if section_name.startswith("po-"):
+                # Only apply configurations that match the current po_name
+                expected_po_name = section_name[3:]  # Remove "po-" prefix
+                if expected_po_name == po_name:
+                    po_subdir = section_config.get("PROJECT_PO_DIR", "").rstrip("/")
+                    if po_subdir:
+                        custom_dir = os.path.join(po_path, po_subdir)
+                        custom_files = []
+                        if os.path.isdir(custom_dir):
+                            for root, _, files in os.walk(custom_dir):
+                                for f in files:
+                                    if f == ".gitkeep":
+                                        continue
+                                    rel_path = os.path.relpath(os.path.join(root, f), custom_dir)
+                                    custom_files.append(rel_path)
+                            custom_dirs.append(
+                                {
+                                    "section": section_name,
+                                    "dir": po_subdir,
+                                    "files": custom_files,
+                                    "file_copy_config": section_config.get("PROJECT_PO_FILE_COPY", ""),
+                                }
+                            )
+
         po_info = {
             "name": po_name,
             "patch_files": patch_files,
             "override_files": override_files,
+            "custom_dirs": custom_dirs,
         }
         po_infos.append(po_info)
     # Print summary
@@ -1401,4 +1612,16 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
                     print(f"    - {of}")
             else:
                 print("    (none)")
+
+            # Show custom directories if any
+            if po["custom_dirs"]:
+                for custom_dir_info in po["custom_dirs"]:
+                    print(f"  {custom_dir_info['section']} ({custom_dir_info['dir']}):")
+                    print(f"    file copy config: {custom_dir_info['file_copy_config']}")
+                    print("    files:")
+                    if custom_dir_info["files"]:
+                        for cf in custom_dir_info["files"]:
+                            print(f"      - {cf}")
+                    else:
+                        print("      (none)")
     return po_infos
