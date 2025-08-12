@@ -49,10 +49,10 @@ if command -v pyinstaller &> /dev/null; then
         --distpath $BINARY_DIR \
         --workpath $BINARY_DIR/build \
         --specpath $BINARY_DIR \
-        -n projctl \
+        -n projman \
         src/__main__.py
 
-    echo "Binary generated at $BINARY_DIR/projctl"
+    echo "Binary generated at $BINARY_DIR/projman"
 
     # Apply static linking for better compatibility
     echo -e "\033[32m--- Applying static linking for better compatibility ---\033[0m"
@@ -62,15 +62,15 @@ if command -v pyinstaller &> /dev/null; then
         pip install staticx
     fi
 
-    staticx $BINARY_DIR/projctl $BINARY_DIR/projctl-static
-mv $BINARY_DIR/projctl-static $BINARY_DIR/projctl
+    staticx $BINARY_DIR/projman $BINARY_DIR/projman-static
+mv $BINARY_DIR/projman-static $BINARY_DIR/projman
     echo "Static linking applied successfully"
 
     # Remove debug info to reduce file size
     echo -e "\033[32m--- Final debug info removal ---\033[0m"
-    strip $BINARY_DIR/projctl
+    strip $BINARY_DIR/projman
 
-echo "Final binary generated at $BINARY_DIR/projctl"
+echo "Final binary generated at $BINARY_DIR/projman"
 else
     echo "pyinstaller not installed, skipping binary packaging. Use 'pip install pyinstaller' to install."
 fi
@@ -81,5 +81,5 @@ rm -rf src/*.egg-info
 # Show build summary
 echo -e "\033[32m--- Build Summary ---\033[0m"
 echo "Python packages: $PACKAGE_DIR/"
-echo "Binary executable: $BINARY_DIR/projctl"
+echo "Binary executable: $BINARY_DIR/projman"
 echo "All artifacts: $OUT_DIR/" 

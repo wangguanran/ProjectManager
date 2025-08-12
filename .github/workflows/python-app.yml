@@ -50,7 +50,7 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          out/binary/projctl
+          out/binary/projman
           install.sh
           uninstall.sh
 
@@ -69,8 +69,8 @@ jobs:
       run: |
         bash install.sh
         export PATH="$HOME/.local/bin:$PATH"
-        projctl --version
-        rm "$HOME/.local/bin/projctl"
+        projman --version
+        rm "$HOME/.local/bin/projman"
 
   pytest:
     name: pytest

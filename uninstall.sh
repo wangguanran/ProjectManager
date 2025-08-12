@@ -12,20 +12,20 @@ pip3 uninstall -y multi-project-manager || true
 fi
 
 # Remove standalone binary from ~/.local/bin
-TARGET_BIN="$HOME/.local/bin/projctl"
+TARGET_BIN="$HOME/.local/bin/projman"
 if [ -f "$TARGET_BIN" ]; then
     echo "Removing standalone binary: $TARGET_BIN"
     rm -f "$TARGET_BIN"
 fi
 
-# Remove venv directory and run_projctl.sh script
+# Remove venv directory and run_projman.sh script
 if [ -d "venv" ]; then
     echo "Removing venv directory..."
     rm -rf venv
 fi
-if [ -f "run_projctl.sh" ]; then
-    echo "Removing run_projctl.sh script..."
-    rm -f run_projctl.sh
+if [ -f "run_projman.sh" ]; then
+    echo "Removing run_projman.sh script..."
+    rm -f run_projman.sh
 fi
 
 echo "Uninstallation complete." 
