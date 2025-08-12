@@ -41,10 +41,10 @@ docker pull ghcr.io/wangguanran/projectmanager:latest
 **Run with Docker**:
 ```bash
 # Basic usage
-docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/projectmanager:latest
+docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/projectmanager:latest
 
 # With specific command
-docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/projectmanager:latest po_apply myproject
+docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/projectmanager:latest po_apply myproject
 ```
 
 ## Main Features
@@ -60,7 +60,7 @@ docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/projectmanager
 ## Directory Structure
 
 ```
-vprojects/
+projects/
   board01/
     board01.ini          # Board configuration file
     po/
@@ -153,7 +153,7 @@ python -m src <operation> <project_or_board_name> [parameters] [--options]
 
 **Directory Structure Created**:
 ```
-vprojects/<board_name>/
+projects/<board_name>/
   <board_name>.ini
   po/
 ```
@@ -241,7 +241,7 @@ PROJECT_PO_CONFIG=po_test01 po_test02 -po_test03 po_test04[file1 file2]
 
 **Directory Structure Created**:
 ```
-vprojects/<board_name>/po/<po_name>/
+projects/<board_name>/po/<po_name>/
   patches/
   overrides/
 ```
@@ -375,6 +375,6 @@ BOARD_NAME=board01
 
 - Currently, project/board management features are reserved (TODO), while PO management and patch application features are fully implemented.
 - Platform management features have been merged into existing plugins, with no separate `platform_manager.py` or `po_manager.py` files.
-- To extend platform-related operations, custom plugins can be added in the `vprojects/scripts/` directory.
+- To extend platform-related operations, custom plugins can be added in the `projects/scripts/` directory.
 - All PO operations support interactive confirmation and detailed logging.
 - The tool automatically handles multi-repository environments and complex PO configurations.

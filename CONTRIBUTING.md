@@ -84,7 +84,7 @@ ProjectManager/
 │   └── utils.py           # General utilities
 ├── tests/                 # Test files
 ├── docs/                  # Documentation
-├── vprojects/            # Test projects
+├── projects/             # Test projects
 ├── hooks/                # Git hooks
 └── scripts/              # Build and utility scripts
 ```

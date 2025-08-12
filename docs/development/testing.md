@@ -64,7 +64,7 @@ tests/
 ├── test_log_manager.py       # Logging functionality tests
 ├── test_profiler.py          # Profiling functionality tests
 ├── test_utils.py             # Utility function tests
-├── vprojects/                # Test project configurations
+├── projects/                 # Test project configurations
 │   ├── board01/
 │   │   ├── board01.ini
 │   │   └── po/
@@ -168,7 +168,7 @@ def test_git_command(mock_run):
 
 **Structure**:
 ```
-tests/vprojects/
+tests/projects/
 ├── board01/
 │   ├── .git/                 # Git repository
 │   ├── board01.ini          # Configuration
@@ -186,7 +186,7 @@ tests/vprojects/
 
 **Examples**:
 ```ini
-# tests/vprojects/board01/board01.ini
+# tests/projects/board01/board01.ini
 [project1]
 board_name = board01
 PROJECT_PO_CONFIG = po1 po2

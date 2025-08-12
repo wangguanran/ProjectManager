@@ -90,7 +90,7 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
         else:
             print("  1. The project has a parent project that exists in projects_info")
             print("  2. The project name follows the pattern 'parent-project'")
-            print("  3. There are available board directories in vprojects")
+            print("  3. There are available board directories in projects")
         return False
     if not os.path.isdir(board_path):
         log.error(

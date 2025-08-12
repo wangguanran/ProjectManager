@@ -114,7 +114,7 @@ jobs:
         python -m src --help
         
         # Docker
-        docker run -v \$(pwd)/vprojects:/app/vprojects ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+        docker run -v \$(pwd)/projects:/app/projects ghcr.io/${{ github.repository }}:${{ github.ref_name }}
         \`\`\`
         
         ## Checksum

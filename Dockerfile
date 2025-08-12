@@ -26,10 +26,10 @@ COPY pyproject.toml .
 COPY README.md .
 
 # Create necessary directories
-RUN mkdir -p /app/vprojects /app/.cache/logs /app/.cache/cprofile
+RUN mkdir -p /app/projects /app/.cache/logs /app/.cache/cprofile
 
 # Set volume for persistent data
-VOLUME ["/app/vprojects", "/app/.cache"]
+VOLUME ["/app/projects", "/app/.cache"]
 
 # Set default command
 ENTRYPOINT ["python", "-m", "src"]

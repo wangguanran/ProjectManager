@@ -36,19 +36,19 @@ def _strip_comment(val):
 
 @func_time
 @func_cprofile
-def _load_common_config(vprojects_path):
+def _load_common_config(projects_path):
     """
     Load common.ini configuration file.
 
     Args:
-        vprojects_path (str): Path to vprojects directory
+        projects_path (str): Path to projects directory
 
     Returns:
         tuple: (common_configs, po_configs)
             - common_configs: dict containing [common] section config
             - po_configs: dict containing all po-* sections config
     """
-    common_config_path = os.path.join(vprojects_path, "common", "common.ini")
+    common_config_path = os.path.join(projects_path, "common", "common.ini")
     common_configs = {}
     po_configs = {}
 
@@ -79,10 +79,10 @@ def _load_common_config(vprojects_path):
 
 @func_time
 @func_cprofile
-def _load_all_projects(vprojects_path, common_configs):
+def _load_all_projects(projects_path, common_configs):
     exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
-    if not os.path.exists(vprojects_path):
-        log.warning("vprojects directory does not exist: '%s'", vprojects_path)
+    if not os.path.exists(projects_path):
+        log.warning("projects directory does not exist: '%s'", projects_path)
         return {}
     projects_info = {}
     raw_configs = {}
@@ -90,9 +90,9 @@ def _load_all_projects(vprojects_path, common_configs):
 
     # Use the passed common_configs parameter
 
-    for item in os.listdir(vprojects_path):
+    for item in os.listdir(projects_path):
         board_name = item
-        board_path = os.path.join(vprojects_path, board_name)
+        board_path = os.path.join(projects_path, board_name)
         if not os.path.isdir(board_path) or board_name in exclude_dirs:
             continue
         ini_files = [f for f in os.listdir(board_path) if f.endswith(".ini")]
@@ -267,8 +267,8 @@ def _load_builtin_plugin_operations():
 
 @func_time
 @func_cprofile
-def _load_platform_plugin_operations(vprojects_path):
-    scripts_dir = os.path.join(vprojects_path, "scripts")
+def _load_platform_plugin_operations(projects_path):
+    scripts_dir = os.path.join(projects_path, "scripts")
     plugin_classes = []
     if not os.path.exists(scripts_dir):
         return {}
@@ -446,10 +446,10 @@ def _find_repositories():
 
 
 @func_time
-def check_and_create_vprojects(vprojects_path):
-    """Check if vprojects directory exists, prompt user and create if needed."""
-    if not os.path.exists(vprojects_path):
-        answer = input("vprojects directory does not exist, create standard structure? [y/N]: ").strip().lower()
+def check_and_create_projects(projects_path):
+    """Check if projects directory exists, prompt user and create if needed."""
+    if not os.path.exists(projects_path):
+        answer = input("projects directory does not exist, create standard structure? [y/N]: ").strip().lower()
         if answer in ("y", "yes"):
 
             def touch(path):
@@ -465,7 +465,7 @@ def check_and_create_vprojects(vprojects_path):
                 "scripts/.gitkeep": None,
             }
             for rel_path in structure:
-                abs_path = os.path.join(vprojects_path, rel_path)
+                abs_path = os.path.join(projects_path, rel_path)
                 if abs_path.endswith(".ini"):
                     touch(abs_path)
                 else:
@@ -473,23 +473,23 @@ def check_and_create_vprojects(vprojects_path):
                     pathlib.Path(abs_path).parent.mkdir(parents=True, exist_ok=True)
                     with open(abs_path, "w", encoding="utf-8") as f:
                         f.write("")
-            print(f"vprojects directory and basic structure created at: {vprojects_path}")
-            # Initialize git repository in vprojects
+            print(f"projects directory and basic structure created at: {projects_path}")
+            # Initialize git repository in projects
 
             try:
-                subprocess.run(["git", "init"], cwd=vprojects_path, check=True)
-                subprocess.run(["git", "add", "-A"], cwd=vprojects_path, check=True)
+                subprocess.run(["git", "init"], cwd=projects_path, check=True)
+                subprocess.run(["git", "add", "-A"], cwd=projects_path, check=True)
                 subprocess.run(
-                    ["git", "commit", "-m", "Initial vprojects structure"],
-                    cwd=vprojects_path,
+                    ["git", "commit", "-m", "Initial projects structure"],
+                    cwd=projects_path,
                     check=True,
                 )
-                print("Initialized empty Git repository in vprojects directory and committed initial structure.")
+                print("Initialized empty Git repository in projects directory and committed initial structure.")
                 # TODO: Install git hooks here for file checking in the future
             except subprocess.CalledProcessError as e:
                 print(f"Failed to initialize git repository: {e}. Output: {e.output if hasattr(e, 'output') else ''}")
         else:
-            print("vprojects directory not created, exiting.")
+            print("projects directory not created, exiting.")
             sys.exit(0)
 
 
@@ -516,31 +516,31 @@ def main():
 
     # Define root_path as current working directory
     root_path = os.getcwd()
-    # Use vprojects path from current working directory
-    vprojects_path = os.path.join(root_path, "vprojects")
+    # Use projects path from current working directory
+    projects_path = os.path.join(root_path, "projects")
 
-    check_and_create_vprojects(vprojects_path)
+    check_and_create_projects(projects_path)
 
     env = {
         "root_path": root_path,
-        "vprojects_path": vprojects_path,
+        "projects_path": projects_path,
         # "repositories": _find_repositories(),  # lazy loading
     }
 
     # Load common configurations
-    common_configs, po_configs = _load_common_config(env["vprojects_path"])
+    common_configs, po_configs = _load_common_config(env["projects_path"])
     env["po_configs"] = po_configs
     log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
     log.debug("Loaded %d po configurations.", len(po_configs))
     log.debug("Po configurations: %s", list(po_configs.keys()))
 
-    projects_info = _load_all_projects(env["vprojects_path"], common_configs)
+    projects_info = _load_all_projects(env["projects_path"], common_configs)
     log.debug("Loaded %d projects.", len(projects_info))
     log.debug(
         "Loaded projects info:\n%s",
         json.dumps(projects_info, indent=4, ensure_ascii=False),
     )
-    platform_operations = _load_platform_plugin_operations(env["vprojects_path"])
+    platform_operations = _load_platform_plugin_operations(env["projects_path"])
     log.debug("Loaded %d platform operations.", len(platform_operations))
     log.debug("Platform operations: %s", list(platform_operations.keys()))
     builtin_operations = _load_builtin_plugin_operations()

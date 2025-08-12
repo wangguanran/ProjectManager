@@ -51,7 +51,7 @@ class TestLoadAllProjects:
     This test suite covers the following scenarios:
 
     1. Basic Functionality:
-       - Empty vprojects directory
+       - Empty projects directory
        - Non-existent directory
        - Single board with single project
        - Multiple boards with multiple projects
@@ -117,40 +117,40 @@ class TestLoadAllProjects:
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    def _create_temp_vprojects_structure(self):
-        """Create a temporary vprojects directory structure for testing."""
+    def _create_temp_projects_structure(self):
+        """Create a temporary projects directory structure for testing."""
         self.temp_dir = tempfile.mkdtemp()
-        vprojects_path = os.path.join(self.temp_dir, "vprojects")
-        os.makedirs(vprojects_path)
-        return vprojects_path
+        projects_path = os.path.join(self.temp_dir, "projects")
+        os.makedirs(projects_path)
+        return projects_path
 
-    def _create_board_structure(self, vprojects_path, board_name, ini_content):
+    def _create_board_structure(self, projects_path, board_name, ini_content):
         """Create a board directory with ini file."""
-        board_path = os.path.join(vprojects_path, board_name)
+        board_path = os.path.join(projects_path, board_name)
         os.makedirs(board_path)
         ini_file = os.path.join(board_path, f"{board_name}.ini")
         with open(ini_file, "w", encoding="utf-8") as f:
             f.write(ini_content)
         return board_path, ini_file
 
-    def _create_common_config(self, vprojects_path, common_content):
+    def _create_common_config(self, projects_path, common_content):
         """Create common configuration file."""
-        common_path = os.path.join(vprojects_path, "common")
+        common_path = os.path.join(projects_path, "common")
         os.makedirs(common_path)
         common_ini = os.path.join(common_path, "common.ini")
         with open(common_ini, "w", encoding="utf-8") as f:
             f.write(common_content)
         return common_ini
 
-    def _load_projects_with_config(self, vprojects_path):
+    def _load_projects_with_config(self, projects_path):
         """Load projects with common configuration."""
-        common_configs, _ = self._load_common_config(vprojects_path)
-        return self._load_all_projects(vprojects_path, common_configs)
+        common_configs, _ = self._load_common_config(projects_path)
+        return self._load_all_projects(projects_path, common_configs)
 
     def test_load_all_projects_empty_directory(self):
-        """Test loading projects from an empty vprojects directory."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        result = self._load_projects_with_config(vprojects_path)
+        """Test loading projects from an empty projects directory."""
+        projects_path = self._create_temp_projects_structure()
+        result = self._load_projects_with_config(projects_path)
         assert not result
 
     def test_load_all_projects_nonexistent_directory(self):
@@ -161,7 +161,7 @@ class TestLoadAllProjects:
 
     def test_load_all_projects_single_board_single_project(self):
         """Test loading a single board with a single project."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create board with single project
         ini_content = """[testproject]
@@ -169,9 +169,9 @@ PROJECT_NAME=test_project
 PROJECT_PLATFORM=test_platform
 PROJECT_CUSTOMER=test_customer
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         assert "testproject" in result
@@ -184,23 +184,23 @@ PROJECT_CUSTOMER=test_customer
 
     def test_load_all_projects_with_common_config(self):
         """Test loading projects with common configuration inheritance."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create common config
         common_content = """[common]
 COMMON_SETTING=common_value
 DEFAULT_CHIP=default_platform
 """
-        self._create_common_config(vprojects_path, common_content)
+        self._create_common_config(projects_path, common_content)
 
         # Create board with project
         ini_content = """[test-project]
 PROJECT_NAME=test_project
 PROJECT_PLATFORM=test_platform
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         project_info = result["test-project"]
@@ -211,7 +211,7 @@ PROJECT_PLATFORM=test_platform
 
     def test_load_all_projects_parent_child_relationship(self):
         """Test loading projects with parent-child relationships."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[parentproject]
 PROJECT_NAME=parent_project
@@ -222,9 +222,9 @@ PROJECT_NAME=parent_project_child
 [parentproject-child-grandchild]
 PROJECT_NAME=parent_project_child_grandchild
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 3
 
@@ -244,19 +244,19 @@ PROJECT_NAME=parent_project_child_grandchild
 
     def test_load_all_projects_exclude_directories(self):
         """Test that excluded directories are not processed."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create excluded directories
         for exclude_dir in ["scripts", "common", "template", ".cache", ".git"]:
-            os.makedirs(os.path.join(vprojects_path, exclude_dir))
+            os.makedirs(os.path.join(projects_path, exclude_dir))
 
         # Create valid board
         ini_content = """[test-project]
 PROJECT_NAME=test_project
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         # Should only load the valid board, not excluded directories
         assert len(result) == 1
@@ -264,8 +264,8 @@ PROJECT_NAME=test_project
 
     def test_load_all_projects_multiple_ini_files_error(self):
         """Test error handling when multiple ini files exist in a board directory."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        board_path = os.path.join(vprojects_path, "board01")
+        projects_path = self._create_temp_projects_structure()
+        board_path = os.path.join(projects_path, "board01")
         os.makedirs(board_path)
 
         # Create multiple ini files
@@ -276,48 +276,48 @@ PROJECT_NAME=test_project
 
         # Should raise AssertionError
         with self.assert_raises(AssertionError):
-            self._load_projects_with_config(vprojects_path)
+            self._load_projects_with_config(projects_path)
 
     def test_load_all_projects_no_ini_file(self):
         """Test handling of board directory without ini file."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create board directory without ini file
-        board_path = os.path.join(vprojects_path, "board01")
+        board_path = os.path.join(projects_path, "board01")
         os.makedirs(board_path)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         # Should return empty dict when no ini file found
         assert not result
 
     def test_load_all_projects_duplicate_keys(self):
         """Test handling of duplicate keys in project configuration."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[test-project]
 PROJECT_NAME=test_project
 PROJECT_NAME=duplicate_key
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         # Should skip projects with duplicate keys
         assert not result
 
     def test_load_all_projects_comments_stripping(self):
         """Test that comments are properly stripped from configuration values."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[test-project]
 PROJECT_NAME=test_project # inline comment
 PROJECT_PLATFORM=test_platform ; another comment
 PROJECT_CUSTOMER=test_customer
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         project_info = result["test-project"]
@@ -327,22 +327,22 @@ PROJECT_CUSTOMER=test_customer
 
     def test_load_all_projects_po_config_concatenation(self):
         """Test that PROJECT_PO_CONFIG values are concatenated properly."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create common config with PO config
         common_content = """[common]
 PROJECT_PO_CONFIG=po_common01
 """
-        self._create_common_config(vprojects_path, common_content)
+        self._create_common_config(projects_path, common_content)
 
         # Create board with project that has its own PO config
         ini_content = """[test-project]
 PROJECT_NAME=test_project
 PROJECT_PO_CONFIG=po_test01
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         project_info = result["test-project"]
@@ -351,7 +351,7 @@ PROJECT_PO_CONFIG=po_test01
 
     def test_load_all_projects_multiple_boards(self):
         """Test loading projects from multiple boards."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create multiple boards
         board1_content = """[project1]
@@ -361,10 +361,10 @@ PROJECT_NAME=project1
 PROJECT_NAME=project2
 """
 
-        self._create_board_structure(vprojects_path, "board01", board1_content)
-        self._create_board_structure(vprojects_path, "board02", board2_content)
+        self._create_board_structure(projects_path, "board01", board1_content)
+        self._create_board_structure(projects_path, "board02", board2_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 2
         assert "project1" in result
@@ -374,7 +374,7 @@ PROJECT_NAME=project2
 
     def test_load_all_projects_invalid_projects_handling(self):
         """Test handling of invalid projects."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[valid-project]
 PROJECT_NAME=valid_project
@@ -382,9 +382,9 @@ PROJECT_NAME=valid_project
 [invalid-project]
 PROJECT_NAME=invalid_project
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         # Both projects should be loaded (invalid_projects set is empty in this test)
         assert len(result) == 2
@@ -393,30 +393,30 @@ PROJECT_NAME=invalid_project
 
     def test_load_all_projects_complex_inheritance(self):
         """Test complex configuration inheritance scenarios."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create common config
         common_content = """[common]
 BASE_SETTING=base_value
 COMMON_CHIP=common_platform
 """
-        self._create_common_config(vprojects_path, common_content)
+        self._create_common_config(projects_path, common_content)
 
         # Create parent project
         parent_content = """[parent-project]
 PROJECT_NAME=parent_project
 PARENT_SETTING=parent_value
 """
-        self._create_board_structure(vprojects_path, "board01", parent_content)
+        self._create_board_structure(projects_path, "board01", parent_content)
 
         # Create child project
         child_content = """[parent-project-child]
 PROJECT_NAME=child_project
 CHILD_SETTING=child_value
 """
-        self._create_board_structure(vprojects_path, "board02", child_content)
+        self._create_board_structure(projects_path, "board02", child_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 2
 
@@ -437,7 +437,7 @@ CHILD_SETTING=child_value
 
     def test_load_all_projects_with_hyphenated_names(self):
         """Test loading projects with hyphenated names to verify parent-child logic."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[baseproject]
 PROJECT_NAME=base_project
@@ -448,9 +448,9 @@ PROJECT_NAME=base_project_variant1
 [baseproject-variant2]
 PROJECT_NAME=base_project_variant2
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 3
 
@@ -472,21 +472,21 @@ PROJECT_NAME=base_project_variant2
 
     def test_load_all_projects_common_config_missing_section(self):
         """Test handling when common.ini exists but has no [common] section."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create common config without [common] section
         common_content = """[other-section]
 SOME_SETTING=some_value
 """
-        self._create_common_config(vprojects_path, common_content)
+        self._create_common_config(projects_path, common_content)
 
         # Create board with project
         ini_content = """[testproject]
 PROJECT_NAME=test_project
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         project_info = result["testproject"]
@@ -495,7 +495,7 @@ PROJECT_NAME=test_project
 
     def test_load_all_projects_empty_sections(self):
         """Test handling of empty project sections."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[empty-project]
 # This section has no content
@@ -503,9 +503,9 @@ PROJECT_NAME=test_project
 [valid-project]
 PROJECT_NAME=valid_project
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         # Empty sections are still loaded but with empty config
         assert len(result) == 2
@@ -516,7 +516,7 @@ PROJECT_NAME=valid_project
 
     def test_load_all_projects_comments_only_sections(self):
         """Test handling of sections with only comments."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[comment-only-project]
 # This is a comment
@@ -525,9 +525,9 @@ PROJECT_NAME=valid_project
 [valid-project]
 PROJECT_NAME=valid_project
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         # Comment-only sections are still loaded but with empty config
         assert len(result) == 2
@@ -538,16 +538,16 @@ PROJECT_NAME=valid_project
 
     def test_load_all_projects_whitespace_handling(self):
         """Test handling of whitespace in configuration values."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         ini_content = """[testproject]
 PROJECT_NAME=  test_project
 PROJECT_PLATFORM=  test_platform
 PROJECT_CUSTOMER=test_customer
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         project_info = result["testproject"]
@@ -558,22 +558,22 @@ PROJECT_CUSTOMER=test_customer
 
     def test_load_all_projects_po_config_with_whitespace(self):
         """Test PROJECT_PO_CONFIG concatenation with whitespace handling."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create common config with PO config
         common_content = """[common]
 PROJECT_PO_CONFIG=  po_common01
 """
-        self._create_common_config(vprojects_path, common_content)
+        self._create_common_config(projects_path, common_content)
 
         # Create board with project that has its own PO config
         ini_content = """[testproject]
 PROJECT_NAME=test_project
 PROJECT_PO_CONFIG=  po_test01
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 1
         project_info = result["testproject"]
@@ -582,13 +582,13 @@ PROJECT_PO_CONFIG=  po_test01
 
     def test_load_all_projects_deep_inheritance_chain(self):
         """Test deep inheritance chain with multiple levels."""
-        vprojects_path = self._create_temp_vprojects_structure()
+        projects_path = self._create_temp_projects_structure()
 
         # Create common config
         common_content = """[common]
 BASE_SETTING=base_value
 """
-        self._create_common_config(vprojects_path, common_content)
+        self._create_common_config(projects_path, common_content)
 
         # Create multiple levels of inheritance
         ini_content = """[level1]
@@ -603,9 +603,9 @@ LEVEL3_SETTING=level3_value
 [level1-level2-level3-level4]
 LEVEL4_SETTING=level4_value
 """
-        self._create_board_structure(vprojects_path, "board01", ini_content)
+        self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(vprojects_path)
+        result = self._load_projects_with_config(projects_path)
 
         assert len(result) == 4
 
@@ -683,12 +683,12 @@ class TestPluginOperations:
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    def _create_temp_vprojects_structure(self):
-        """Create a temporary vprojects directory structure for testing."""
+    def _create_temp_projects_structure(self):
+        """Create a temporary projects directory structure for testing."""
         self.temp_dir = tempfile.mkdtemp()
-        vprojects_path = os.path.join(self.temp_dir, "vprojects")
-        os.makedirs(vprojects_path)
-        return vprojects_path
+        projects_path = os.path.join(self.temp_dir, "projects")
+        os.makedirs(projects_path)
+        return projects_path
 
     def _create_test_plugin_class(self):
         """Create a test plugin class with various method types."""
@@ -831,23 +831,23 @@ class TestPluginOperations:
 
     def test_load_platform_plugin_operations_no_scripts_dir(self):
         """Test loading platform plugin operations when scripts directory doesn't exist."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        result = self._load_platform_plugin_operations(vprojects_path)
+        projects_path = self._create_temp_projects_structure()
+        result = self._load_platform_plugin_operations(projects_path)
         assert not result
 
     def test_load_platform_plugin_operations_empty_scripts_dir(self):
         """Test loading platform plugin operations from empty scripts directory."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        scripts_dir = os.path.join(vprojects_path, "scripts")
+        projects_path = self._create_temp_projects_structure()
+        scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
-        result = self._load_platform_plugin_operations(vprojects_path)
+        result = self._load_platform_plugin_operations(projects_path)
         assert not result
 
     def test_load_platform_plugin_operations_valid_script(self):
         """Test loading platform plugin operations from valid script file."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        scripts_dir = os.path.join(vprojects_path, "scripts")
+        projects_path = self._create_temp_projects_structure()
+        scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
         # Create a valid platform script
@@ -873,7 +873,7 @@ class PlatformPlugin:
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script_content)
 
-        result = self._load_platform_plugin_operations(vprojects_path)
+        result = self._load_platform_plugin_operations(projects_path)
 
         assert len(result) == 2
         assert "platform_operation" in result
@@ -893,8 +893,8 @@ class PlatformPlugin:
 
     def test_load_platform_plugin_operations_invalid_script(self):
         """Test loading platform plugin operations with invalid script."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        scripts_dir = os.path.join(vprojects_path, "scripts")
+        projects_path = self._create_temp_projects_structure()
+        scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
         # Create an invalid script that will cause import error
@@ -910,14 +910,14 @@ class PlatformPlugin:
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script_content)
 
-        result = self._load_platform_plugin_operations(vprojects_path)
+        result = self._load_platform_plugin_operations(projects_path)
         # Should return empty dict due to import error
         assert not result
 
     def test_load_platform_plugin_operations_underscore_file(self):
         """Test that files starting with underscore are ignored."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        scripts_dir = os.path.join(vprojects_path, "scripts")
+        projects_path = self._create_temp_projects_structure()
+        scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
         # Create a script with underscore prefix
@@ -931,14 +931,14 @@ class PlatformPlugin:
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script_content)
 
-        result = self._load_platform_plugin_operations(vprojects_path)
+        result = self._load_platform_plugin_operations(projects_path)
         # Should return empty dict as underscore files are ignored
         assert not result
 
     def test_load_platform_plugin_operations_non_py_file(self):
         """Test that non-Python files are ignored."""
-        vprojects_path = self._create_temp_vprojects_structure()
-        scripts_dir = os.path.join(vprojects_path, "scripts")
+        projects_path = self._create_temp_projects_structure()
+        scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
         # Create a non-Python file
@@ -946,7 +946,7 @@ class PlatformPlugin:
         with open(script_path, "w", encoding="utf-8") as f:
             f.write("This is not a Python file")
 
-        result = self._load_platform_plugin_operations(vprojects_path)
+        result = self._load_platform_plugin_operations(projects_path)
         # Should return empty dict as non-Python files are ignored
         assert not result
 

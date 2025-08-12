@@ -52,7 +52,7 @@ ProjectManager/
 │   └── __main__.py        # Main entry point
 ├── tests/                 # Test files
 ├── docs/                  # Documentation
-├── vprojects/            # Project configurations
+├── projects/             # Project configurations
 └── scripts/              # Build and deployment scripts
 ```
 

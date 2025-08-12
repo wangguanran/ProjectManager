@@ -121,10 +121,10 @@ docker pull ghcr.io/wangguanran/ProjectManager:latest
 **Run the container**:
 ```bash
 # Basic usage
-docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/ProjectManager:latest
+docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/ProjectManager:latest
 
 # With specific command
-docker run -v $(pwd)/vprojects:/app/vprojects ghcr.io/wangguanran/ProjectManager:latest po_apply myproject
+docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/ProjectManager:latest po_apply myproject
 ```
 
 ## Version Management

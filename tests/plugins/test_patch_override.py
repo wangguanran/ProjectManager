@@ -31,7 +31,7 @@ class TestPatchOverride:
         """Test po_apply with basic successful case."""
         # Arrange
         env = {
-            "vprojects_path": "/tmp/vprojects",
+            "projects_path": "/tmp/projects",
             "repositories": [("/tmp/repo1", "repo1"), ("/tmp/repo2", "repo2")],
         }
         projects_info = {"test_project": {"board_name": "test_board", "config": {"PROJECT_PO_CONFIG": "po1"}}}
@@ -56,7 +56,7 @@ class TestPatchOverride:
     def test_po_apply_missing_board_name(self):
         """Test po_apply when board_name is missing from project config."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {"test_project": {}}  # No board_name
         project_name = "test_project"
 
@@ -71,7 +71,7 @@ class TestPatchOverride:
     def test_po_apply_empty_po_config(self):
         """Test po_apply when PROJECT_PO_CONFIG is empty."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
@@ -92,7 +92,7 @@ class TestPatchOverride:
         """Test po_apply when PO is excluded in config."""
         # Arrange
         env = {
-            "vprojects_path": "/tmp/vprojects",
+            "projects_path": "/tmp/projects",
             "repositories": [("/tmp/repo1", "repo1")],
         }
         projects_info = {
@@ -115,7 +115,7 @@ class TestPatchOverride:
         """Test po_apply with excluded files in config."""
         # Arrange
         env = {
-            "vprojects_path": "/tmp/vprojects",
+            "projects_path": "/tmp/projects",
             "repositories": [("/tmp/repo1", "repo1")],
         }
         projects_info = {
@@ -163,7 +163,7 @@ class TestPatchOverrideRevert:
         """Test po_revert with basic successful case."""
         # Arrange
         env = {
-            "vprojects_path": "/tmp/vprojects",
+            "projects_path": "/tmp/projects",
             "repositories": [("/tmp/repo1", "repo1"), ("/tmp/repo2", "repo2")],
         }
         projects_info = {
@@ -191,7 +191,7 @@ class TestPatchOverrideRevert:
     def test_po_revert_missing_board_name(self):
         """Test po_revert when board_name is missing from project config."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {"test_project": {}}  # No board_name
         project_name = "test_project"
 
@@ -206,7 +206,7 @@ class TestPatchOverrideRevert:
     def test_po_revert_empty_po_config(self):
         """Test po_revert when PROJECT_PO_CONFIG is empty."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
@@ -243,7 +243,7 @@ class TestPatchOverrideNew:
     def test_po_new_invalid_name_format(self):
         """Test po_new with invalid PO name format."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
@@ -267,7 +267,7 @@ class TestPatchOverrideNew:
     def test_po_new_missing_board_info(self):
         """Test po_new when board info is missing."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         # Missing board_name and board_path
         projects_info = {"test_project": {}}
         project_name = "test_project"
@@ -284,7 +284,7 @@ class TestPatchOverrideNew:
     def test_po_new_valid_name_format(self):
         """Test po_new with valid PO name format."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
@@ -332,7 +332,7 @@ class TestPatchOverrideDelete:
     def test_po_del_invalid_name_format(self):
         """Test po_del with invalid PO name format."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
@@ -356,7 +356,7 @@ class TestPatchOverrideDelete:
     def test_po_del_missing_board_info(self):
         """Test po_del when board info is missing."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         # Missing board_name and board_path
         projects_info = {"test_project": {}}
         project_name = "test_project"
@@ -390,7 +390,7 @@ class TestPatchOverrideList:
     def test_po_list_missing_board_name(self):
         """Test po_list when board_name is missing from project config."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {"test_project": {}}  # No board_name
         project_name = "test_project"
 
@@ -405,7 +405,7 @@ class TestPatchOverrideList:
     def test_po_list_no_po_directory(self):
         """Test po_list when po directory doesn't exist."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",
@@ -430,7 +430,7 @@ class TestPatchOverrideList:
     def test_po_list_empty_config(self):
         """Test po_list when PROJECT_PO_CONFIG is empty."""
         # Arrange
-        env = {"vprojects_path": "/tmp/vprojects"}
+        env = {"projects_path": "/tmp/projects"}
         projects_info = {
             "test_project": {
                 "board_name": "test_board",

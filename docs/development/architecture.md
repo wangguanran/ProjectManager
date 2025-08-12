@@ -116,7 +116,7 @@ src/__main__.py
 ### 1. Project Configuration Structure
 
 ```
-vprojects/
+projects/
 ├── board01/
 │   ├── board01.ini          # Project configurations
 │   └── po/                  # PO directories

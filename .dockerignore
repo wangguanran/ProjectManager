@@ -40,7 +40,7 @@ ENV/
 Thumbs.db
 
 # Project specific
-vprojects/
+projects/
 .cache/
 tests/
 docs/

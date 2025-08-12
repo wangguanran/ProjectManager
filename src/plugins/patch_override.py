@@ -52,7 +52,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     Returns:
         bool: True if success, otherwise False.
     """
-    vprojects_path = env["vprojects_path"]
+    projects_path = env["projects_path"]
     log.info("start po_apply for project: '%s'", project_name)
     project_info = projects_info.get(project_name, {})
     project_cfg = project_info.get("config", {})
@@ -60,7 +60,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return False
-    board_path = os.path.join(vprojects_path, board_name)
+    board_path = os.path.join(projects_path, board_name)
     po_dir = os.path.join(board_path, "po")
     po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
     if not po_config:
@@ -407,7 +407,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
     Returns:
         bool: True if success, otherwise False.
     """
-    vprojects_path = env["vprojects_path"]
+    projects_path = env["projects_path"]
     log.info("start po_revert for project: '%s'", project_name)
     project_info = projects_info.get(project_name, {})
     project_cfg = project_info.get("config", {})
@@ -415,7 +415,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return False
-    board_path = os.path.join(vprojects_path, board_name)
+    board_path = os.path.join(projects_path, board_name)
     po_dir = os.path.join(board_path, "po")
     po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
     if not po_config:
@@ -786,7 +786,7 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
         log.error("Board info missing for project '%s'", project_name)
         return False
 
-    board_path = os.path.join(env["vprojects_path"], board_name)
+    board_path = os.path.join(env["projects_path"], board_name)
     po_dir = os.path.join(board_path, "po")
 
     # Create po directory if it doesn't exist
@@ -1283,7 +1283,7 @@ def po_del(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
         log.error("Board info missing for project '%s'", project_name)
         return False
 
-    board_path = os.path.join(env["vprojects_path"], board_name)
+    board_path = os.path.join(env["projects_path"], board_name)
     po_dir = os.path.join(board_path, "po")
     po_path = os.path.join(po_dir, po_name)
 
@@ -1513,7 +1513,7 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         log.error("Cannot find board name for project: '%s'", project_name)
         return []
 
-    board_path = os.path.join(env["vprojects_path"], board_name)
+    board_path = os.path.join(env["projects_path"], board_name)
     po_dir = os.path.join(board_path, "po")
     if not os.path.isdir(po_dir):
         log.warning("No po directory found for '%s'", project_name)
