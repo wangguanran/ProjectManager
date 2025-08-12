@@ -4,377 +4,383 @@
 ![Build Status](https://github.com/wangguanran/ProjectManager/actions/workflows/python-app.yml/badge.svg) ![Pylint](https://github.com/wangguanran/ProjectManager/actions/workflows/pylint.yml/badge.svg)
 ![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg) ![Python](https://img.shields.io/badge/python-3.7+-blue.svg) ![Platform](https://img.shields.io/badge/platform-linux-blue.svg)
 
-Universal Project and Patch (PO) Management Tool
+通用项目和补丁（PO）管理工具
 
-## Project Overview
+## 项目概述
 
-ProjectManager is a project management and patch (patch/override, PO) management tool for multi-board, multi-project environments. It supports project/board creation, deletion, building, as well as PO directory management and patch application/rollback operations. Suitable for scenarios requiring batch management of different hardware platforms and custom patches.
+ProjectManager 是一个适用于多主板、多项目环境的项目管理和补丁（patch/override，PO）管理工具。它支持项目/主板的创建、删除、构建，以及PO目录管理和补丁应用/回滚操作。适用于需要批量管理不同硬件平台和自定义补丁的场景。
 
-## Installation
+## 安装
 
-### Python Package
+### Python 包
 
-**From PyPI**:
+**从 PyPI 安装**：
 ```bash
 pip install multi-project-manager
 ```
 
-**From GitHub Package Registry**:
+**从 GitHub Package Registry 安装**：
 ```bash
 pip install multi-project-manager --index-url https://pypi.pkg.github.com/wangguanran/
 ```
 
-**From Source**:
+**从源码安装**：
 ```bash
 git clone https://github.com/wangguanran/ProjectManager.git
 cd ProjectManager
 pip install -e .
 ```
 
-### Docker Image
+### Docker 镜像
 
-**Pull the latest image**:
+**拉取最新镜像**：
 ```bash
 docker pull ghcr.io/wangguanran/projectmanager:latest
 ```
 
-**Run with Docker**:
+**使用 Docker 运行**：
 ```bash
-# Basic usage
+# 基本用法
 docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/projectmanager:latest
 
-# With specific command
+# 执行特定命令
 docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/projectmanager:latest po_apply myproject
 ```
 
-## Main Features
+## 主要功能
 
-- Support for unified management of multiple boards and projects
-- Project/board creation, deletion, and building (some features are reserved)
-- PO (patch/override) directory creation, deletion, and listing
-- Apply/rollback patches and overrides for projects
-- Automatic log archiving and performance analysis support
-- Interactive file selection for PO creation
-- Support for .repo manifest and multi-repository environments
+- 支持统一管理多个主板和项目
+- 项目/主板的创建、删除和构建（部分功能预留）
+- PO（补丁/覆盖）目录的创建、删除和列表显示
+- 为项目应用/回滚补丁和覆盖
+- 自动日志归档和性能分析支持
+- PO创建的交互式文件选择
+- 支持 .repo 清单和多仓库环境
 
-## Directory Structure
+## 目录结构
 
 ```
 projects/
   board01/
-    board01.ini          # Board configuration file
+    board01.ini          # 主板配置文件
     po/
       po_test01/
-        patches/         # Git patch files
-        overrides/       # Override files
+        patches/         # Git 补丁文件
+        overrides/       # 覆盖文件
       ...
   common/
     ...
   template/
     ...
 .cache/
-  logs/         # Log files with timestamp
-  cprofile/     # Performance analysis data
+  logs/         # 带时间戳的日志文件
+  cprofile/     # 性能分析数据
 src/
-  __main__.py   # Command line main entry
+  __main__.py   # 命令行主入口
   plugins/
-    project_manager.py   # Project/board management
-    patch_override.py    # PO management and patch application
+    project_manager.py   # 项目/主板管理
+    patch_override.py    # PO管理和补丁应用
   ...
 ```
 
-## Command Line Usage
+## 命令行用法
 
-Start with the following command:
+使用以下命令启动：
 
 ```bash
-python -m src <operation> <project_or_board_name> [parameters] [--options]
+python -m src <操作> <项目或主板名称> [参数] [--选项]
 ```
 
-### Global Options
+### 全局选项
 
-- `--version`: Show program version
-- `--help`: Show detailed help for all operations
-- `--perf-analyze`: Enable cProfile performance analysis
+- `--version`: 显示程序版本
+- `--help`: 显示所有操作的详细帮助
+- `--perf-analyze`: 启用 cProfile 性能分析
 
-## Detailed Command Reference
+## 详细命令参考
 
-### Project Management Commands
+### 项目管理命令
 
-#### `project_new` - Create New Project
-**Status**: TODO (Not implemented)
+#### `project_new` - 创建新项目
+**状态**: TODO（未实现）
 
-**Usage**: `python -m src project_new <project_name>`
+**用法**: `python -m src project_new <项目名称>`
 
-**Description**: Creates a new project with specified configuration.
+**描述**: 使用指定配置创建新项目。
 
-**Parameters**:
-- `project_name` (required): Name of the project to create
+**参数**:
+- `项目名称`（必需）: 要创建的项目名称
 
-**Configuration**: Project configuration is stored in board-specific `.ini` files.
-
----
-
-#### `project_del` - Delete Project
-**Status**: TODO (Not implemented)
-
-**Usage**: `python -m src project_del <project_name>`
-
-**Description**: Deletes the specified project directory and updates its status in the config file.
-
-**Parameters**:
-- `project_name` (required): Name of the project to delete
+**配置**: 项目配置存储在主板特定的 `.ini` 文件中。
 
 ---
 
-#### `project_build` - Build Project
-**Status**: TODO (Not implemented)
+#### `project_del` - 删除项目
+**状态**: TODO（未实现）
 
-**Usage**: `python -m src project_build <project_name>`
+**用法**: `python -m src project_del <项目名称>`
 
-**Description**: Builds the specified project according to its configuration.
+**描述**: 删除指定的项目目录并更新配置文件中的状态。
 
-**Parameters**:
-- `project_name` (required): Name of the project to build
+**参数**:
+- `项目名称`（必需）: 要删除的项目名称
 
 ---
 
-### Board Management Commands
+#### `project_build` - 构建项目
+**状态**: TODO（未实现）
 
-#### `board_new` - Create New Board
-**Status**: TODO (Not implemented)
+**用法**: `python -m src project_build <项目名称>`
 
-**Usage**: `python -m src board_new <board_name>`
+**描述**: 根据配置构建指定项目。
 
-**Description**: Creates a new board with initial directory structure.
+**参数**:
+- `项目名称`（必需）: 要构建的项目名称
 
-**Parameters**:
-- `board_name` (required): Name of the board to create
+---
 
-**Directory Structure Created**:
+### 主板管理命令
+
+#### `board_new` - 创建新主板
+**状态**: TODO（未实现）
+
+**用法**: `python -m src board_new <主板名称>`
+
+**描述**: 创建新主板并初始化目录结构。
+
+**参数**:
+- `主板名称`（必需）: 要创建的主板名称
+
+**创建的目录结构**:
 ```
-projects/<board_name>/
-  <board_name>.ini
+projects/<主板名称>/
+  <主板名称>.ini
   po/
 ```
 
 ---
 
-#### `board_del` - Delete Board
-**Status**: TODO (Not implemented)
+#### `board_del` - 删除主板
+**状态**: TODO（未实现）
 
-**Usage**: `python -m src board_del <board_name>`
+**用法**: `python -m src board_del <主板名称>`
 
-**Description**: Deletes the specified board and all its projects.
+**描述**: 删除指定的主板及其所有项目。
 
-**Parameters**:
-- `board_name` (required): Name of the board to delete
+**参数**:
+- `主板名称`（必需）: 要删除的主板名称
 
 ---
 
-### PO (Patch/Override) Management Commands
+### PO（补丁/覆盖）管理命令
 
-#### `po_apply` - Apply Patches and Overrides
-**Status**: ✅ Implemented
+#### `po_apply` - 应用补丁和覆盖
+**状态**: ✅ 已实现
 
-**Usage**: `python -m src po_apply <project_name>`
+**用法**: `python -m src po_apply <项目名称>`
 
-**Description**: Applies all configured patches and overrides for the specified project.
+**描述**: 为指定项目应用所有配置的补丁和覆盖。
 
-**Parameters**:
-- `project_name` (required): Name of the project to apply PO to
+**参数**:
+- `项目名称`（必需）: 要应用PO的项目名称
 
-**Process**:
-1. Reads `PROJECT_PO_CONFIG` from project configuration
-2. Parses PO configuration (supports inclusion/exclusion)
-3. Applies patches using `git apply`
-4. Copies override files to target locations
-5. Creates flag files (`.patch_applied`, `.override_applied`) to track applied POs
+**流程**:
+1. 从项目配置读取 `PROJECT_PO_CONFIG`
+2. 解析PO配置（支持包含/排除）
+3. 使用 `git apply` 应用补丁
+4. 将覆盖文件复制到目标位置
+5. 创建标志文件（`.patch_applied`，`.override_applied`）来跟踪已应用的PO
 
-**Configuration Format**:
+**配置格式**:
 ```
 PROJECT_PO_CONFIG=po_test01 po_test02 -po_test03 po_test04[file1 file2]
 ```
-- `po_test01`: Apply PO
-- `-po_test03`: Exclude PO
-- `po_test04[file1 file2]`: Apply PO but exclude specific files
+- `po_test01`: 应用PO
+- `-po_test03`: 排除PO
+- `po_test04[file1 file2]`: 应用PO但排除特定文件
 
 ---
 
-#### `po_revert` - Revert Patches and Overrides
-**Status**: ✅ Implemented
+#### `po_revert` - 回滚补丁和覆盖
+**状态**: ✅ 已实现
 
-**Usage**: `python -m src po_revert <project_name>`
+**用法**: `python -m src po_revert <项目名称>`
 
-**Description**: Reverts all applied patches and overrides for the specified project.
+**描述**: 回滚指定项目的所有已应用补丁和覆盖。
 
-**Parameters**:
-- `project_name` (required): Name of the project to revert PO from
+**参数**:
+- `项目名称`（必需）: 要回滚PO的项目名称
 
-**Process**:
-1. Reads `PROJECT_PO_CONFIG` from project configuration
-2. Reverts patches using `git apply --reverse`
-3. Removes override files (restores from git if tracked)
-4. Updates flag files to remove PO references
+**流程**:
+1. 从项目配置读取 `PROJECT_PO_CONFIG`
+2. 使用 `git apply --reverse` 回滚补丁
+3. 删除覆盖文件（如果被git跟踪则从git恢复）
+4. 更新标志文件以移除PO引用
 
 ---
 
-#### `po_new` - Create New PO Directory
-**Status**: ✅ Implemented
+#### `po_new` - 创建新PO目录
+**状态**: ✅ 已实现
 
-**Usage**: `python -m src po_new <project_name> <po_name> [--force]`
+**用法**: `python -m src po_new <项目名称> <po名称> [--force]`
 
-**Description**: Creates a new PO directory structure and optionally populates it with modified files.
+**描述**: 创建新的PO目录结构，并可选择性地用修改的文件填充它。
 
-**Parameters**:
-- `project_name` (required): Name of the project
-- `po_name` (required): Name of the new PO (must start with 'po' and contain only lowercase letters, digits, underscores)
-- `--force` (optional): Skip confirmation prompts and create empty directory structure
+**参数**:
+- `项目名称`（必需）: 项目名称
+- `po名称`（必需）: 新PO的名称（必须以'po'开头，只能包含小写字母、数字、下划线）
+- `--force`（可选）: 跳过确认提示并创建空目录结构
 
-**Features**:
-- Interactive file selection from modified files in git repositories
-- Support for .repo manifest files
-- Automatic repository discovery
-- File ignore patterns from `.gitignore` and `PROJECT_PO_IGNORE` config
-- Choice between patch and override for each file
-- Custom patch naming
+**功能**:
+- 从git仓库中的修改文件进行交互式文件选择
+- 支持 .repo 清单文件
+- 自动仓库发现
+- 从 `.gitignore` 和 `PROJECT_PO_IGNORE` 配置的文件忽略模式
+- 为每个文件选择补丁或覆盖
+- 自定义补丁命名
 
-**Directory Structure Created**:
+**创建的目录结构**:
 ```
-projects/<board_name>/po/<po_name>/
+projects/<主板名称>/po/<po名称>/
   patches/
   overrides/
 ```
 
-**Interactive Process**:
-1. Scans for git repositories (supports .repo manifest)
-2. Lists modified files in each repository
-3. Allows user to select files for inclusion
-4. For each file, user chooses:
-   - Create patch (for tracked files with modifications)
-   - Create override (for any file)
-   - Skip file
+**交互式流程**:
+1. 扫描git仓库（支持 .repo 清单）
+2. 列出每个仓库中的修改文件
+3. 允许用户选择要包含的文件
+4. 对于每个文件，用户选择：
+   - 创建补丁（用于有修改的跟踪文件）
+   - 创建覆盖（用于任何文件）
+   - 跳过文件
 
 ---
 
-#### `po_del` - Delete PO Directory
-**Status**: ✅ Implemented
+#### `po_del` - 删除PO目录
+**状态**: ✅ 已实现
 
-**Usage**: `python -m src po_del <project_name> <po_name> [--force]`
+**用法**: `python -m src po_del <项目名称> <po名称> [--force]`
 
-**Description**: Deletes the specified PO directory and removes it from all project configurations.
+**描述**: 删除指定的PO目录并从所有项目配置中移除它。
 
-**Parameters**:
-- `project_name` (required): Name of the project
-- `po_name` (required): Name of the PO to delete
-- `--force` (optional): Skip confirmation prompts
+**参数**:
+- `项目名称`（必需）: 项目名称
+- `po名称`（必需）: 要删除的PO名称
+- `--force`（可选）: 跳过确认提示
 
-**Process**:
-1. Shows directory contents and projects using the PO
-2. Removes PO from all project configurations in `.ini` files
-3. Deletes PO directory and all contents
-4. Removes empty `po/` directory if no POs remain
+**流程**:
+1. 显示目录内容和使用该PO的项目
+2. 从 `.ini` 文件中的所有项目配置中移除PO
+3. 删除PO目录和所有内容
+4. 如果没有剩余PO，则删除空的 `po/` 目录
 
-**Safety Features**:
-- Confirmation prompt showing affected projects
-- Directory tree display of contents to be deleted
-- Automatic cleanup of empty directories
-
----
-
-#### `po_list` - List Configured POs
-**Status**: ✅ Implemented
-
-**Usage**: `python -m src po_list <project_name> [--short]`
-
-**Description**: Lists all enabled PO directories for the specified project.
-
-**Parameters**:
-- `project_name` (required): Name of the project
-- `--short` (optional): Show only PO names, not detailed file lists
-
-**Output**:
-- Lists all POs enabled in `PROJECT_PO_CONFIG`
-- Shows patch files and override files for each PO
-- Displays file counts and paths
+**安全功能**:
+- 显示受影响项目的确认提示
+- 显示要删除内容的目录树
+- 自动清理空目录
 
 ---
 
-## Configuration Files
+#### `po_list` - 列出配置的PO
+**状态**: ✅ 已实现
 
-### Board Configuration (.ini files)
+**用法**: `python -m src po_list <项目名称> [--short]`
 
-Each board has a configuration file (`<board_name>.ini`) containing project definitions:
+**描述**: 列出指定项目的所有启用的PO目录。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+- `--short`（可选）: 只显示PO名称，不显示详细文件列表
+
+**输出**:
+- 列出 `PROJECT_PO_CONFIG` 中启用的所有PO
+- 显示每个PO的补丁文件和覆盖文件
+- 显示文件计数和路径
+
+---
+
+## 配置文件
+
+### 主板配置文件（.ini 文件）
+
+每个主板都有一个配置文件（`<主板名称>.ini`），包含项目定义：
 
 ```ini
 [project_name]
 PROJECT_PO_CONFIG=po_test01 po_test02 -po_test03
 PROJECT_PO_IGNORE=external vendor/third_party
 BOARD_NAME=board01
-# Other project-specific configurations
+# 其他项目特定配置
 ```
 
-**Configuration Keys**:
-- `PROJECT_PO_CONFIG`: PO configuration string (see format above)
-- `PROJECT_PO_IGNORE`: Space-separated ignore patterns for repositories/files
-- `BOARD_NAME`: Board name (auto-populated)
+**配置键**:
+- `PROJECT_PO_CONFIG`: PO配置字符串（见上述格式）
+- `PROJECT_PO_IGNORE`: 仓库/文件的空格分隔忽略模式
+- `BOARD_NAME`: 主板名称（自动填充）
 
-### PO Configuration Format
+### PO配置格式
 
-**Basic Format**: `po_name1 po_name2 -po_name3`
+**基本格式**: `po_name1 po_name2 -po_name3`
 
-**Advanced Format**: `po_name1[file1 file2] -po_name2[file3]`
+**高级格式**: `po_name1[file1 file2] -po_name2[file3]`
 
-**Examples**:
-- `po_test01 po_test02`: Apply po_test01 and po_test02
-- `po_test01 -po_test02`: Apply po_test01, exclude po_test02
-- `po_test01[src/main.c include/header.h]`: Apply po_test01 but exclude specific files
-- `po_test01 -po_test02[config.ini]`: Apply po_test01, exclude po_test02 except config.ini
+**示例**:
+- `po_test01 po_test02`: 应用 po_test01 和 po_test02
+- `po_test01 -po_test02`: 应用 po_test01，排除 po_test02
+- `po_test01[src/main.c include/header.h]`: 应用 po_test01 但排除特定文件
+- `po_test01 -po_test02[config.ini]`: 应用 po_test01，排除 po_test02 但保留 config.ini
 
-## Logging and Performance Analysis
+## 日志记录和性能分析
 
-### Logging
-- **Location**: `.cache/logs/`
-- **Format**: `Log_YYYYMMDD_HHMMSS.log`
-- **Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL
-- **Features**: 
-  - Colored console output
-  - Automatic log rotation
-  - Time-based archiving
+### 日志记录
+- **位置**: `.cache/logs/`
+- **格式**: `Log_YYYYMMDD_HHMMSS.log`
+- **级别**: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- **功能**: 
+  - 彩色控制台输出
+  - 自动日志轮转
+  - 基于时间的归档
 
-### Performance Analysis
-- **Location**: `.cache/cprofile/`
-- **Enable**: Use `--perf-analyze` flag
-- **Output**: Detailed function call statistics and timing
+### 性能分析
+- **位置**: `.cache/cprofile/`
+- **启用**: 使用 `--perf-analyze` 标志
+- **输出**: 详细的函数调用统计和计时
 
-## Environment Support
+## 环境支持
 
-### Repository Types
-- Single git repository
-- Multiple git repositories (recursive discovery)
-- .repo manifest files (Android-style)
+### 仓库类型
+- 单个git仓库
+- 多个git仓库（递归发现）
+- .repo 清单文件（Android风格）
 
-### File Types
-- **Patches**: Git patch files (`.patch`)
-- **Overrides**: Direct file copies
-- **Flags**: `.patch_applied`, `.override_applied` (tracking files)
+### 文件类型
+- **补丁**: Git补丁文件（`.patch`）
+- **覆盖**: 直接文件复制
+- **标志**: `.patch_applied`，`.override_applied`（跟踪文件）
 
-### Ignore Patterns
-- `.gitignore` file patterns
-- `PROJECT_PO_IGNORE` configuration
-- Repository-level exclusions
+### 忽略模式
+- `.gitignore` 文件模式
+- `PROJECT_PO_IGNORE` 配置
+- 仓库级排除
 
-## Dependencies and Installation
+## 依赖和安装
 
 - **Python**: 3.7+
-- **Dependencies**: See `requirements.txt`
-- **Git**: Required for patch operations
-- **File System**: Standard POSIX file operations
+- **依赖**: 参见 `requirements.txt`
+- **Git**: 补丁操作必需
+- **文件系统**: 标准POSIX文件操作
 
-## Notes
+## 注意事项
 
-- Currently, project/board management features are reserved (TODO), while PO management and patch application features are fully implemented.
-- Platform management features have been merged into existing plugins, with no separate `platform_manager.py` or `po_manager.py` files.
-- To extend platform-related operations, custom plugins can be added in the `projects/scripts/` directory.
-- All PO operations support interactive confirmation and detailed logging.
-- The tool automatically handles multi-repository environments and complex PO configurations.
+- 目前，项目/主板管理功能是预留的（TODO），而PO管理和补丁应用功能已完全实现。
+- 平台管理功能已合并到现有插件中，没有单独的 `platform_manager.py` 或 `po_manager.py` 文件。
+- 要扩展平台相关操作，可以在 `projects/scripts/` 目录中添加自定义插件。
+- 所有PO操作都支持交互式确认和详细日志记录。
+- 该工具自动处理多仓库环境和复杂的PO配置。
+
+---
+
+## 其他语言版本
+
+- [English Version](README_EN.md) - 英文版文档
