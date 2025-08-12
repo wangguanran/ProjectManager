@@ -185,10 +185,10 @@ download_and_update_bin() {
     # 赋予可执行权限
     chmod +x "$temp_file"
     
-    # 重命名为 mpm 并移动到 .local/bin 目录
-    mv "$temp_file" "$bin_dir/mpm"
+    # 重命名为 projctl 并移动到 .local/bin 目录
+    mv "$temp_file" "$bin_dir/projctl"
     
-    echo "Downloaded and installed as $bin_dir/mpm"
+    echo "Downloaded and installed as $bin_dir/projctl"
 }
 
 # Main execution
