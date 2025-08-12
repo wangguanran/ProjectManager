@@ -45,7 +45,6 @@ if command -v pyinstaller &> /dev/null; then
         --hidden-import=src.utils \
         --collect-all=git \
         --collect-all=importlib_metadata \
-        --add-data "$(pwd)/src:src" \
         --add-data "$(pwd)/pyproject.toml:." \
         --distpath $BINARY_DIR \
         --workpath $BINARY_DIR/build \
