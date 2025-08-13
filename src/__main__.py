@@ -267,11 +267,14 @@ def _load_builtin_plugin_operations():
 
 @func_time
 @func_cprofile
-def _load_platform_plugin_operations(projects_path):
+def _import_platform_scripts(projects_path):
     scripts_dir = os.path.join(projects_path, "scripts")
-    plugin_classes = []
     if not os.path.exists(scripts_dir):
-        return {}
+        log.debug("Scripts directory not found: %s", scripts_dir)
+        return
+
+    # Import all script modules
+    imported_count = 0
     for file_name in os.listdir(scripts_dir):
         if not file_name.endswith(".py") or file_name.startswith("_"):
             continue
@@ -281,16 +284,12 @@ def _load_platform_plugin_operations(projects_path):
             spec = importlib.util.spec_from_file_location(module_name, script_path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            # Load all classes that do not start with an underscore
-            for attr_name in dir(mod):
-                if attr_name.startswith("_"):
-                    continue
-                attr = getattr(mod, attr_name)
-                if inspect.isclass(attr) and attr.__module__ == mod.__name__:
-                    plugin_classes.append(attr)
+            # Module is imported successfully
+            imported_count += 1
         except (ImportError, AttributeError) as e:
-            log.error("Failed to load platform plugin from %s: %s", script_path, e)
-    return _load_plugin_operations(plugin_classes)
+            log.error("Failed to import platform script from %s: %s", script_path, e)
+
+    log.debug("Imported %d platform scripts from %s", imported_count, scripts_dir)
 
 
 @func_time
@@ -540,15 +539,16 @@ def main():
         "Loaded projects info:\n%s",
         json.dumps(projects_info, indent=4, ensure_ascii=False),
     )
-    platform_operations = _load_platform_plugin_operations(env["projects_path"])
-    log.debug("Loaded %d platform operations.", len(platform_operations))
-    log.debug("Platform operations: %s", list(platform_operations.keys()))
+
+    # Import platform scripts
+    _import_platform_scripts(env["projects_path"])
+
     builtin_operations = _load_builtin_plugin_operations()
     log.debug("Loaded %d builtin operations.", len(builtin_operations))
     log.debug("Builtin operations: %s", list(builtin_operations.keys()))
 
-    # Merge all operations
-    all_operations = {**builtin_operations, **platform_operations}
+    # Use only builtin operations since platform scripts are just imported
+    all_operations = builtin_operations
 
     operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(all_operations)
     builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)

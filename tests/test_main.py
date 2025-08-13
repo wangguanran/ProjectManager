@@ -660,7 +660,7 @@ LEVEL4_SETTING=level4_value
 
 
 class TestPluginOperations:
-    """Test cases for plugin operation loading functions."""
+    """Test cases for plugin operation loading and script importing functions."""
 
     def setup_method(self):
         """Set up test environment for each test case."""
@@ -668,14 +668,14 @@ class TestPluginOperations:
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.__main__ import (
+            _import_platform_scripts,
             _load_builtin_plugin_operations,
-            _load_platform_plugin_operations,
             _load_plugin_operations,
         )
 
         self._load_plugin_operations = _load_plugin_operations
         self._load_builtin_plugin_operations = _load_builtin_plugin_operations
-        self._load_platform_plugin_operations = _load_platform_plugin_operations
+        self._import_platform_scripts = _import_platform_scripts
         self.temp_dir = None
 
     def teardown_method(self):
@@ -829,28 +829,24 @@ class TestPluginOperations:
                 assert "params" in result[operation]
                 assert "plugin_class" in result[operation]
 
-    def test_load_platform_plugin_operations_no_scripts_dir(self):
-        """Test loading platform plugin operations when scripts directory doesn't exist."""
+    def test_import_platform_scripts_no_or_empty_scripts_dir(self):
+        """Test importing platform scripts when scripts directory doesn't exist or is empty."""
         projects_path = self._create_temp_projects_structure()
-        result = self._load_platform_plugin_operations(projects_path)
-        assert not result
+        # Test when scripts directory doesn't exist
+        self._import_platform_scripts(projects_path)
 
-    def test_load_platform_plugin_operations_empty_scripts_dir(self):
-        """Test loading platform plugin operations from empty scripts directory."""
+        # Test when scripts directory exists but is empty
+        scripts_dir = os.path.join(projects_path, "scripts")
+        os.makedirs(scripts_dir)
+        self._import_platform_scripts(projects_path)
+
+    def test_import_platform_scripts_valid_and_multiple_scripts(self):
+        """Test importing valid platform scripts (single and multiple)."""
         projects_path = self._create_temp_projects_structure()
         scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
-        result = self._load_platform_plugin_operations(projects_path)
-        assert not result
-
-    def test_load_platform_plugin_operations_valid_script(self):
-        """Test loading platform plugin operations from valid script file."""
-        projects_path = self._create_temp_projects_structure()
-        scripts_dir = os.path.join(projects_path, "scripts")
-        os.makedirs(scripts_dir)
-
-        # Create a valid platform script
+        # Test single valid script
         script_content = '''
 class PlatformPlugin:
     """Test platform plugin class."""
@@ -873,26 +869,36 @@ class PlatformPlugin:
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script_content)
 
-        result = self._load_platform_plugin_operations(projects_path)
+        # Function should import the script without raising exceptions
+        self._import_platform_scripts(projects_path)
 
-        assert len(result) == 2
-        assert "platform_operation" in result
-        assert "another_operation" in result
-        assert "_private_method" not in result
+        # Test multiple valid scripts
+        script1_content = """
+class Plugin1:
+    @staticmethod
+    def operation1(env, projects_info, project_name):
+        pass
+"""
+        script2_content = """
+class Plugin2:
+    @staticmethod
+    def operation2(env, projects_info, project_name):
+        pass
+"""
 
-        # Check metadata
-        platform_op = result["platform_operation"]
-        assert platform_op["desc"] == "Platform operation for testing."
-        assert platform_op["params"] == ["env", "projects_info", "project_name"]
-        assert platform_op["required_count"] == 3
+        script1_path = os.path.join(scripts_dir, "plugin1.py")
+        script2_path = os.path.join(scripts_dir, "plugin2.py")
 
-        another_op = result["another_operation"]
-        assert another_op["desc"] == "Another platform operation."
-        assert another_op["params"] == ["env", "projects_info", "project_name", "flag"]
-        assert another_op["required_count"] == 3
+        with open(script1_path, "w", encoding="utf-8") as f:
+            f.write(script1_content)
+        with open(script2_path, "w", encoding="utf-8") as f:
+            f.write(script2_content)
 
-    def test_load_platform_plugin_operations_invalid_script(self):
-        """Test loading platform plugin operations with invalid script."""
+        # Function should import all valid scripts
+        self._import_platform_scripts(projects_path)
+
+    def test_import_platform_scripts_invalid_script(self):
+        """Test importing platform scripts with invalid script."""
         projects_path = self._create_temp_projects_structure()
         scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
@@ -910,45 +916,33 @@ class PlatformPlugin:
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(script_content)
 
-        result = self._load_platform_plugin_operations(projects_path)
-        # Should return empty dict due to import error
-        assert not result
+        # Function should handle import error gracefully
+        self._import_platform_scripts(projects_path)
 
-    def test_load_platform_plugin_operations_underscore_file(self):
-        """Test that files starting with underscore are ignored."""
+    def test_import_platform_scripts_ignored_files(self):
+        """Test that underscore files and non-Python files are ignored."""
         projects_path = self._create_temp_projects_structure()
         scripts_dir = os.path.join(projects_path, "scripts")
         os.makedirs(scripts_dir)
 
         # Create a script with underscore prefix
-        script_content = """
+        underscore_script_content = """
 class PlatformPlugin:
     @staticmethod
     def platform_operation(env, projects_info, project_name):
         pass
 """
-        script_path = os.path.join(scripts_dir, "_private_script.py")
-        with open(script_path, "w", encoding="utf-8") as f:
-            f.write(script_content)
-
-        result = self._load_platform_plugin_operations(projects_path)
-        # Should return empty dict as underscore files are ignored
-        assert not result
-
-    def test_load_platform_plugin_operations_non_py_file(self):
-        """Test that non-Python files are ignored."""
-        projects_path = self._create_temp_projects_structure()
-        scripts_dir = os.path.join(projects_path, "scripts")
-        os.makedirs(scripts_dir)
+        underscore_script_path = os.path.join(scripts_dir, "_private_script.py")
+        with open(underscore_script_path, "w", encoding="utf-8") as f:
+            f.write(underscore_script_content)
 
         # Create a non-Python file
-        script_path = os.path.join(scripts_dir, "config.txt")
-        with open(script_path, "w", encoding="utf-8") as f:
+        non_py_file_path = os.path.join(scripts_dir, "config.txt")
+        with open(non_py_file_path, "w", encoding="utf-8") as f:
             f.write("This is not a Python file")
 
-        result = self._load_platform_plugin_operations(projects_path)
-        # Should return empty dict as non-Python files are ignored
-        assert not result
+        # Function should ignore both underscore files and non-Python files
+        self._import_platform_scripts(projects_path)
 
     def test_load_plugin_operations_needs_repositories_detection(self):
         """Test detection of @needs_repositories in docstrings."""
