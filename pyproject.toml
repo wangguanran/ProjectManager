@@ -123,4 +123,99 @@ known_first_party = ["src"]
 # module = [
 #     "GitPython.*",
 # ]
-# ignore_missing_imports = true 
+# ignore_missing_imports = true
+
+[tool.pylint.main]
+fail-under = 10
+init-hook = "import sys; import os; sys.path.insert(0, os.getcwd())"
+py-version = "3.10"
+source-roots = ["src", "tests"]
+suggestion-mode = "yes"
+
+[tool.pylint.basic]
+good-names = ["i", "j", "k", "ex", "Run", "_"]
+
+[tool.pylint.design]
+max-args = 5
+max-attributes = 7
+max-bool-expr = 5
+max-branches = 12
+max-locals = 15
+max-parents = 7
+max-positional-arguments = 5
+max-public-methods = 20
+max-returns = 6
+max-statements = 50
+min-public-methods = 2
+
+[tool.pylint.format]
+max-line-length = 100
+max-module-lines = 1000
+
+[tool.pylint.messages_control]
+disable = [
+    "raw-checker-failed",
+    "bad-inline-option",
+    "locally-disabled",
+    "file-ignored",
+    "suppressed-message",
+    "useless-suppression",
+    "deprecated-pragma",
+    "use-implicit-booleaness-not-comparison-to-string",
+    "use-implicit-booleaness-not-comparison-to-zero",
+    "use-symbolic-message-instead",
+    "attribute-defined-outside-init",
+    "invalid-name",
+    "import-outside-toplevel",
+    "too-many-public-methods",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "C0301",  # Line too long
+    "R0914",  # Too many local variables
+    "R0912",  # Too many branches
+    "R0915",  # Too many statements
+    "R0903",  # Too few public methods
+    "W0511",  # TODO/FIXME/XXX comments
+    "R1702",  # Too many nested blocks
+    "R0911",  # Too many return statements
+    "C0302",  # Too many lines in module
+]
+
+[tool.pylint.method_args]
+timeout-methods = [
+    "requests.api.delete",
+    "requests.api.get",
+    "requests.api.head",
+    "requests.api.options",
+    "requests.api.patch",
+    "requests.api.post",
+    "requests.api.put",
+    "requests.api.request",
+]
+
+[tool.pylint.miscellaneous]
+notes = ["FIXME", "XXX", "TODO"]
+
+[tool.pylint.refactoring]
+max-nested-blocks = 5
+never-returning-functions = ["sys.exit", "argparse.parse_error"]
+suggest-join-with-non-empty-separator = "yes"
+
+[tool.pylint.reports]
+evaluation = "max(0, 0 if fatal else 10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10))"
+reports = "no"
+score = "yes"
+
+[tool.pylint.similarities]
+min-similarity-lines = 4
+ignore-comments = "yes"
+ignore-docstrings = "yes"
+ignore-imports = "yes"
+ignore-signatures = "yes"
+
+[tool.pylint.typecheck]
+ignore-none = "yes"
+ignore-on-opaque-inference = "yes"
+missing-member-hint = "yes"
+missing-member-hint-distance = 1
+missing-member-max-choices = 1 

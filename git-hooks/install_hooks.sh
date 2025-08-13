@@ -16,7 +16,7 @@ fi
 mkdir -p .git/hooks
 
 # Copy all hook files from hooks directory
-for hook_file in hooks/*; do
+for hook_file in git-hooks/*; do
     if [ -f "$hook_file" ]; then
         hook_name=$(basename "$hook_file")
         
@@ -38,7 +38,7 @@ done
 echo "Git hooks installed successfully!"
 echo ""
 echo "The following hooks are now active:"
-for hook_file in hooks/*; do
+for hook_file in git-hooks/*; do
     if [ -f "$hook_file" ]; then
         hook_name=$(basename "$hook_file")
         if [ "$hook_name" != "install_hooks.sh" ] && [ "$hook_name" != "README.md" ]; then

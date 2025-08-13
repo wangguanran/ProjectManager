@@ -92,7 +92,7 @@ print_status "Import sorting check passed ✓"
 # Run pylint on all Python files in the project
 print_status "Running pylint..."
 PY_FILES=$(find . -type f -name '*.py' ! -path './venv/*' ! -path './out/*' ! -path './.cache/*')
-if pylint $PY_FILES --rcfile=.pylintrc --output-format=text; then
+if pylint $PY_FILES; then
     print_status "Pylint passed ✓"
 else
     print_error "Pylint failed ✗"
