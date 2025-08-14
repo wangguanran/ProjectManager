@@ -10,7 +10,7 @@ authors = [
 ]
 description = "A comprehensive project and patch management tool for multi-board, multi-project environments with Git integration and automated PO (Patch/Override) operations."
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.8"
 license = "GPL-3.0"
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -19,11 +19,11 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Build Tools",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Version Control :: Git",
@@ -31,21 +31,23 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "GitPython",
+    "configupdater>=3.0.0",
+    "toml>=0.10.2",
+    "GitPython>=3.1.40",
     'importlib-metadata; python_version < "3.8"',
 ]
 
 [project.optional-dependencies]
 dev = [
-    "build",
-    "pytest",
-    "pyinstaller",
-    "toml",
-    "pylint",
-    "pytest-cov",
-    "black",
-    "isort",
-    "mypy",
+    "build>=1.0.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pyinstaller>=6.0.0",
+    "pylint>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
 ]
 
 [project.urls]
@@ -82,7 +84,7 @@ markers = [
 
 [tool.black]
 line-length = 120
-target-version = ['py37']
+target-version = ['py38']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
