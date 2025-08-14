@@ -8,9 +8,7 @@ import importlib.util
 import inspect
 import json
 import os
-import pathlib
 import re
-import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from importlib import import_module
@@ -445,54 +443,6 @@ def _find_repositories():
 
 
 @func_time
-def check_and_create_projects(projects_path):
-    """Check if projects directory exists, prompt user and create if needed."""
-    if not os.path.exists(projects_path):
-        answer = input("projects directory does not exist, create standard structure? [y/N]: ").strip().lower()
-        if answer in ("y", "yes"):
-
-            def touch(path):
-                pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
-                pathlib.Path(path).touch(exist_ok=True)
-
-            structure = {
-                "common/common.ini": None,
-                "common/po/.gitkeep": None,
-                "template/template.ini": None,
-                "template/po/po_template/overrides/.gitkeep": None,
-                "template/po/po_template/patches/.gitkeep": None,
-                "scripts/.gitkeep": None,
-            }
-            for rel_path in structure:
-                abs_path = os.path.join(projects_path, rel_path)
-                if abs_path.endswith(".ini"):
-                    touch(abs_path)
-                else:
-                    # .gitkeep placeholder
-                    pathlib.Path(abs_path).parent.mkdir(parents=True, exist_ok=True)
-                    with open(abs_path, "w", encoding="utf-8") as f:
-                        f.write("")
-            print(f"projects directory and basic structure created at: {projects_path}")
-            # Initialize git repository in projects
-
-            try:
-                subprocess.run(["git", "init"], cwd=projects_path, check=True)
-                subprocess.run(["git", "add", "-A"], cwd=projects_path, check=True)
-                subprocess.run(
-                    ["git", "commit", "-m", "Initial projects structure"],
-                    cwd=projects_path,
-                    check=True,
-                )
-                print("Initialized empty Git repository in projects directory and committed initial structure.")
-                # TODO: Install git hooks here for file checking in the future
-            except subprocess.CalledProcessError as e:
-                print(f"Failed to initialize git repository: {e}. Output: {e.output if hasattr(e, 'output') else ''}")
-        else:
-            print("projects directory not created, exiting.")
-            sys.exit(0)
-
-
-@func_time
 def get_operation_meta_flag(func, operate, key):
     """
     Retrieve a boolean flag from operation metadata for a given function, operation name, and config key.
@@ -517,8 +467,6 @@ def main():
     root_path = os.getcwd()
     # Use projects path from current working directory
     projects_path = os.path.join(root_path, "projects")
-
-    check_and_create_projects(projects_path)
 
     env = {
         "root_path": root_path,
