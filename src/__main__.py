@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from difflib import SequenceMatcher
 from importlib import import_module
 
 import configupdater
@@ -366,14 +367,15 @@ def _parse_args_and_plugin_args(builtin_operations):
     help_text = "supported operations :\n" + "\n".join(builtin_help_lines)
     choices = list(builtin_operations)
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
-    parser = argparse.ArgumentParser(
+    parser = FuzzyOperationParser(
+        available_operations=choices,
         usage="__main__.py [options] operations name [args ...]",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=plugin_options if plugin_options else None,
         add_help=True,
     )
     parser.add_argument("--version", action="version", version=get_version())
-    parser.add_argument("operate", choices=choices, help=help_text, metavar="operations")
+    parser.add_argument("operate", help=help_text, metavar="operations")
     parser.add_argument("name", help="project or board name")
     parser.add_argument("args", nargs="*", help="additional arguments for plugin operations")
     parser.add_argument(
@@ -455,6 +457,209 @@ def get_operation_meta_flag(func, operate, key):
         return bool(meta[key])
     log.error("Failed to get operation meta flag for '%s' with key '%s'", operate, key)
     return False
+
+
+def _find_best_operation_match(user_input: str, available_operations: list[str], threshold: float = 0.6) -> str | None:
+    """
+    Find the best matching operation name using fuzzy string matching.
+
+    Args:
+        user_input: The user-provided operation name
+        available_operations: List of available operation names
+        threshold: Minimum similarity score to consider a match (0.0 to 1.0)
+
+    Returns:
+        The best matching operation name, or None if no match above threshold
+    """
+    # Handle empty input
+    if not user_input:
+        return None
+
+    if user_input in available_operations:
+        return user_input
+
+    best_match = None
+    best_score = 0.0
+
+    for operation in available_operations:
+        # Calculate similarity using SequenceMatcher
+        similarity = SequenceMatcher(None, user_input.lower(), operation.lower()).ratio()
+
+        # Check if user_input is a substring of operation (e.g., "build" in "project_build")
+        if user_input.lower() in operation.lower():
+            # Boost substring matches, but prefer shorter operations for same substring
+            substring_boost = 0.8
+            # If multiple operations contain the substring, prefer the one that starts with it
+            if operation.lower().startswith(user_input.lower()):
+                substring_boost = 0.9
+            similarity = max(similarity, substring_boost)
+
+        # Check if operation starts with user_input (e.g., "proj" matches "project_build")
+        if operation.lower().startswith(user_input.lower()):
+            similarity = max(similarity, 0.7)
+
+        # Special handling for common prefixes
+        if user_input.lower() == "build" and "build" in operation.lower():
+            # For "build", prefer operations that end with "build" over those that contain "build" in the middle
+            if operation.lower().endswith("build"):
+                similarity = max(similarity, 0.95)
+            elif "build" in operation.lower():
+                similarity = max(similarity, 0.85)
+
+        # Special handling for exact word matches
+        if user_input.lower() == "build" and operation.lower() == "project_build":
+            # For "build", strongly prefer "project_build" over other build operations
+            similarity = max(similarity, 0.98)
+
+        # Special handling for build-related prefixes
+        if user_input.lower() in ["bui", "buil"] and operation.lower() == "project_build":
+            # For build prefixes, strongly prefer "project_build" over other build operations
+            similarity = max(similarity, 0.97)
+
+        if user_input.lower() == "po" and operation.lower().startswith("po_"):
+            # For "po", prefer po_* operations over project_post_*
+            similarity = max(similarity, 0.9)
+
+        if similarity > best_score:
+            best_score = similarity
+            best_match = operation
+
+    if best_score >= threshold:
+        log.debug("Fuzzy match: '%s' -> '%s' (score: %.2f)", user_input, best_match, best_score)
+        return best_match
+
+    return None
+
+
+def _find_all_operation_matches(
+    user_input: str, available_operations: list[str], threshold: float = 0.6
+) -> tuple[str | None, list[str]]:
+    """
+    Find all possible matching operation names using fuzzy string matching.
+
+    Args:
+        user_input: The user-provided operation name
+        available_operations: List of available operation names
+        threshold: Minimum similarity score to consider a match (0.0 to 1.0)
+
+    Returns:
+        Tuple of (best_match, all_matches) where:
+        - best_match: The single best matching operation name, or None if no match above threshold
+        - all_matches: List of all operations that match above threshold
+    """
+    # Handle empty input
+    if not user_input:
+        return None, []
+
+    if user_input in available_operations:
+        return user_input, [user_input]
+
+    matches = []
+    best_match = None
+    best_score = 0.0
+
+    for operation in available_operations:
+        # Calculate similarity using SequenceMatcher
+        similarity = SequenceMatcher(None, user_input.lower(), operation.lower()).ratio()
+
+        # Check if user_input is a substring of operation (e.g., "build" in "project_build")
+        if user_input.lower() in operation.lower():
+            # Boost substring matches, but prefer shorter operations for same substring
+            substring_boost = 0.8
+            # If multiple operations contain the substring, prefer the one that starts with it
+            if operation.lower().startswith(user_input.lower()):
+                substring_boost = 0.9
+            similarity = max(similarity, substring_boost)
+
+        # Check if operation starts with user_input (e.g., "proj" matches "project_build")
+        if operation.lower().startswith(user_input.lower()):
+            similarity = max(similarity, 0.7)
+
+        # Special handling for common prefixes
+        if user_input.lower() == "build" and "build" in operation.lower():
+            # For "build", prefer operations that end with "build" over those that contain "build" in the middle
+            if operation.lower().endswith("build"):
+                similarity = max(similarity, 0.95)
+            elif "build" in operation.lower():
+                similarity = max(similarity, 0.85)
+
+        # Special handling for exact word matches
+        if user_input.lower() == "build" and operation.lower() == "project_build":
+            # For "build", strongly prefer "project_build" over other build operations
+            similarity = max(similarity, 0.98)
+
+        # Special handling for build-related prefixes
+        if user_input.lower() in ["bui", "buil"] and operation.lower() == "project_build":
+            # For build prefixes, strongly prefer "project_build" over other build operations
+            similarity = max(similarity, 0.97)
+
+        if user_input.lower() == "po" and operation.lower().startswith("po_"):
+            # For "po", prefer po_* operations over project_post_*
+            similarity = max(similarity, 0.9)
+
+        if similarity >= threshold:
+            matches.append((operation, similarity))
+            if similarity > best_score:
+                best_score = similarity
+                best_match = operation
+
+    # Sort matches by similarity score (highest first)
+    matches.sort(key=lambda x: x[1], reverse=True)
+    all_matches = [op for op, _ in matches]
+
+    if best_match:
+        log.debug("Fuzzy match: '%s' -> '%s' (score: %.2f)", user_input, best_match, best_score)
+        return best_match, all_matches
+
+    return None, []
+
+
+class FuzzyOperationParser(argparse.ArgumentParser):
+    """
+    Custom ArgumentParser that supports fuzzy matching for operation names.
+    """
+
+    def __init__(self, available_operations: list[str], *args, **kwargs):
+        self.available_operations = available_operations
+        super().__init__(*args, **kwargs)
+
+    def _get_value(self, action, arg_string):
+        """
+        Override to implement fuzzy matching for operation argument.
+        """
+        if action.dest == "operate":
+            # Try exact match first
+            if arg_string in self.available_operations:
+                return arg_string
+
+            # Try fuzzy match
+            best_match, all_matches = _find_all_operation_matches(arg_string, self.available_operations)
+
+            if best_match:
+                if len(all_matches) == 1:
+                    # Single match - print hint and return
+                    log.info("Fuzzy match: '%s' -> '%s'", arg_string, best_match)
+                    return best_match
+                # Multiple matches - show all options and use the best one
+                matches_str = ", ".join(all_matches)
+                log.warning("Ambiguous operation '%s'. Possible matches: %s", arg_string, matches_str)
+                log.info("Using best match: '%s' -> '%s'", arg_string, best_match)
+                return best_match
+
+            # If no match found, raise error with suggestions
+            suggestions = []
+            for op in self.available_operations:
+                if arg_string.lower() in op.lower() or op.lower().startswith(arg_string.lower()):
+                    suggestions.append(op)
+
+            if suggestions:
+                suggestions_str = ", ".join(suggestions[:5])  # Limit to 5 suggestions
+                raise argparse.ArgumentTypeError(f"Unknown operation '{arg_string}'. Did you mean: {suggestions_str}?")
+            raise argparse.ArgumentTypeError(
+                f"Unknown operation '{arg_string}'. Available operations: {', '.join(self.available_operations)}"
+            )
+
+        return super()._get_value(action, arg_string)
 
 
 @func_time

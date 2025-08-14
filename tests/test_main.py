@@ -979,3 +979,129 @@ class PlatformPlugin:
 
         assert len(result) == 3
         assert result["needs_repos_method"]["needs_repositories"] is True
+
+
+class TestFuzzyOperationMatching:
+    """Test cases for fuzzy operation matching functionality."""
+
+    def setup_method(self):
+        """
+        Prepare the test environment for each test case.
+        - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+        - Imports the fuzzy matching function from src.__main__ and assigns it to self.fuzzy_match for use in test cases.
+        """
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.__main__ import _find_best_operation_match
+
+        self.fuzzy_match = _find_best_operation_match
+
+    def test_fuzzy_match_exact_match(self):
+        """Test fuzzy matching with exact operation name."""
+        available_operations = ["project_build", "project_new", "project_del"]
+        result = self.fuzzy_match("project_build", available_operations)
+        assert result == "project_build"
+
+    def test_fuzzy_match_substring_match(self):
+        """Test fuzzy matching with substring (e.g., 'build' matches 'project_build')."""
+        available_operations = ["project_build", "project_pre_build", "project_post_build"]
+        result = self.fuzzy_match("build", available_operations)
+        assert result == "project_build"
+
+    def test_fuzzy_match_prefix_match(self):
+        """Test fuzzy matching with prefix (e.g., 'proj' matches 'project_build')."""
+        available_operations = ["project_build", "project_new", "project_del"]
+        result = self.fuzzy_match("proj", available_operations)
+        assert result == "project_build"
+
+    def test_fuzzy_match_po_operations(self):
+        """Test fuzzy matching for po_* operations."""
+        available_operations = ["po_apply", "po_revert", "po_new", "po_del", "po_list"]
+        result = self.fuzzy_match("po", available_operations)
+        assert result == "po_apply"
+
+    def test_fuzzy_match_po_specific(self):
+        """Test fuzzy matching for specific po operations."""
+        available_operations = ["po_apply", "po_revert", "po_new", "po_del", "po_list"]
+        result = self.fuzzy_match("apply", available_operations)
+        assert result == "po_apply"
+
+    def test_fuzzy_match_build_variations(self):
+        """Test fuzzy matching for build operation variations."""
+        available_operations = ["project_build", "project_pre_build", "project_do_build", "project_post_build"]
+
+        # Test different build-related inputs
+        assert self.fuzzy_match("build", available_operations) == "project_build"
+        assert self.fuzzy_match("bui", available_operations) == "project_build"
+        assert self.fuzzy_match("project_bui", available_operations) == "project_build"
+
+    def test_fuzzy_match_no_match(self):
+        """Test fuzzy matching when no match is found."""
+        available_operations = ["project_build", "project_new", "project_del"]
+        result = self.fuzzy_match("nonexistent", available_operations)
+        assert result is None
+
+    def test_fuzzy_match_empty_input(self):
+        """Test fuzzy matching with empty input."""
+        available_operations = ["project_build", "project_new", "project_del"]
+        result = self.fuzzy_match("", available_operations)
+        assert result is None
+
+    def test_fuzzy_match_case_insensitive(self):
+        """Test fuzzy matching is case insensitive."""
+        available_operations = ["project_build", "project_new", "project_del"]
+        result = self.fuzzy_match("PROJECT_BUILD", available_operations)
+        assert result == "project_build"
+
+    def test_fuzzy_match_partial_build(self):
+        """Test fuzzy matching with partial build input."""
+        available_operations = ["project_build", "project_pre_build", "project_do_build", "project_post_build"]
+        result = self.fuzzy_match("project_bui", available_operations)
+        assert result == "project_build"
+
+    def test_fuzzy_match_new_operation(self):
+        """Test fuzzy matching for new operation."""
+        available_operations = ["project_new", "project_del", "project_build"]
+        result = self.fuzzy_match("new", available_operations)
+        assert result == "project_new"
+
+    def test_fuzzy_match_del_operation(self):
+        """Test fuzzy matching for del operation."""
+        available_operations = ["project_new", "project_del", "project_build"]
+        result = self.fuzzy_match("del", available_operations)
+        assert result == "project_del"
+
+    def test_fuzzy_match_diff_operation(self):
+        """Test fuzzy matching for diff operation."""
+        available_operations = ["project_diff", "project_new", "project_build"]
+        result = self.fuzzy_match("diff", available_operations)
+        assert result == "project_diff"
+
+    def test_fuzzy_match_threshold_behavior(self):
+        """Test fuzzy matching threshold behavior."""
+        available_operations = ["project_build", "project_new", "project_del"]
+
+        # Test with very low threshold - should find some match
+        result = self.fuzzy_match("proj", available_operations, threshold=0.1)
+        assert result is not None
+
+        # Test with high threshold - should not find match for unrelated input
+        result = self.fuzzy_match("xyz", available_operations, threshold=0.9)
+        assert result is None
+
+    def test_fuzzy_match_priority_order(self):
+        """Test that fuzzy matching prioritizes better matches."""
+        available_operations = ["project_build", "project_pre_build", "project_post_build"]
+
+        # "build" should match "project_build" (ends with build) over "project_pre_build"
+        result = self.fuzzy_match("build", available_operations)
+        assert result == "project_build"
+
+    def test_fuzzy_match_po_priority(self):
+        """Test that po_* operations are prioritized over project_post_* for 'po' input."""
+        available_operations = ["po_apply", "project_post_build", "project_pre_build"]
+
+        # "po" should match "po_apply" over "project_post_build"
+        result = self.fuzzy_match("po", available_operations)
+        assert result == "po_apply"
