@@ -5,6 +5,7 @@ Project build utility class for CLI operations.
 import os
 import shutil
 import subprocess
+import tarfile
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -20,12 +21,18 @@ from src.operations.registry import register
     needs_repositories=True,
     desc="Generate after, before, patch, commit directories for all repositories or current repo, under a timestamped diff directory.",
 )
-def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
+def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_dir: bool = False) -> bool:
     """
     Generate after, before, patch, commit directories for all repositories or current repo, under a timestamped diff directory.
     Patch files are named changes_worktree.patch and changes_staged.patch.
     If single repo, do not create root subdirectory, put files directly under after, before, etc.
     Diff directory is .cache/build/{project_name}/{timestamp}/diff
+
+    Args:
+        env: Environment variables and configuration
+        projects_info: Project information dictionary
+        project_name: Name of the project
+        keep_diff_dir: If True, preserve the diff directory after creating tar.gz archive (default: False)
     """
     _ = projects_info  # Mark as intentionally unused
 
@@ -221,6 +228,36 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str) -> bool:
             save_patch(repo_path, file_list, patch_dir, "changes_staged.patch", staged=True)
         save_commits(repo_path, commit_dir)
         os.chdir(original_cwd)
+
+    # Create tar.gz archive of the diff directory
+    try:
+        # Get the parent directory of diff_root (the timestamp directory)
+        timestamp_dir = os.path.dirname(diff_root)
+        archive_name = f"diff_{safe_project_name}_{ts}.tar.gz"
+        archive_path = os.path.join(timestamp_dir, archive_name)
+
+        log.info("Creating tar.gz archive: %s", archive_path)
+
+        with tarfile.open(archive_path, "w:gz") as tar:
+            # Add the diff directory to the archive
+            tar.add(diff_root, arcname=os.path.basename(diff_root))
+
+        log.info("Successfully created tar.gz archive: %s", archive_path)
+
+        # Check keep_diff_dir parameter to determine whether to delete the diff directory
+        # Default behavior: delete the diff directory after archiving
+        # Use --keep-diff-dir flag to preserve the diff directory
+
+        if not keep_diff_dir:
+            # Remove the original diff directory after archiving (default behavior)
+            shutil.rmtree(diff_root)
+            log.info("Removed original diff directory after archiving")
+        else:
+            log.info("Keeping original diff directory as per --keep-diff-dir flag")
+
+    except (OSError, tarfile.TarError, RuntimeError) as e:
+        log.error("Failed to create tar.gz archive: %s", e)
+        # Continue execution even if archiving fails
 
     return True
 
