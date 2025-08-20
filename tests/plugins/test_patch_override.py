@@ -8,10 +8,12 @@ Tests for patch_override module.
 
 import os
 import sys
+import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
-class TestPatchOverride:
+class TestPatchOverrideApply:
     """Test cases for PatchOverride class."""
 
     def setup_method(self):
@@ -141,6 +143,206 @@ class TestPatchOverride:
             # Assert
             assert result is True
             mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
+
+    def test_po_apply_patches_with_exclude_and_flag(self):
+        """Apply patches: run git apply, respect exclude list, and create .patch_applied flag."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Prepare patches directory with two patch files (one excluded)
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
+            os.makedirs(patches_dir, exist_ok=True)
+            allow_patch = os.path.join(patches_dir, "allow.patch")
+            skip_patch = os.path.join(patches_dir, "skip.patch")
+            with open(allow_patch, "w", encoding="utf-8") as f:
+                f.write("diff --git a/a b/a\n")
+            with open(skip_patch, "w", encoding="utf-8") as f:
+                f.write("diff --git a/b b/b\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "repo1")],
+            }
+            # Exclude repo1/skip.patch
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": f"{po_name} -{po_name}[repo1/skip.patch]"},
+                }
+            }
+
+            # Mock subprocess.run to simulate successful git apply and capture calls
+            calls = []
+
+            def _mock_run(cmd, cwd=None, **_kwargs):
+                calls.append((cmd, cwd))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            # Only one apply call for allow.patch
+            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
+            assert len(applied_cmds) == 1
+            assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
+
+            # .patch_applied flag contains po_name
+            flag_path = os.path.join(repo1_path, ".patch_applied")
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert po_name in content
+
+    def test_po_apply_overrides_copy_with_exclude_and_flag(self):
+        """Apply overrides: copy files, respect exclude list, and create .override_applied flag per target dir."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # Prepare overrides directory structure
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(os.path.join(overrides_dir, "repo1", "folder"), exist_ok=True)
+            with open(os.path.join(overrides_dir, "onlyroot.txt"), "w", encoding="utf-8") as f:
+                f.write("root")
+            deep_file_rel = os.path.join("repo1", "folder", "fileA.txt")
+            deep_file_abs = os.path.join(overrides_dir, deep_file_rel)
+            with open(deep_file_abs, "w", encoding="utf-8") as f:
+                f.write("deep")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+            }
+            # Exclude the deep file so only root file is copied
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": f"{po_name} -{po_name}[{deep_file_rel}]"},
+                }
+            }
+
+            # Run in tmpdir so override targets write under here
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+            finally:
+                os.chdir(old_cwd)
+
+            # onlyroot.txt should exist at repo root (".")
+            assert os.path.exists(os.path.join(tmpdir, "onlyroot.txt"))
+            # Excluded deep file should not be copied
+            assert not os.path.exists(os.path.join(tmpdir, deep_file_rel))
+            # .override_applied flag should exist in root (".") and contain po_name
+            flag_path = os.path.join(tmpdir, ".override_applied")
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert po_name in content
+
+    def test_custom_copy_star_includes_subdirs(self):
+        """'*' should recursively copy all files including subdirectories from PROJECT_PO_DIR."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            custom_dir = "custom"
+            po_custom_dir = os.path.join(projects_path, board_name, "po", po_name, custom_dir)
+
+            # Prepare source structure
+            os.makedirs(os.path.join(po_custom_dir, "data", "sub"), exist_ok=True)
+            os.makedirs(os.path.join(po_custom_dir, "other"), exist_ok=True)
+            with open(os.path.join(po_custom_dir, "root.txt"), "w", encoding="utf-8") as f:
+                f.write("root")
+            with open(os.path.join(po_custom_dir, "data", "file1.txt"), "w", encoding="utf-8") as f:
+                f.write("file1")
+            with open(os.path.join(po_custom_dir, "data", "sub", "inner.txt"), "w", encoding="utf-8") as f:
+                f.write("inner")
+            with open(os.path.join(po_custom_dir, "other", "oth.txt"), "w", encoding="utf-8") as f:
+                f.write("oth")
+
+            dest_dir = os.path.join(tmpdir, "dest1")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {
+                    "po-custom": {
+                        "PROJECT_PO_DIR": custom_dir,
+                        "PROJECT_PO_FILE_COPY": f"*:{dest_dir}{os.sep}",
+                    }
+                },
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            assert result is True
+
+            # Assert files are copied with relative structure preserved
+            assert os.path.exists(os.path.join(dest_dir, "root.txt"))
+            assert os.path.exists(os.path.join(dest_dir, "data", "file1.txt"))
+            assert os.path.exists(os.path.join(dest_dir, "data", "sub", "inner.txt"))
+            assert os.path.exists(os.path.join(dest_dir, "other", "oth.txt"))
+
+    def test_custom_copy_data_star_includes_subdirs(self):
+        """'data/*' should recursively copy all files from PROJECT_PO_DIR/data including subdirectories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            custom_dir = "custom"
+            po_custom_dir = os.path.join(projects_path, board_name, "po", po_name, custom_dir)
+
+            # Prepare source structure under data/
+            os.makedirs(os.path.join(po_custom_dir, "data", "sub"), exist_ok=True)
+            os.makedirs(os.path.join(po_custom_dir, "other"), exist_ok=True)
+            with open(os.path.join(po_custom_dir, "data", "file1.txt"), "w", encoding="utf-8") as f:
+                f.write("file1")
+            with open(os.path.join(po_custom_dir, "data", "sub", "inner.txt"), "w", encoding="utf-8") as f:
+                f.write("inner")
+            with open(os.path.join(po_custom_dir, "root.txt"), "w", encoding="utf-8") as f:
+                f.write("root")
+
+            dest_root = os.path.join(tmpdir, "dest2")
+            dest_data = os.path.join(dest_root, "data") + os.sep
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {
+                    "po-custom": {
+                        "PROJECT_PO_DIR": custom_dir,
+                        "PROJECT_PO_FILE_COPY": f"data/*:{dest_data}",
+                    }
+                },
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            assert result is True
+
+            # Should copy files under data/ recursively
+            assert os.path.exists(os.path.join(dest_root, "data", "file1.txt"))
+            assert os.path.exists(os.path.join(dest_root, "data", "sub", "inner.txt"))
+            # Should not copy files outside data/
+            assert not os.path.exists(os.path.join(dest_root, "root.txt"))
 
 
 class TestPatchOverrideRevert:
