@@ -13,6 +13,7 @@ import sys
 import xml.etree.ElementTree as ET
 from difflib import SequenceMatcher
 from importlib import import_module
+from typing import List, Optional, Tuple
 
 import configupdater
 
@@ -459,7 +460,9 @@ def get_operation_meta_flag(func, operate, key):
     return False
 
 
-def _find_best_operation_match(user_input: str, available_operations: list[str], threshold: float = 0.6) -> str | None:
+def _find_best_operation_match(
+    user_input: str, available_operations: List[str], threshold: float = 0.6
+) -> Optional[str]:
     """
     Find the best matching operation name using fuzzy string matching.
 
@@ -532,8 +535,8 @@ def _find_best_operation_match(user_input: str, available_operations: list[str],
 
 
 def _find_all_operation_matches(
-    user_input: str, available_operations: list[str], threshold: float = 0.6
-) -> tuple[str | None, list[str]]:
+    user_input: str, available_operations: List[str], threshold: float = 0.6
+) -> Tuple[Optional[str], List[str]]:
     """
     Find all possible matching operation names using fuzzy string matching.
 
@@ -619,7 +622,7 @@ class FuzzyOperationParser(argparse.ArgumentParser):
     Custom ArgumentParser that supports fuzzy matching for operation names.
     """
 
-    def __init__(self, available_operations: list[str], *args, **kwargs):
+    def __init__(self, available_operations: List[str], *args, **kwargs):
         self.available_operations = available_operations
         super().__init__(*args, **kwargs)
 
