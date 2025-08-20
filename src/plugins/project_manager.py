@@ -37,13 +37,6 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
             config.update(projects_info[name])
         return config
 
-    def strip_empty_lines(lines):
-        while lines and lines[0].strip() == "":
-            lines = lines[1:]
-        while lines and lines[-1].strip() == "":
-            lines = lines[:-1]
-        return lines
-
     def find_board_for_project(project_name, projects_info):
         """
         Find the appropriate board for a new project based on parent project or project name pattern.
@@ -133,69 +126,59 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
         project_name_parts.append(project_customer)
     project_name_value = "_".join(project_name_parts)
 
-    # Only write new project-specific fields
-    new_section_lines = [f"[{project_name}]\n"]
-    new_section_lines.append(f"PROJECT_NAME={project_name_value}\n")
-    # Do not write PROJECT_PO_CONFIG by default, let it inherit from parent
-    new_section_lines.append("\n")
-
     # Read the original ini file content to preserve comments and formatting
     with open(ini_file, "r", encoding="utf-8") as f:
         original_lines = f.readlines()
 
-    # --- Parse all section contents ---
-    section_blocks = []  # [(section_name, [lines])]
+    # Rewrite only the board's PROJECT_NAME assignment to have spaces around '=' and keep comments intact
+    new_lines = []
     current_section = None
-    current_lines = []
     for line in original_lines:
-        line_strip = line.strip()
-        if line_strip.startswith("[") and line_strip.endswith("]"):
-            if current_section is not None:
-                section_blocks.append((current_section, strip_empty_lines(current_lines)))
-            current_section = line_strip[1:-1]
-            current_lines = [line]
-        else:
-            if current_section is not None:
-                current_lines.append(line)
-    if current_section is not None:
-        section_blocks.append((current_section, strip_empty_lines(current_lines)))
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_section = stripped[1:-1]
+            new_lines.append(line)
+            continue
+        if current_section == board_name:
+            lstrip = line.lstrip()
+            if lstrip.upper().startswith("PROJECT_NAME") and "=" in line:
+                # Preserve leading indentation and any trailing inline comment
+                prefix_len = len(line) - len(lstrip)
+                prefix = line[:prefix_len]
+                _after = line.split("=", 1)[1]
+                # Keep everything after '=' including inline comments/spaces
+                new_lines.append(f"{prefix}PROJECT_NAME = {_after.lstrip()}")
+                continue
+        new_lines.append(line)
 
-    # --- Add new project section to section_blocks ---
-    new_section = (project_name, new_section_lines)
-    section_blocks.append(new_section)
+    # Ensure a single blank line before appending the new section
+    if new_lines and new_lines[-1].strip() != "":
+        new_lines.append("\n")
+    elif len(new_lines) >= 2 and new_lines[-1].strip() == "" and new_lines[-2].strip() == "":
+        # Reduce multiple trailing blanks to a single one
+        while len(new_lines) >= 2 and new_lines[-1].strip() == "" and new_lines[-2].strip() == "":
+            new_lines.pop()
 
-    section_objs = {name: config[name] for name in config.sections()}
-    for name in config.sections():
-        config.remove_section(name)
-    for idx, name in enumerate(section_objs.keys()):
-        config.add_section(name)
-        for opt_key, opt_val in section_objs[name].items():
-            val = opt_val.value if hasattr(opt_val, "value") else opt_val
-            config[name][opt_key] = val
-            if hasattr(opt_val, "comment"):
-                config[name][opt_key].comment = opt_val.comment
-        if hasattr(section_objs[name], "comment") and section_objs[name].comment:
-            config[name].set_comment(section_objs[name].comment)
-        # Only insert one blank line between every two sections
-        if idx < len(section_objs) - 1:
-            config[name].add_after.space()
-    # Before adding the new project, ensure there is one blank line after the last section
-    if project_name not in config:
-        if config.sections():
-            last_section = list(config.sections())[-1]
-            last_section_obj = config[last_section]
-            last_section_obj.add_after.space()
-        config.add_section(project_name)
-    config[project_name]["PROJECT_NAME"] = project_name_value
-    # Do not write PROJECT_PO_CONFIG by default
-    config.update_file()
+    # Append the new project section
+    new_lines.append(f"[{project_name}]\n")
+    new_lines.append(f"PROJECT_NAME = {project_name_value}\n")
+
+    # Write back preserving all original comments and formatting elsewhere
+    with open(ini_file, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
     log.debug("Created new project '%s' in board '%s'.", project_name, board_name)
     print(f"Created new project '{project_name}' in board '{board_name}'.")
+
     # Print all config for the new project (merged: ini section + inherited config['config'])
+    # Re-read using ConfigUpdater to fetch the new section values
+    config_after = ConfigUpdater()
+    config_after.optionxform = str
+    config_after.read(ini_file, encoding="utf-8")
     parent_config = inherited_config.get("config", {}) if isinstance(inherited_config.get("config", {}), dict) else {}
     merged_config = dict(parent_config)
-    if project_name in config:
-        for key, value in config[project_name].items():
+    if project_name in config_after:
+        for key, value in config_after[project_name].items():
             merged_config[key] = value.value if hasattr(value, "value") else value
     print(f"All config for project '{project_name}':")
     for key, value in merged_config.items():
