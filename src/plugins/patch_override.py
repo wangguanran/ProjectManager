@@ -828,7 +828,7 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
                 return False
             print("Please enter 'yes' or 'no'.")
 
-    def __get_modified_files(repo_path, repo_name):
+    def __get_modified_files(repo_path, repo_name, project_cfg):
         """Get modified files in a repository including staged files, with ignore support."""
         modified_files = []
         ignore_patterns = __load_ignore_patterns(project_cfg)
@@ -1086,7 +1086,7 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
                 return False
             print("Invalid choice. Please enter 1, 2, or 3.")
 
-    def __interactive_file_selection(po_path, repositories):
+    def __interactive_file_selection(po_path, repositories, project_cfg):
         """Interactive file selection for PO creation."""
         print("\n=== File Selection for PO ===")
         print("Scanning for modified files in repositories...")
@@ -1098,7 +1098,7 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
 
         all_modified_files = []
         for repo_path, repo_name in repositories:
-            modified_files = __get_modified_files(repo_path, repo_name)
+            modified_files = __get_modified_files(repo_path, repo_name, project_cfg)
             if modified_files:
                 all_modified_files.extend(modified_files)
 
@@ -1164,8 +1164,8 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
         patterns = []
 
         # First, try to get ignore patterns from project configuration
-        if project_cfg:
-            po_ignore_config = project_cfg.get("PROJECT_PO_IGNORE", "").strip()
+        if project_cfg and "config" in project_cfg:
+            po_ignore_config = project_cfg["config"].get("PROJECT_PO_IGNORE", "").strip()
             if po_ignore_config:
                 config_patterns = [p.strip() for p in po_ignore_config.split() if p.strip()]
                 patterns.extend(config_patterns)
@@ -1226,8 +1226,8 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
     try:
         # Interactive file selection first
         if not force:
-            # 传入env['repositories']
-            __interactive_file_selection(po_path, env.get("repositories", []))
+            # 传入env['repositories']和project_cfg
+            __interactive_file_selection(po_path, env.get("repositories", []), project_cfg)
 
         # In force mode, create empty directory structure
         if force:
