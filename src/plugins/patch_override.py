@@ -1125,40 +1125,67 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
             log.error("Failed to create override for file %s: %s", file_path, e)
             return False
 
-    def __process_single_file(file_info, po_path):
-        """Process a single file and ask user to choose between patch and override."""
-        repo_name, file_path, status = file_info
-        patches_dir = os.path.join(po_path, "patches")
-        overrides_dir = os.path.join(po_path, "overrides")
+    def __process_multiple_files(file_infos, po_path):
+        """Process multiple files with a single choice for all files."""
+        if not file_infos:
+            return 0
 
         # Create po directory when first file is selected
         os.makedirs(po_path, exist_ok=True)
         log.info("Created po directory: '%s'", po_path)
 
-        print(f"\nFile: [{repo_name}] {file_path} ({status})")
-        print("Choose action:")
-        print("  1. Create patch (for tracked files with modifications)")
-        print("  2. Create override (for any file)")
-        print("  3. Skip this file")
+        # Show all files to be processed
+        print(f"\nFiles to process ({len(file_infos)}):")
+        for i, (repo_name, file_path, status) in enumerate(file_infos, 1):
+            print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
+
+        print("\nChoose action for ALL selected files:")
+        print("  1. Create patches (for tracked files with modifications)")
+        print("  2. Create overrides (for any file)")
+        print("  3. Skip all files")
 
         while True:
             choice = input("Choice (1/2/3): ").strip()
             if choice == "1":
-                if __create_patch_for_file(repo_name, file_path, patches_dir, force=False):
-                    print(f"  ✓ Created patch for {file_path}")
-                    return True
-                print(f"  ✗ Failed to create patch for {file_path}")
-                return False
+                return __batch_create_patches(file_infos, po_path)
             if choice == "2":
-                if __create_override_for_file(repo_name, file_path, overrides_dir):
-                    print(f"  ✓ Created override for {file_path}")
-                    return True
-                print(f"  ✗ Failed to create override for {file_path}")
-                return False
+                return __batch_create_overrides(file_infos, po_path)
             if choice == "3":
-                print(f"  - Skipped {file_path}")
-                return False
+                print("  - Skipped all files")
+                return 0
             print("Invalid choice. Please enter 1, 2, or 3.")
+
+    def __batch_create_patches(file_infos, po_path):
+        """Create patches for multiple files."""
+        patches_dir = os.path.join(po_path, "patches")
+        success_count = 0
+
+        print("  Creating patches for all selected files...")
+        for repo_name, file_path, _ in file_infos:
+            if __create_patch_for_file(repo_name, file_path, patches_dir, force=True):
+                print(f"    ✓ Created patch for {file_path}")
+                success_count += 1
+            else:
+                print(f"    ✗ Failed to create patch for {file_path}")
+
+        print(f"  Completed: {success_count}/{len(file_infos)} patches created")
+        return success_count
+
+    def __batch_create_overrides(file_infos, po_path):
+        """Create overrides for multiple files."""
+        overrides_dir = os.path.join(po_path, "overrides")
+        success_count = 0
+
+        print("  Creating overrides for all selected files...")
+        for repo_name, file_path, _ in file_infos:
+            if __create_override_for_file(repo_name, file_path, overrides_dir):
+                print(f"    ✓ Created override for {file_path}")
+                success_count += 1
+            else:
+                print(f"    ✗ Failed to create override for {file_path}")
+
+        print(f"  Completed: {success_count}/{len(file_infos)} overrides created")
+        return success_count
 
     def __interactive_file_selection(po_path, repositories, project_cfg):
         """Interactive file selection for PO creation."""
@@ -1204,6 +1231,7 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
 
             print("\nOptions:")
             print("  Enter file number to process (e.g., '1')")
+            print("  Enter multiple numbers separated by comma or space (e.g., '1,3,5' or '1 3 5')")
             print("  Enter 'all' to process all remaining files")
             print("  Enter 'q' to quit and finish")
 
@@ -1215,21 +1243,65 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
             if selection.lower() == "all":
                 # Process all remaining files
                 files_to_process = remaining_files.copy()
-                for file_info in files_to_process:
-                    __process_single_file(file_info, po_path)
-                    processed_files.add(file_info)
-                    remaining_files.remove(file_info)
+                processed_count = __process_multiple_files(files_to_process, po_path)
+                if processed_count > 0:
+                    for file_info in files_to_process:
+                        processed_files.add(file_info)
+                remaining_files.clear()
                 continue
 
             try:
-                index = int(selection) - 1
-                if 0 <= index < len(remaining_files):
-                    file_info = remaining_files[index]
-                    if __process_single_file(file_info, po_path):
-                        processed_files.add(file_info)
-                    remaining_files.pop(index)
+                # Check if input contains multiple numbers (e.g., "1,3,5" or "1 3 5")
+                if "," in selection or " " in selection:
+                    # Split by comma or space and process multiple files
+                    separators = [",", " "]
+                    numbers = selection
+                    for sep in separators:
+                        if sep in numbers:
+                            numbers = numbers.replace(sep, " ")
+                    number_list = numbers.split()
+
+                    # Validate all numbers first
+                    valid_indices = []
+                    for num_str in number_list:
+                        try:
+                            index = int(num_str) - 1
+                            if 0 <= index < len(remaining_files):
+                                valid_indices.append(index)
+                            else:
+                                print(f"Invalid file number: {num_str}")
+                        except ValueError:
+                            print(f"Invalid number format: {num_str}")
+
+                    if valid_indices:
+                        # Get all selected files
+                        selected_files = [remaining_files[index] for index in valid_indices]
+
+                        # Process all files with single choice
+                        processed_count = __process_multiple_files(selected_files, po_path)
+
+                        # Remove processed files from remaining_files
+                        valid_indices.sort(reverse=True)
+                        for index in valid_indices:
+                            remaining_files.pop(index)
+
+                        # Add to processed_files if any were successfully processed
+                        if processed_count > 0:
+                            for file_info in selected_files:
+                                processed_files.add(file_info)
+                    else:
+                        print("No valid file numbers provided")
                 else:
-                    print("Invalid file number. Please try again.")
+                    # Single number processing - treat as single file selection
+                    index = int(selection) - 1
+                    if 0 <= index < len(remaining_files):
+                        file_info = remaining_files[index]
+                        processed_count = __process_multiple_files([file_info], po_path)
+                        if processed_count > 0:
+                            processed_files.add(file_info)
+                        remaining_files.pop(index)
+                    else:
+                        print("Invalid file number. Please try again.")
             except ValueError:
                 print("Invalid input. Please enter a number, 'all', or 'q'.")
 
