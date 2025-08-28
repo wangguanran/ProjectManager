@@ -191,8 +191,8 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
 
-            # .patch_applied flag contains po_name
-            flag_path = os.path.join(repo1_path, ".patch_applied")
+            # patch_applied flag contains po_name
+            flag_path = os.path.join(repo1_path, "patch_applied")
             assert os.path.exists(flag_path)
             with open(flag_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -245,8 +245,8 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
 
-            # .patch_applied flag should exist and contain po_name
-            flag_path = os.path.join(repo1_path, ".patch_applied")
+            # patch_applied flag should exist and contain po_name
+            flag_path = os.path.join(repo1_path, "patch_applied")
             assert os.path.exists(flag_path)
             with open(flag_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -298,15 +298,15 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
 
-            # .patch_applied flag should exist and contain po_name
-            flag_path = os.path.join(repo1_path, ".patch_applied")
+            # patch_applied flag should exist and contain po_name
+            flag_path = os.path.join(repo1_path, "patch_applied")
             assert os.path.exists(flag_path)
             with open(flag_path, "r", encoding="utf-8") as f:
                 content = f.read()
             assert po_name in content
 
     def test_po_apply_overrides_copy_with_exclude_and_flag(self):
-        """Apply overrides: copy files, respect exclude list, and create .override_applied flag per target dir."""
+        """Apply overrides: copy files, respect exclude list, and create override_applied flag per target dir."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -347,8 +347,8 @@ class TestPatchOverrideApply:
             assert os.path.exists(os.path.join(tmpdir, "onlyroot.txt"))
             # Excluded deep file should not be copied
             assert not os.path.exists(os.path.join(tmpdir, deep_file_rel))
-            # .override_applied flag should exist in root (".") and contain po_name
-            flag_path = os.path.join(tmpdir, ".override_applied")
+            # override_applied flag should exist in root (".") and contain po_name
+            flag_path = os.path.join(tmpdir, "override_applied")
             assert os.path.exists(flag_path)
             with open(flag_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -450,6 +450,251 @@ class TestPatchOverrideApply:
             assert os.path.exists(os.path.join(dest_root, "data", "sub", "inner.txt"))
             # Should not copy files outside data/
             assert not os.path.exists(os.path.join(dest_root, "root.txt"))
+
+    def test_po_apply_patches_with_multiple_patches_same_repo(self):
+        """Apply patches: test that multiple patch files can be applied to the same repository."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Prepare patches directory with multiple patch files for the same repo
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
+            os.makedirs(patches_dir, exist_ok=True)
+
+            # Create multiple patch files
+            patch1 = os.path.join(patches_dir, "patch1.patch")
+            patch2 = os.path.join(patches_dir, "patch2.patch")
+            patch3 = os.path.join(patches_dir, "patch3.patch")
+
+            with open(patch1, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file1.txt b/file1.txt\n")
+            with open(patch2, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file2.txt b/file2.txt\n")
+            with open(patch3, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file3.txt b/file3.txt\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "repo1")],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Mock subprocess.run to simulate successful git apply and capture calls
+            calls = []
+
+            def _mock_run(cmd, cwd=None, **_kwargs):
+                calls.append((cmd, cwd))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            # Should have three apply calls for all three patches
+            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
+            assert len(applied_cmds) == 3
+            assert all(c[1] == repo1_path for c in applied_cmds)  # All should use same repo path
+
+            # patch_applied flag should exist and contain po_name
+            flag_path = os.path.join(repo1_path, "patch_applied")
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert po_name in content
+
+    def test_po_apply_patches_with_multiple_patches_different_repos(self):
+        """Apply patches: test that multiple patch files can be applied to different repositories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            repo2_path = os.path.join(tmpdir, "repo2")
+            os.makedirs(repo1_path, exist_ok=True)
+            os.makedirs(repo2_path, exist_ok=True)
+
+            # Prepare patches directory with patch files for different repos
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches")
+
+            # Create patches for repo1
+            repo1_patches_dir = os.path.join(patches_dir, "repo1")
+            os.makedirs(repo1_patches_dir, exist_ok=True)
+            patch1 = os.path.join(repo1_patches_dir, "patch1.patch")
+            with open(patch1, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file1.txt b/file1.txt\n")
+
+            # Create patches for repo2
+            repo2_patches_dir = os.path.join(patches_dir, "repo2")
+            os.makedirs(repo2_patches_dir, exist_ok=True)
+            patch2 = os.path.join(repo2_patches_dir, "patch2.patch")
+            patch3 = os.path.join(repo2_patches_dir, "patch3.patch")
+            with open(patch2, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file2.txt b/file2.txt\n")
+            with open(patch3, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file3.txt b/file3.txt\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "repo1"), (repo2_path, "repo2")],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Mock subprocess.run to simulate successful git apply and capture calls
+            calls = []
+
+            def _mock_run(cmd, cwd=None, **_kwargs):
+                calls.append((cmd, cwd))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            # Should have three apply calls total (1 for repo1, 2 for repo2)
+            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
+            assert len(applied_cmds) == 3
+
+            # Check repo1 got 1 patch
+            repo1_calls = [c for c in applied_cmds if c[1] == repo1_path]
+            assert len(repo1_calls) == 1
+
+            # Check repo2 got 2 patches
+            repo2_calls = [c for c in applied_cmds if c[1] == repo2_path]
+            assert len(repo2_calls) == 2
+
+            # Both repos should have patch_applied flags
+            flag1_path = os.path.join(repo1_path, "patch_applied")
+            flag2_path = os.path.join(repo2_path, "patch_applied")
+            assert os.path.exists(flag1_path)
+            assert os.path.exists(flag2_path)
+
+            # Both flags should contain po_name
+            with open(flag1_path, "r", encoding="utf-8") as f:
+                content1 = f.read()
+            with open(flag2_path, "r", encoding="utf-8") as f:
+                content2 = f.read()
+            assert po_name in content1
+            assert po_name in content2
+
+    def test_po_apply_patches_with_mixed_success_and_failure(self):
+        """Apply patches: test that patch flags are only written when all patches succeed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Prepare patches directory with multiple patch files
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
+            os.makedirs(patches_dir, exist_ok=True)
+
+            patch1 = os.path.join(patches_dir, "patch1.patch")
+            patch2 = os.path.join(patches_dir, "patch2.patch")
+
+            with open(patch1, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file1.txt b/file1.txt\n")
+            with open(patch2, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file2.txt b/file2.txt\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "repo1")],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Mock subprocess.run to simulate first patch success, second patch failure
+            call_count = 0
+
+            def _mock_run(_cmd, _cwd=None, **_kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    # First patch succeeds
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                # Second patch fails
+                return SimpleNamespace(returncode=1, stdout="", stderr="Patch failed")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is False  # Should fail due to second patch
+
+            # No patch_applied flag should be created since not all patches succeeded
+            flag_path = os.path.join(repo1_path, "patch_applied")
+            assert not os.path.exists(flag_path)
+
+    def test_po_apply_patches_with_existing_flag(self):
+        """Apply patches: test that existing patch flags are respected and not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Create existing patch_applied flag with different PO
+            flag_path = os.path.join(repo1_path, "patch_applied")
+            with open(flag_path, "w", encoding="utf-8") as f:
+                f.write("po_other\n")
+
+            # Prepare patches directory with one patch file
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
+            os.makedirs(patches_dir, exist_ok=True)
+
+            patch1 = os.path.join(patches_dir, "patch1.patch")
+            with open(patch1, "w", encoding="utf-8") as f:
+                f.write("diff --git a/file1.txt b/file1.txt\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "repo1")],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Mock subprocess.run to simulate successful git apply
+            calls = []
+
+            def _mock_run(cmd, cwd=None, **_kwargs):
+                calls.append((cmd, cwd))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            # Should have one apply call
+            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
+            assert len(applied_cmds) == 1
+
+            # patch_applied flag should contain both POs
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert "po_other" in content
+            assert po_name in content
 
 
 class TestPatchOverrideRevert:

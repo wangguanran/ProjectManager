@@ -223,6 +223,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     def __apply_patch(po_name, po_patch_dir, exclude_files):
         """Apply patches for the specified po."""
         patch_applied_dirs = set()
+        successful_patches = {}  # Track successful patches per repo
         log.debug("po_name: '%s', po_patch_dir: '%s'", po_name, po_patch_dir)
         if not os.path.isdir(po_patch_dir):
             log.debug("No patches dir for po: '%s'", po_name)
@@ -263,7 +264,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if not patch_target:
                     log.error("Cannot find repo path for '%s'", repo_name)
                     continue
-                patch_flag = os.path.join(patch_target, ".patch_applied")
+                patch_flag = os.path.join(patch_target, "patch_applied")
                 patch_file = os.path.join(current_dir, fname)
                 log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
                 if patch_target in patch_applied_dirs:
@@ -307,16 +308,30 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                             result.stderr,
                         )
                         return False
-                    with open(patch_flag, "a", encoding="utf-8") as f:
-                        f.write(f"{po_name}\n")
-                    patch_applied_dirs.add(patch_target)
-                    log.info("patch applied and flag set for repo: '%s'", patch_target)
+                    # Track successful patch instead of writing flag immediately
+                    if patch_target not in successful_patches:
+                        successful_patches[patch_target] = []
+                    successful_patches[patch_target].append(rel_path)
+                    log.info("patch applied successfully for repo: '%s'", patch_target)
                 except subprocess.SubprocessError as e:
                     log.error("Subprocess error applying patch '%s': '%s'", patch_file, e)
                     return False
                 except OSError as e:
                     log.error("OS error applying patch '%s': '%s'", patch_file, e)
                     return False
+
+        # Write patch flags after all patches are successfully applied
+        for patch_target, patch_files in successful_patches.items():
+            try:
+                patch_flag = os.path.join(patch_target, "patch_applied")
+                with open(patch_flag, "a", encoding="utf-8") as f:
+                    f.write(f"{po_name}\n")
+                patch_applied_dirs.add(patch_target)
+                log.info("patch flags set for repo: '%s' after applying %d patches", patch_target, len(patch_files))
+            except OSError as e:
+                log.error("Failed to write patch flag for repo '%s': '%s'", patch_target, e)
+                return False
+
         return True
 
     def __apply_override(po_name, po_override_dir, exclude_files):
@@ -354,7 +369,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     log.error("Invalid override file path: '%s'", rel_path)
                     continue
 
-                override_flag = os.path.join(override_target, ".override_applied")
+                override_flag = os.path.join(override_target, "override_applied")
                 log.debug(
                     "override override_target: '%s', override_flag: '%s'",
                     override_target,
@@ -541,7 +556,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if not patch_target:
                     log.error("Cannot find repo path for '%s'", repo_name)
                     continue
-                patch_flag = os.path.join(patch_target, ".patch_applied")
+                patch_flag = os.path.join(patch_target, "patch_applied")
                 log.debug(
                     "patch patch_target: '%s', patch_flag: '%s'",
                     patch_target,
@@ -642,7 +657,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     log.error("Invalid override file path: '%s'", rel_path)
                     continue
 
-                override_flag = os.path.join(override_target, ".override_applied")
+                override_flag = os.path.join(override_target, "override_applied")
                 log.debug(
                     "override override_target: '%s', override_flag: '%s'",
                     override_target,
