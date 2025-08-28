@@ -198,6 +198,113 @@ class TestPatchOverrideApply:
                 content = f.read()
             assert po_name in content
 
+    def test_po_apply_patches_with_multilevel_directory(self):
+        """Apply patches: test repo_name extraction from multilevel directory structure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Prepare patches directory with multilevel structure
+            # patches/uboot/driver/example.patch -> repo_name should be "uboot/driver"
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches")
+            multilevel_dir = os.path.join(patches_dir, "uboot", "driver")
+            os.makedirs(multilevel_dir, exist_ok=True)
+
+            # Create patch file in multilevel directory
+            patch_file = os.path.join(multilevel_dir, "example.patch")
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write("diff --git a/driver.c b/driver.c\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "uboot/driver")],  # Mock repository with multilevel name
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Mock subprocess.run to simulate successful git apply and capture calls
+            calls = []
+
+            def _mock_run(cmd, cwd=None, **_kwargs):
+                calls.append((cmd, cwd))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            # Should have one apply call for the patch
+            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
+            assert len(applied_cmds) == 1
+            assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
+
+            # .patch_applied flag should exist and contain po_name
+            flag_path = os.path.join(repo1_path, ".patch_applied")
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert po_name in content
+
+    def test_po_apply_patches_with_root_level_patch(self):
+        """Apply patches: test repo_name extraction for root level patches."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Prepare patches directory with root level patch
+            # patches/root.patch -> repo_name should be "root"
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches")
+            os.makedirs(patches_dir, exist_ok=True)
+
+            # Create patch file at root level
+            patch_file = os.path.join(patches_dir, "root.patch")
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write("diff --git a/root.c b/root.c\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "root")],  # Mock repository with root name
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Mock subprocess.run to simulate successful git apply and capture calls
+            calls = []
+
+            def _mock_run(cmd, cwd=None, **_kwargs):
+                calls.append((cmd, cwd))
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("subprocess.run", side_effect=_mock_run):
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            # Should have one apply call for the patch
+            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
+            assert len(applied_cmds) == 1
+            assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
+
+            # .patch_applied flag should exist and contain po_name
+            flag_path = os.path.join(repo1_path, ".patch_applied")
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert po_name in content
+
     def test_po_apply_overrides_copy_with_exclude_and_flag(self):
         """Apply overrides: copy files, respect exclude list, and create .override_applied flag per target dir."""
         with tempfile.TemporaryDirectory() as tmpdir:

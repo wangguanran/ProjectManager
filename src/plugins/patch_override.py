@@ -241,13 +241,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
                 path_parts = rel_path.split(os.sep)
-                if len(path_parts) < 2:
+                if len(path_parts) == 1:
+                    # Root level patch file (e.g., patches/root.patch)
+                    repo_name = "root"
+                elif len(path_parts) >= 2:
+                    # Patch file in subdirectory (e.g., patches/uboot/driver/example.patch)
+                    # Include all subdirectories in repo_name, not just the first level
+                    repo_name = os.path.join(*path_parts[:-1])
+                else:
                     log.error("Invalid patch file path: '%s'", rel_path)
                     continue
-                if len(path_parts) == 1:
-                    repo_name = "root"
-                else:
-                    repo_name = path_parts[0]
 
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
                     log.debug(
@@ -341,11 +344,15 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
+                    # Root level override file (e.g., overrides/root.txt)
                     override_target = "."
-                    # file_path variable is not used in this context
+                elif len(path_parts) >= 2:
+                    # Override file in subdirectory (e.g., overrides/uboot/driver/config.txt)
+                    # Include all subdirectories in override_target, not just the first level
+                    override_target = os.path.join(*path_parts[:-1])
                 else:
-                    override_target = path_parts[0]
-                    # file_path variable is not used in this context
+                    log.error("Invalid override file path: '%s'", rel_path)
+                    continue
 
                 override_flag = os.path.join(override_target, ".override_applied")
                 log.debug(
@@ -506,13 +513,15 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
+                    # Root level patch file (e.g., patches/root.patch)
                     repo_name = "root"
-                    # For root repository, patch file contains only filename
-                    # file_path variable is not used in this context
+                elif len(path_parts) >= 2:
+                    # Patch file in subdirectory (e.g., patches/uboot/driver/example.patch)
+                    # Include all subdirectories in repo_name, not just the first level
+                    repo_name = os.path.join(*path_parts[:-1])
                 else:
-                    repo_name = path_parts[0]
-                    # For other repositories, patch file contains only filename
-                    # file_path variable is not used in this context
+                    log.error("Invalid patch file path: '%s'", rel_path)
+                    continue
 
                 # In __revert_patch, patch_target = find_repo_path_by_name(repo_name) needs to define find_repo_path_by_name first
                 # Directly keep the assignment method of patch_target consistent with __apply_patch
@@ -623,11 +632,15 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
+                    # Root level override file (e.g., overrides/root.txt)
                     override_target = "."
-                    # file_path variable is not used in this context
+                elif len(path_parts) >= 2:
+                    # Override file in subdirectory (e.g., overrides/uboot/driver/config.txt)
+                    # Include all subdirectories in override_target, not just the first level
+                    override_target = os.path.join(*path_parts[:-1])
                 else:
-                    override_target = path_parts[0]
-                    # file_path variable is not used in this context
+                    log.error("Invalid override file path: '%s'", rel_path)
+                    continue
 
                 override_flag = os.path.join(override_target, ".override_applied")
                 log.debug(
