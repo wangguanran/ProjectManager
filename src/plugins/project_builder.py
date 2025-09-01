@@ -342,18 +342,19 @@ def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
         return platform in _platform_hooks and hook_type.value in _platform_hooks[platform]
 
+    # Create a single shared context for the entire build process
+    shared_context = create_context(env, projects_info, project_name, platform)
+
     # Execute validation hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.VALIDATION, platform):
-        context = create_context(env, projects_info, project_name, platform)
-        validation_result = execute_hooks_with_fallback(HookType.VALIDATION, context, platform)
+        validation_result = execute_hooks_with_fallback(HookType.VALIDATION, shared_context, platform)
         if not validation_result:
             log.error("Validation hooks failed, aborting build")
             return False
 
     # Execute pre-build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.PRE_BUILD, platform):
-        context = create_context(env, projects_info, project_name, platform)
-        pre_build_result = execute_hooks_with_fallback(HookType.PRE_BUILD, context, platform)
+        pre_build_result = execute_hooks_with_fallback(HookType.PRE_BUILD, shared_context, platform)
         if not pre_build_result:
             log.error("Pre-build hooks failed, aborting build")
             return False
@@ -365,8 +366,7 @@ def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
     # Execute build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.BUILD, platform):
-        context = create_context(env, projects_info, project_name, platform)
-        build_result = execute_hooks_with_fallback(HookType.BUILD, context, platform)
+        build_result = execute_hooks_with_fallback(HookType.BUILD, shared_context, platform)
         if not build_result:
             log.error("Build hooks failed, aborting build")
             return False
@@ -378,8 +378,7 @@ def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
     # Execute post-build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.POST_BUILD, platform):
-        context = create_context(env, projects_info, project_name, platform)
-        post_build_result = execute_hooks_with_fallback(HookType.POST_BUILD, context, platform)
+        post_build_result = execute_hooks_with_fallback(HookType.POST_BUILD, shared_context, platform)
         if not post_build_result:
             log.error("Post-build hooks failed, aborting build")
             return False
