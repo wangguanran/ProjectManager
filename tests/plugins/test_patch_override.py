@@ -354,6 +354,77 @@ class TestPatchOverrideApply:
                 content = f.read()
             assert po_name in content
 
+    def test_po_apply_overrides_dest_file_path_construction(self):
+        """Test that dest_file path construction avoids path duplication."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # Prepare overrides directory structure with nested subdirectories
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+
+            # Create nested structure: uboot/drivers/config.txt
+            nested_dir = os.path.join(overrides_dir, "uboot", "drivers")
+            os.makedirs(nested_dir, exist_ok=True)
+
+            # Create files at different levels
+            root_file = os.path.join(overrides_dir, "README.md")
+            nested_file = os.path.join(nested_dir, "config.txt")
+
+            with open(root_file, "w", encoding="utf-8") as f:
+                f.write("root content")
+            with open(nested_file, "w", encoding="utf-8") as f:
+                f.write("nested content")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Run in tmpdir so override targets write under here
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+            finally:
+                os.chdir(old_cwd)
+
+            # Test root level file: should be copied to ./README.md
+            assert os.path.exists(os.path.join(tmpdir, "README.md"))
+            with open(os.path.join(tmpdir, "README.md"), "r", encoding="utf-8") as f:
+                assert f.read() == "root content"
+
+            # Test nested file: should be copied to uboot/drivers/config.txt (NOT uboot/drivers/drivers/config.txt)
+            expected_nested_path = os.path.join(tmpdir, "uboot", "drivers", "config.txt")
+            assert os.path.exists(expected_nested_path)
+            with open(expected_nested_path, "r", encoding="utf-8") as f:
+                assert f.read() == "nested content"
+
+            # Verify no path duplication occurred
+            # The old bug would create: uboot/drivers/drivers/config.txt
+            wrong_path = os.path.join(tmpdir, "uboot", "drivers", "drivers", "config.txt")
+            assert not os.path.exists(wrong_path), f"Path duplication detected: {wrong_path} exists"
+
+            # Check override flags
+            root_flag = os.path.join(tmpdir, "override_applied")
+            nested_flag = os.path.join(tmpdir, "uboot", "drivers", "override_applied")
+
+            assert os.path.exists(root_flag)
+            assert os.path.exists(nested_flag)
+
+            with open(root_flag, "r", encoding="utf-8") as f:
+                assert po_name in f.read()
+            with open(nested_flag, "r", encoding="utf-8") as f:
+                assert po_name in f.read()
+
     def test_custom_copy_star_includes_subdirs(self):
         """'*' should recursively copy all files including subdirectories from PROJECT_PO_DIR."""
         with tempfile.TemporaryDirectory() as tmpdir:

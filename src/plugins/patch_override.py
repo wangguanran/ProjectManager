@@ -397,13 +397,11 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         # If file exists but can't be read, treat as not applied
                         pass
                 src_file = os.path.join(current_dir, fname)
-                dest_file = (
-                    os.path.join(override_target, *rel_path.split(os.sep)[1:])
-                    if len(rel_path.split(os.sep)) > 1
-                    else os.path.join(override_target, fname)
-                )
+                dest_file = rel_path
                 log.debug("override src_file: '%s', dest_file: '%s'", src_file, dest_file)
-                os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                dest_dir = os.path.dirname(dest_file)
+                if dest_dir:  # Only create directory if it's not empty
+                    os.makedirs(dest_dir, exist_ok=True)
                 try:
                     shutil.copy2(src_file, dest_file)
                     with open(override_flag, "a", encoding="utf-8") as f:
