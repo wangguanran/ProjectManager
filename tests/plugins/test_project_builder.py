@@ -267,11 +267,13 @@ class TestProjectPreBuild:
 
         self.project_pre_build = project_pre_build
 
+    @patch("src.plugins.project_builder.po_apply")
     @patch("src.plugins.project_builder.project_diff")
-    def test_project_pre_build_basic_functionality(self, mock_project_diff):
+    def test_project_pre_build_basic_functionality(self, mock_project_diff, mock_po_apply):
         """Test project_pre_build basic functionality"""
         # Arrange
         mock_project_diff.return_value = True
+        mock_po_apply.return_value = True
         env = {}
         projects_info = {}
         project_name = "test_project"
@@ -282,12 +284,15 @@ class TestProjectPreBuild:
         # Assert
         assert result is True
         mock_project_diff.assert_called_once_with(env, projects_info, project_name)
+        mock_po_apply.assert_called_once_with(env, projects_info, project_name)
 
+    @patch("src.plugins.project_builder.po_apply")
     @patch("src.plugins.project_builder.project_diff")
-    def test_project_pre_build_project_diff_failure(self, mock_project_diff):
+    def test_project_pre_build_project_diff_failure(self, mock_project_diff, mock_po_apply):
         """Test project_pre_build when project_diff fails"""
         # Arrange
         mock_project_diff.return_value = False
+        mock_po_apply.return_value = True
         env = {}
         projects_info = {}
         project_name = "test_project"
@@ -299,6 +304,7 @@ class TestProjectPreBuild:
         # Note: project_pre_build always returns True regardless of project_diff result
         assert result is True
         mock_project_diff.assert_called_once_with(env, projects_info, project_name)
+        mock_po_apply.assert_called_once_with(env, projects_info, project_name)
 
 
 class TestProjectDoBuild:
@@ -521,7 +527,8 @@ class TestProjectBuild:
         mock_do_build.assert_called_once_with(env, projects_info, project_name)
         mock_post_build.assert_called_once_with(env, projects_info, project_name)
 
-    def test_project_build_with_platform_config(self):
+    @patch("src.plugins.project_builder.po_apply")
+    def test_project_build_with_platform_config(self, mock_po_apply):
         """Test project_build with platform configuration"""
         # Arrange
         env = {}
@@ -529,17 +536,20 @@ class TestProjectBuild:
         project_name = "test_project"
 
         # Act
+        mock_po_apply.return_value = True
         result = self.project_build(env, projects_info, project_name)
 
         # Assert
         assert result is True
 
-    def test_project_build_without_platform_config(self):
+    @patch("src.plugins.project_builder.po_apply")
+    def test_project_build_without_platform_config(self, mock_po_apply):
         """Test project_build without platform configuration"""
         # Arrange
         env = {}
         projects_info = {"test_project": {"config": {}}}
         project_name = "test_project"
+        mock_po_apply.return_value = True
 
         # Act
         result = self.project_build(env, projects_info, project_name)
@@ -547,12 +557,14 @@ class TestProjectBuild:
         # Assert
         assert result is True
 
-    def test_project_build_empty_projects_info(self):
+    @patch("src.plugins.project_builder.po_apply")
+    def test_project_build_empty_projects_info(self, mock_po_apply):
         """Test project_build with empty projects_info"""
         # Arrange
         env = {}
         projects_info = {}
         project_name = "test_project"
+        mock_po_apply.return_value = True
 
         # Act
         result = self.project_build(env, projects_info, project_name)
@@ -568,17 +580,21 @@ class TestProjectBuild:
         project_name = "nonexistent_project"
 
         # Act
-        result = self.project_build(env, projects_info, project_name)
+        with patch("src.plugins.project_builder.po_apply") as mock_po_apply:
+            mock_po_apply.return_value = True
+            result = self.project_build(env, projects_info, project_name)
 
         # Assert
         assert result is True
 
-    def test_project_build_empty_project_name(self):
+    @patch("src.plugins.project_builder.po_apply")
+    def test_project_build_empty_project_name(self, mock_po_apply):
         """Test project_build with empty project name"""
         # Arrange
         env = {}
         projects_info = {}
         project_name = ""
+        mock_po_apply.return_value = True
 
         # Act
         result = self.project_build(env, projects_info, project_name)

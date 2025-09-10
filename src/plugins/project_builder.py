@@ -14,6 +14,7 @@ from src.log_manager import log
 from src.operations.registry import register
 
 # from src.profiler import auto_profile  # unused
+from src.plugins.patch_override import po_apply
 
 
 @register(
@@ -273,6 +274,15 @@ def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool
     """
     log.info("Pre-build stage for project: %s", project_name)
     project_diff(env, projects_info, project_name)
+    # Apply patch/override; failures are fatal
+    try:
+        result = po_apply(env, projects_info, project_name)
+        if not result:
+            log.error("po_apply failed for project: %s", project_name)
+            return False
+    except Exception as exc:  # pylint: disable=broad-except
+        log.error("Exception during po_apply for %s: %s", project_name, exc)
+        return False
     return True
 
 
