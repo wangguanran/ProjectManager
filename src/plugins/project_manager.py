@@ -107,7 +107,17 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Check for duplicate project
     config = ConfigUpdater()
     config.optionxform = str
-    config.read(ini_file, encoding="utf-8")
+    try:
+        # Ensure ini file is readable
+        if not os.access(ini_file, os.R_OK):
+            log.error("INI file is not readable: '%s'", ini_file)
+            print(f"Error: INI file is not readable: '{ini_file}'")
+            return False
+        config.read(ini_file, encoding="utf-8")
+    except (PermissionError, OSError, UnicodeError) as err:
+        log.error("Failed to read INI file '%s': %s", ini_file, err)
+        print(f"Error: Failed to read INI file '{ini_file}': {err}")
+        return False
     if project_name in config.sections():
         log.error("Project '%s' already exists in board '%s'.", project_name, board_name)
         print(f"Project '{project_name}' already exists in board '{board_name}'.")
@@ -127,8 +137,17 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     project_name_value = "_".join(project_name_parts)
 
     # Read the original ini file content to preserve comments and formatting
-    with open(ini_file, "r", encoding="utf-8") as f:
-        original_lines = f.readlines()
+    try:
+        if not os.access(ini_file, os.R_OK):
+            log.error("INI file is not readable: '%s'", ini_file)
+            print(f"Error: INI file is not readable: '{ini_file}'")
+            return False
+        with open(ini_file, "r", encoding="utf-8") as f:
+            original_lines = f.readlines()
+    except (PermissionError, OSError, UnicodeError) as err:
+        log.error("Failed to read INI file '%s': %s", ini_file, err)
+        print(f"Error: Failed to read INI file '{ini_file}': {err}")
+        return False
 
     # Rewrite only the board's PROJECT_NAME assignment to have spaces around '=' and keep comments intact
     new_lines = []
@@ -164,8 +183,23 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     new_lines.append(f"PROJECT_NAME = {project_name_value}\n")
 
     # Write back preserving all original comments and formatting elsewhere
-    with open(ini_file, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+    try:
+        # Ensure board directory and file are writable
+        board_dirname = os.path.dirname(ini_file)
+        if board_dirname and not os.access(board_dirname, os.W_OK):
+            log.error("Board directory is not writable: '%s'", board_dirname)
+            print(f"Error: Board directory is not writable: '{board_dirname}'")
+            return False
+        if not os.access(ini_file, os.W_OK):
+            log.error("INI file is not writable: '%s'", ini_file)
+            print(f"Error: INI file is not writable: '{ini_file}'")
+            return False
+        with open(ini_file, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+    except (PermissionError, OSError, UnicodeError) as err:
+        log.error("Failed to write INI file '%s': %s", ini_file, err)
+        print(f"Error: Failed to write INI file '{ini_file}': {err}")
+        return False
 
     log.debug("Created new project '%s' in board '%s'.", project_name, board_name)
     print(f"Created new project '{project_name}' in board '{board_name}'.")
@@ -174,7 +208,12 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Re-read using ConfigUpdater to fetch the new section values
     config_after = ConfigUpdater()
     config_after.optionxform = str
-    config_after.read(ini_file, encoding="utf-8")
+    try:
+        config_after.read(ini_file, encoding="utf-8")
+    except (PermissionError, OSError, UnicodeError) as err:
+        log.error("Failed to re-read INI file '%s': %s", ini_file, err)
+        print(f"Error: Failed to re-read INI file '{ini_file}': {err}")
+        return False
     parent_config = inherited_config.get("config", {}) if isinstance(inherited_config.get("config", {}), dict) else {}
     merged_config = dict(parent_config)
     if project_name in config_after:
