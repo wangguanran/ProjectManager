@@ -306,7 +306,7 @@ class TestPatchOverrideApply:
             assert po_name in content
 
     def test_po_apply_overrides_copy_with_exclude_and_flag(self):
-        """Apply overrides: copy files, respect exclude list, and create override_applied flag per target dir."""
+        """Apply overrides: copy files, respect exclude list, and create override_applied flag at repo root."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -413,16 +413,10 @@ class TestPatchOverrideApply:
             wrong_path = os.path.join(tmpdir, "uboot", "drivers", "drivers", "config.txt")
             assert not os.path.exists(wrong_path), f"Path duplication detected: {wrong_path} exists"
 
-            # Check override flags
+            # Check override flag only at repo root
             root_flag = os.path.join(tmpdir, "override_applied")
-            nested_flag = os.path.join(tmpdir, "uboot", "drivers", "override_applied")
-
             assert os.path.exists(root_flag)
-            assert os.path.exists(nested_flag)
-
             with open(root_flag, "r", encoding="utf-8") as f:
-                assert po_name in f.read()
-            with open(nested_flag, "r", encoding="utf-8") as f:
                 assert po_name in f.read()
 
     def test_custom_copy_star_includes_subdirs(self):

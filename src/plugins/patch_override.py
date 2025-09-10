@@ -360,25 +360,26 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
                     # Root level override file (e.g., overrides/root.txt)
-                    override_target = "."
+                    repo_root = "."
                 elif len(path_parts) >= 2:
                     # Override file in subdirectory (e.g., overrides/uboot/driver/config.txt)
                     # Include all subdirectories in override_target, not just the first level
-                    override_target = os.path.join(*path_parts[:-1])
+                    # Repo root is the top-level directory of the destination path
+                    repo_root = path_parts[0]
                 else:
                     log.error("Invalid override file path: '%s'", rel_path)
                     continue
 
-                override_flag = os.path.join(override_target, "override_applied")
+                override_flag = os.path.join(repo_root, "override_applied")
                 log.debug(
-                    "override override_target: '%s', override_flag: '%s'",
-                    override_target,
+                    "override repo_root: '%s', override_flag: '%s'",
+                    repo_root,
                     override_flag,
                 )
-                if override_target in override_applied_dirs:
+                if repo_root in override_applied_dirs:
                     log.debug(
-                        "override flag already set for dir: '%s', skipping",
-                        override_target,
+                        "override flag already set for repo root: '%s', skipping",
+                        repo_root,
                     )
                     continue
                 if os.path.exists(override_flag):
@@ -387,11 +388,11 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                             applied_pos_in_flag = f.read().strip().split("\n")
                         if po_name in applied_pos_in_flag:
                             log.info(
-                                "override already applied for dir: '%s' by po: '%s', skipping",
-                                override_target,
+                                "override already applied for repo root: '%s' by po: '%s', skipping",
+                                repo_root,
                                 po_name,
                             )
-                            override_applied_dirs.add(override_target)
+                            override_applied_dirs.add(repo_root)
                             continue
                     except OSError:
                         # If file exists but can't be read, treat as not applied
@@ -406,10 +407,10 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     shutil.copy2(src_file, dest_file)
                     with open(override_flag, "a", encoding="utf-8") as f:
                         f.write(f"{po_name}\n")
-                    override_applied_dirs.add(override_target)
+                    override_applied_dirs.add(repo_root)
                     log.info(
-                        "override applied and flag set for dir: '%s', file: '%s'",
-                        override_target,
+                        "override applied and flag set for repo root: '%s', file: '%s'",
+                        repo_root,
                         dest_file,
                     )
                 except OSError as e:
