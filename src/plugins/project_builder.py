@@ -33,7 +33,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
         env: Environment variables and configuration
         projects_info: Project information dictionary
         project_name: Name of the project
-        keep_diff_dir: If True, preserve the diff directory after creating tar.gz archive (default: False)
+        keep_diff_dir (bool): If True, preserve the diff directory after creating tar.gz archive (default: False)
     """
     _ = projects_info  # Mark as intentionally unused
 

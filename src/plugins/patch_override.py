@@ -849,6 +849,7 @@ def po_new(
         project_name (str): Project name.
         po_name (str): Name of the new PO to create.
         force (bool): If True, skip confirmation prompt.
+        po_check_exists (bool): When True, require the PO directory to already exist (used by update path).
     Returns:
         bool: True if success, otherwise False.
     """
