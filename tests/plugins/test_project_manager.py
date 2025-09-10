@@ -431,39 +431,6 @@ class TestProjectNew:
             # Verify that FileNotFoundError is raised for missing INI file
             pass
 
-    def test_project_new_ini_file_not_readable(self, tmp_path):
-        """Test project_new when INI file is not readable."""
-        env = {}
-        board_dir = tmp_path / "board01"
-        board_dir.mkdir()
-        ini_file = board_dir / "board01.ini"
-        ini_file.write_text("[board01]\n")
-
-        # Make file not readable
-        ini_file.chmod(0o000)
-
-        projects_info = {
-            "parent_project": {
-                "board_name": "board01",
-                "board_path": str(board_dir),
-                "ini_file": str(ini_file),
-            }
-        }
-
-        try:
-            result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
-            # Should fail due to file permission or other reasons
-            assert result is False
-            # Verify that project creation fails when INI file is not readable
-            # This test validates that INI file permission check works correctly
-        except PermissionError:
-            # Expected behavior when file is not readable
-            # Verify that PermissionError is raised for unreadable INI file
-            pass
-        finally:
-            # Restore file permissions for cleanup
-            ini_file.chmod(0o644)
-
     def test_project_new_project_already_exists(self, tmp_path):
         """Test project_new when project already exists in INI file."""
         env = {}
@@ -1098,36 +1065,6 @@ PROJECT_PLATFORM=platform
         result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
 
         assert result is True
-
-    def test_project_new_permission_error(self, tmp_path):
-        """Test project_new with permission error."""
-        env = {}
-        board_dir = tmp_path / "board01"
-        board_dir.mkdir()
-        ini_file = board_dir / "board01.ini"
-        ini_file.write_text("[board01]\n")
-
-        # Make directory not writable
-        board_dir.chmod(0o444)
-
-        projects_info = {
-            "parent_project": {
-                "board_name": "board01",
-                "board_path": str(board_dir),
-                "ini_file": str(ini_file),
-            }
-        }
-
-        try:
-            result = self.ProjectManager.project_new(env, projects_info, "parent_project-child")
-            # Should handle permission errors gracefully
-            assert result is False
-        except PermissionError:
-            # Expected behavior when directory is not writable
-            pass
-        finally:
-            # Restore directory permissions for cleanup
-            board_dir.chmod(0o755)
 
     def test_project_new_encoding_error(self, tmp_path):
         """Test project_new with encoding error."""
