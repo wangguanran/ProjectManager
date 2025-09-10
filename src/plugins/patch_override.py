@@ -833,7 +833,14 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
 
 @register("po_new", needs_repositories=True, desc="Create a new PO for a project")
-def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False) -> bool:
+def po_new(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    po_name: str,
+    force: bool = False,
+    po_check_exists: bool = False,
+) -> bool:
     """
     Create a new PO (patch and override) directory structure for the specified project.
     Args:
@@ -876,10 +883,15 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
     patches_dir = os.path.join(po_path, "patches")
     overrides_dir = os.path.join(po_path, "overrides")
 
-    # Check if PO directory already exists
-    if os.path.exists(po_path):
-        log.error("PO directory '%s' already exists", po_path)
-        return False
+    # Existence checks differ for new vs update
+    if po_check_exists:
+        if not os.path.exists(po_path):
+            log.error("PO directory '%s' does not exist for update", po_path)
+            return False
+    else:
+        if os.path.exists(po_path):
+            log.error("PO directory '%s' already exists", po_path)
+            return False
 
     # Define helper functions as local functions
     def __confirm_creation(po_name, po_path, board_path):
@@ -1396,6 +1408,15 @@ def po_new(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
     except OSError as e:
         log.error("Failed to create po directory structure for '%s': '%s'", po_name, e)
         return False
+
+
+@register("po_update", needs_repositories=True, desc="Update an existing PO for a project")
+def po_update(env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False) -> bool:
+    """
+    Update an existing PO directory structure (must already exist).
+    Reuses po_new with po_update=True to leverage the same workflow.
+    """
+    return po_new(env, projects_info, project_name, po_name, force=force, po_check_exists=True)
 
 
 @register("po_del", needs_repositories=False, desc="Delete a PO for a project")

@@ -931,6 +931,38 @@ class TestPatchOverrideNew:
                 po_name,
             )
 
+    def test_po_new_fails_when_po_exists(self):
+        """po_new should fail if PO directory already exists."""
+        # Arrange
+        env = {"projects_path": "/tmp/projects"}
+        projects_info = {
+            "test_project": {
+                "board_name": "test_board",
+                "board_path": "/tmp/board",
+            }
+        }
+        project_name = "test_project"
+        po_name = "po_test"
+
+        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+            "src.plugins.patch_override.log"
+        ) as mock_log:
+            mock_join.side_effect = lambda *args: "/".join(args)
+
+            # Simulate PO directory exists
+            def _exists_side_effect(path):
+                # Return True for any path ending with /po/po_test (po_path) and for po_dir
+                return path.endswith(f"po/{po_name}") or path.endswith("/po")
+
+            mock_exists.side_effect = _exists_side_effect
+
+            # Act
+            result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
+
+            # Assert
+            assert result is False
+            mock_log.error.assert_called_with("PO directory '%s' already exists", "/tmp/projects/test_board/po/po_test")
+
 
 class TestPatchOverrideDelete:
     """Test cases for po_del method."""
@@ -1100,6 +1132,104 @@ class TestPatchOverrideParseConfig:
         assert apply_pos == ["po1", "po2"]
         assert exclude_pos == set()
         assert not exclude_files
+
+
+class TestPatchOverrideUpdate:
+    """Test cases for po_update command."""
+
+    def setup_method(self):
+        """
+        Prepare the test environment for each test case.
+        - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
+        - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
+        """
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        import src.plugins.patch_override as PatchOverride
+
+        self.PatchOverride = PatchOverride
+
+    def test_po_update_fails_when_po_not_exists(self):
+        """po_update should fail if PO directory does not exist."""
+        # Arrange
+        env = {"projects_path": "/tmp/projects"}
+        projects_info = {
+            "test_project": {
+                "board_name": "test_board",
+                "board_path": "/tmp/board",
+            }
+        }
+        project_name = "test_project"
+        po_name = "po_test"
+
+        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+            "src.plugins.patch_override.log"
+        ) as mock_log:
+            mock_join.side_effect = lambda *args: "/".join(args)
+
+            # Simulate PO directory not exists and po_dir may or may not exist
+            def _exists_side_effect(path):
+                # Return False for po_path; True for po_dir to bypass its creation logic
+                if path.endswith(f"po/{po_name}"):
+                    return False
+                if path.endswith("/po"):
+                    return True
+                return False
+
+            mock_exists.side_effect = _exists_side_effect
+
+            # Act
+            result = self.PatchOverride.po_update(env, projects_info, project_name, po_name, force=True)
+
+            # Assert
+            assert result is False
+            mock_log.error.assert_called_with(
+                "PO directory '%s' does not exist for update",
+                "/tmp/projects/test_board/po/po_test",
+            )
+
+    def test_po_update_succeeds_when_po_exists(self):
+        """po_update should succeed in force mode when PO directory exists."""
+        # Arrange
+        env = {"projects_path": "/tmp/projects"}
+        projects_info = {
+            "test_project": {
+                "board_name": "test_board",
+                "board_path": "/tmp/board",
+                "config": {},
+            }
+        }
+        project_name = "test_project"
+        po_name = "po_test"
+
+        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+            "os.makedirs"
+        ) as mock_makedirs, patch("src.plugins.patch_override.log") as mock_log:
+            mock_join.side_effect = lambda *args: "/".join(args)
+
+            def _exists_side_effect(path):
+                # PO path exists -> update path
+                if path.endswith(f"po/{po_name}"):
+                    return True
+                # po_dir exists
+                if path.endswith("/po"):
+                    return True
+                return False
+
+            mock_exists.side_effect = _exists_side_effect
+            mock_makedirs.return_value = None
+
+            # Act
+            result = self.PatchOverride.po_update(env, projects_info, project_name, po_name, force=True)
+
+            # Assert
+            assert result is True
+            mock_log.info.assert_any_call(
+                "start po_new for project: '%s', po_name: '%s'",
+                project_name,
+                po_name,
+            )
 
     def test_parse_po_config_with_exclusions(self):
         """Test parse_po_config with excluded POs."""
