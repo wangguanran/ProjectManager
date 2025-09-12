@@ -222,8 +222,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
     def __apply_patch(po_name, po_patch_dir, exclude_files):
         """Apply patches for the specified po."""
-        patch_applied_dirs = set()
-        successful_patches = {}  # Track successful patches per repo
         log.debug("po_name: '%s', po_patch_dir: '%s'", po_name, po_patch_dir)
         if not os.path.isdir(po_patch_dir):
             log.debug("No patches dir for po: '%s'", po_name)
@@ -243,11 +241,8 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
-                    # Root level patch file (e.g., patches/root.patch)
                     repo_name = "root"
                 elif len(path_parts) >= 2:
-                    # Patch file in subdirectory (e.g., patches/uboot/driver/example.patch)
-                    # Include all subdirectories in repo_name, not just the first level
                     repo_name = os.path.join(*path_parts[:-1])
                 else:
                     log.error("Invalid patch file path: '%s'", rel_path)
@@ -264,29 +259,8 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if not patch_target:
                     log.error("Cannot find repo path for '%s'", repo_name)
                     continue
-                patch_flag = os.path.join(patch_target, "patch_applied")
                 patch_file = os.path.join(current_dir, fname)
                 log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
-                if patch_target in patch_applied_dirs:
-                    log.debug(
-                        "patch flag already set for repo: '%s', skipping",
-                        patch_target,
-                    )
-                    continue
-                if os.path.exists(patch_flag):
-                    try:
-                        with open(patch_flag, "r", encoding="utf-8") as f:
-                            applied_pos_in_flag = f.read().strip().split("\n")
-                        if po_name in applied_pos_in_flag:
-                            log.info(
-                                "patch already applied for repo: '%s' by po: '%s', skipping",
-                                patch_target,
-                                po_name,
-                            )
-                            patch_applied_dirs.add(patch_target)
-                            continue
-                    except OSError:
-                        pass
                 try:
                     result = subprocess.run(
                         ["git", "apply", patch_file],
@@ -309,10 +283,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                             result.stderr,
                         )
                         return False
-                    # Track successful patch instead of writing flag immediately
-                    if patch_target not in successful_patches:
-                        successful_patches[patch_target] = []
-                    successful_patches[patch_target].append(rel_path)
                     log.info("patch applied successfully for repo: '%s'", patch_target)
                 except subprocess.SubprocessError as e:
                     log.error("Subprocess error applying patch '%s': '%s'", patch_file, e)
@@ -320,18 +290,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 except OSError as e:
                     log.error("OS error applying patch '%s': '%s'", patch_file, e)
                     return False
-
-        # Write patch flags after all patches are successfully applied
-        for patch_target, patch_files in successful_patches.items():
-            try:
-                patch_flag = os.path.join(patch_target, "patch_applied")
-                with open(patch_flag, "a", encoding="utf-8") as f:
-                    f.write(f"{po_name}\n")
-                patch_applied_dirs.add(patch_target)
-                log.info("patch flags set for repo: '%s' after applying %d patches", patch_target, len(patch_files))
-            except OSError as e:
-                log.error("Failed to write patch flag for repo '%s': '%s'", patch_target, e)
-                return False
 
         return True
 
@@ -354,18 +312,13 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             """Find the actual repository root for the given relative path."""
             path_parts = rel_path.split(os.sep)
             if len(path_parts) == 1:
-                # Root level override file (e.g., overrides/root.txt)
                 return "."
             elif len(path_parts) >= 2:
-                # Try to find the actual repository that contains this path
-                # Check from the most specific path to the least specific
                 for i in range(len(path_parts), 0, -1):
                     potential_repo_name = os.path.join(*path_parts[:i])
                     repo_path = find_repo_path_by_name(potential_repo_name)
                     if repo_path:
                         return repo_path
-                
-                # If no repository found, fall back to the first path component
                 return path_parts[0]
             else:
                 log.error("Invalid override file path: '%s'", rel_path)
@@ -379,7 +332,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
                 log.debug("override rel_path: '%s'", rel_path)
-                # Exclude override files configured in exclude_files
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
                     log.debug(
                         "override file '%s' in po '%s' is excluded by config",
@@ -387,7 +339,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         po_name,
                     )
                     continue
-                # Find the actual repository root for this override file
                 repo_root = find_actual_repo_root(rel_path)
                 if repo_root is None:
                     continue
@@ -395,35 +346,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 dest_file = rel_path
                 repo_to_files.setdefault(repo_root, []).append((src_file, dest_file))
 
-        # 2) After copying per repo_root, write flag once
+        # 2) Perform copies per repo_root (no applied flags)
         for repo_root, file_list in repo_to_files.items():
-            override_flag = os.path.join(repo_root, "override_applied")
             log.debug(
-                "override repo_root: '%s', override_flag: '%s'",
+                "override repo_root: '%s'",
                 repo_root,
-                override_flag,
             )
-            # Skip entire repo if same po was already applied
-            if os.path.exists(override_flag):
-                try:
-                    with open(override_flag, "r", encoding="utf-8") as f:
-                        applied_pos_in_flag = f.read().strip().split("\n")
-                    if po_name in applied_pos_in_flag:
-                        log.info(
-                            "override already applied for repo root: '%s' by po: '%s', skipping",
-                            repo_root,
-                            po_name,
-                        )
-                        continue
-                except OSError:
-                    # If file exists but can't be read, treat as not applied
-                    pass
-
-            # Perform file copies
             for src_file, dest_file in file_list:
                 log.debug("override src_file: '%s', dest_file: '%s'", src_file, dest_file)
                 dest_dir = os.path.dirname(dest_file)
-                if dest_dir:  # Only create directory if it's not empty
+                if dest_dir:
                     os.makedirs(dest_dir, exist_ok=True)
                 try:
                     shutil.copy2(src_file, dest_file)
@@ -435,19 +367,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         e,
                     )
                     return False
-
-            # After all copies succeed, write flag once
-            try:
-                with open(override_flag, "a", encoding="utf-8") as f:
-                    f.write(f"{po_name}\n")
-                log.info(
-                    "override flags set for repo: '%s' after applying %d files",
-                    repo_root,
-                    len(file_list),
-                )
-            except OSError as e:
-                log.error("Failed to write override flag for repo '%s': '%s'", repo_root, e)
-                return False
 
         return True
 
@@ -545,7 +464,6 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 log.debug("current_dir: '%s', fname: '%s'", current_dir, fname)
                 rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
                 log.debug("patch rel_path: '%s'", rel_path)
-                # Exclude patch files configured in exclude_files
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
                     log.debug(
                         "patch file '%s' in po '%s' is excluded by config",
@@ -555,58 +473,22 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
-                    # Root level patch file (e.g., patches/root.patch)
                     repo_name = "root"
                 elif len(path_parts) >= 2:
-                    # Patch file in subdirectory (e.g., patches/uboot/driver/example.patch)
-                    # Include all subdirectories in repo_name, not just the first level
                     repo_name = os.path.join(*path_parts[:-1])
                 else:
                     log.error("Invalid patch file path: '%s'", rel_path)
                     continue
 
-                # In __revert_patch, patch_target = find_repo_path_by_name(repo_name) needs to define find_repo_path_by_name first
-                # Directly keep the assignment method of patch_target consistent with __apply_patch
-                # Replace:
-                # patch_target = find_repo_path_by_name(repo_name)
-                # patch_flag = os.path.join(patch_target, ".patch_applied")
-
-                # First define find_repo_path_by_name
                 def find_repo_path_by_name(repo_name):
                     for repo_path, rname in repositories:
                         if rname == repo_name:
                             return repo_path
                     return None
 
-                # Then patch_target = find_repo_path_by_name(repo_name)
                 patch_target = find_repo_path_by_name(repo_name)
                 if not patch_target:
                     log.error("Cannot find repo path for '%s'", repo_name)
-                    continue
-                patch_flag = os.path.join(patch_target, "patch_applied")
-                log.debug(
-                    "patch patch_target: '%s', patch_flag: '%s'",
-                    patch_target,
-                    patch_flag,
-                )
-                if not os.path.exists(patch_flag):
-                    log.debug("No patch flag found for dir: '%s', skipping", patch_target)
-                    continue
-                try:
-                    with open(patch_flag, "r", encoding="utf-8") as f:
-                        applied_pos_in_flag = f.read().strip().split("\n")
-                    if po_name not in applied_pos_in_flag:
-                        log.debug(
-                            "patch not applied for dir: '%s' by po: '%s', skipping",
-                            patch_target,
-                            po_name,
-                        )
-                        continue
-                except OSError:
-                    log.debug(
-                        "Cannot read patch flag for dir: '%s', skipping",
-                        patch_target,
-                    )
                     continue
                 patch_file = os.path.join(current_dir, fname)
                 log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
@@ -631,16 +513,8 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                             result.stderr,
                         )
                         return False
-                    # Remove po_name from flag file
-                    applied_pos_in_flag.remove(po_name)
-                    if applied_pos_in_flag:
-                        with open(patch_flag, "w", encoding="utf-8") as f:
-                            f.write("\n".join(applied_pos_in_flag) + "\n")
-                    else:
-                        # If no more applied pos, remove the flag file
-                        os.remove(patch_flag)
                     log.info(
-                        "patch reverted and flag updated for dir: '%s'",
+                        "patch reverted for dir: '%s'",
                         patch_target,
                     )
                 except subprocess.SubprocessError as e:
@@ -664,7 +538,6 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
                 log.debug("override rel_path: '%s'", rel_path)
-                # Exclude override files configured in exclude_files
                 if po_name in exclude_files and rel_path in exclude_files[po_name]:
                     log.debug(
                         "override file '%s' in po '%s' is excluded by config",
@@ -674,44 +547,13 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
-                    # Root level override file (e.g., overrides/root.txt)
                     override_target = "."
                 elif len(path_parts) >= 2:
-                    # Override file in subdirectory (e.g., overrides/uboot/driver/config.txt)
-                    # Include all subdirectories in override_target, not just the first level
                     override_target = os.path.join(*path_parts[:-1])
                 else:
                     log.error("Invalid override file path: '%s'", rel_path)
                     continue
 
-                override_flag = os.path.join(override_target, "override_applied")
-                log.debug(
-                    "override override_target: '%s', override_flag: '%s'",
-                    override_target,
-                    override_flag,
-                )
-                if not os.path.exists(override_flag):
-                    log.debug(
-                        "No override flag found for dir: '%s', skipping",
-                        override_target,
-                    )
-                    continue
-                try:
-                    with open(override_flag, "r", encoding="utf-8") as f:
-                        applied_pos_in_flag = f.read().strip().split("\n")
-                    if po_name not in applied_pos_in_flag:
-                        log.debug(
-                            "override not applied for dir: '%s' by po: '%s', skipping",
-                            override_target,
-                            po_name,
-                        )
-                        continue
-                except OSError:
-                    log.debug(
-                        "Cannot read override flag for dir: '%s', skipping",
-                        override_target,
-                    )
-                    continue
                 dest_file = (
                     os.path.join(override_target, *rel_path.split(os.sep)[1:])
                     if len(rel_path.split(os.sep)) > 1
@@ -721,7 +563,6 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if os.path.exists(dest_file):
                     log.info("reverting override file: '%s'", dest_file)
                     try:
-                        # First check if the file is tracked by git
                         result = subprocess.run(
                             ["git", "ls-files", "--error-unmatch", dest_file],
                             cwd=override_target,
@@ -731,7 +572,6 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         )
 
                         if result.returncode == 0:
-                            # File is tracked by git, use git checkout to restore
                             result = subprocess.run(
                                 ["git", "checkout", "--", dest_file],
                                 cwd=override_target,
@@ -753,23 +593,14 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                                 )
                                 return False
                         else:
-                            # File is not tracked by git, delete it directly
                             log.debug(
                                 "File '%s' is not tracked by git, deleting directly",
                                 dest_file,
                             )
                             os.remove(dest_file)
 
-                        # Remove po_name from flag file
-                        applied_pos_in_flag.remove(po_name)
-                        if applied_pos_in_flag:
-                            with open(override_flag, "w", encoding="utf-8") as f:
-                                f.write("\n".join(applied_pos_in_flag) + "\n")
-                        else:
-                            # If no more applied pos, remove the flag file
-                            os.remove(override_flag)
                         log.info(
-                            "override reverted and flag updated for dir: '%s', file: '%s'",
+                            "override reverted for dir: '%s', file: '%s'",
                             override_target,
                             dest_file,
                         )

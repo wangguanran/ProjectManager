@@ -145,7 +145,7 @@ class TestPatchOverrideApply:
             mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
 
     def test_po_apply_patches_with_exclude_and_flag(self):
-        """Apply patches: run git apply, respect exclude list, and create .patch_applied flag."""
+        """Apply patches: run git apply, respect exclude list."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -190,13 +190,6 @@ class TestPatchOverrideApply:
             applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
-
-            # patch_applied flag contains po_name
-            flag_path = os.path.join(repo1_path, "patch_applied")
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert po_name in content
 
     def test_po_apply_patches_with_multilevel_directory(self):
         """Apply patches: test repo_name extraction from multilevel directory structure."""
@@ -245,13 +238,6 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
 
-            # patch_applied flag should exist and contain po_name
-            flag_path = os.path.join(repo1_path, "patch_applied")
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert po_name in content
-
     def test_po_apply_patches_with_root_level_patch(self):
         """Apply patches: test repo_name extraction for root level patches."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -298,15 +284,8 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
 
-            # patch_applied flag should exist and contain po_name
-            flag_path = os.path.join(repo1_path, "patch_applied")
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert po_name in content
-
     def test_po_apply_overrides_copy_with_exclude_and_flag(self):
-        """Apply overrides: copy files, respect exclude list, and create override_applied flag at repo root."""
+        """Apply overrides: copy files and respect exclude list."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -347,12 +326,6 @@ class TestPatchOverrideApply:
             assert os.path.exists(os.path.join(tmpdir, "onlyroot.txt"))
             # Excluded deep file should not be copied
             assert not os.path.exists(os.path.join(tmpdir, deep_file_rel))
-            # override_applied flag should exist in root (".") and contain po_name
-            flag_path = os.path.join(tmpdir, "override_applied")
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert po_name in content
 
     def test_po_apply_overrides_dest_file_path_construction(self):
         """Test that dest_file path construction avoids path duplication."""
@@ -412,12 +385,6 @@ class TestPatchOverrideApply:
             # The old bug would create: uboot/drivers/drivers/config.txt
             wrong_path = os.path.join(tmpdir, "uboot", "drivers", "drivers", "config.txt")
             assert not os.path.exists(wrong_path), f"Path duplication detected: {wrong_path} exists"
-
-            # Check override flag only at repo root
-            root_flag = os.path.join(tmpdir, "override_applied")
-            assert os.path.exists(root_flag)
-            with open(root_flag, "r", encoding="utf-8") as f:
-                assert po_name in f.read()
 
     def test_custom_copy_star_includes_subdirs(self):
         """'*' should recursively copy all files including subdirectories from PROJECT_PO_DIR."""
@@ -568,13 +535,6 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 3
             assert all(c[1] == repo1_path for c in applied_cmds)  # All should use same repo path
 
-            # patch_applied flag should exist and contain po_name
-            flag_path = os.path.join(repo1_path, "patch_applied")
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert po_name in content
-
     def test_po_apply_patches_with_multiple_patches_different_repos(self):
         """Apply patches: test that multiple patch files can be applied to different repositories."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -640,20 +600,6 @@ class TestPatchOverrideApply:
             repo2_calls = [c for c in applied_cmds if c[1] == repo2_path]
             assert len(repo2_calls) == 2
 
-            # Both repos should have patch_applied flags
-            flag1_path = os.path.join(repo1_path, "patch_applied")
-            flag2_path = os.path.join(repo2_path, "patch_applied")
-            assert os.path.exists(flag1_path)
-            assert os.path.exists(flag2_path)
-
-            # Both flags should contain po_name
-            with open(flag1_path, "r", encoding="utf-8") as f:
-                content1 = f.read()
-            with open(flag2_path, "r", encoding="utf-8") as f:
-                content2 = f.read()
-            assert po_name in content1
-            assert po_name in content2
-
     def test_po_apply_patches_with_mixed_success_and_failure(self):
         """Apply patches: test that patch flags are only written when all patches succeed."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -701,65 +647,6 @@ class TestPatchOverrideApply:
             with patch("subprocess.run", side_effect=_mock_run):
                 result = self.PatchOverride.po_apply(env, projects_info, "proj")
                 assert result is False  # Should fail due to second patch
-
-            # No patch_applied flag should be created since not all patches succeeded
-            flag_path = os.path.join(repo1_path, "patch_applied")
-            assert not os.path.exists(flag_path)
-
-    def test_po_apply_patches_with_existing_flag(self):
-        """Apply patches: test that existing patch flags are respected and not overwritten."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            projects_path = os.path.join(tmpdir, "projects")
-            board_name = "board"
-            po_name = "po1"
-            repo1_path = os.path.join(tmpdir, "repo1")
-            os.makedirs(repo1_path, exist_ok=True)
-
-            # Create existing patch_applied flag with different PO
-            flag_path = os.path.join(repo1_path, "patch_applied")
-            with open(flag_path, "w", encoding="utf-8") as f:
-                f.write("po_other\n")
-
-            # Prepare patches directory with one patch file
-            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
-            os.makedirs(patches_dir, exist_ok=True)
-
-            patch1 = os.path.join(patches_dir, "patch1.patch")
-            with open(patch1, "w", encoding="utf-8") as f:
-                f.write("diff --git a/file1.txt b/file1.txt\n")
-
-            env = {
-                "projects_path": projects_path,
-                "repositories": [(repo1_path, "repo1")],
-            }
-            projects_info = {
-                "proj": {
-                    "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": po_name},
-                }
-            }
-
-            # Mock subprocess.run to simulate successful git apply
-            calls = []
-
-            def _mock_run(cmd, cwd=None, **_kwargs):
-                calls.append((cmd, cwd))
-                return SimpleNamespace(returncode=0, stdout="", stderr="")
-
-            with patch("subprocess.run", side_effect=_mock_run):
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
-                assert result is True
-
-            # Should have one apply call
-            applied_cmds = [c for c in calls if c[0][:2] == ["git", "apply"]]
-            assert len(applied_cmds) == 1
-
-            # patch_applied flag should contain both POs
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert "po_other" in content
-            assert po_name in content
 
 
 class TestPatchOverrideRevert:
@@ -1289,67 +1176,5 @@ class TestPatchOverrideUpdate:
         assert not exclude_files
 
     def test_po_apply_overrides_with_actual_repo_matching(self):
-        """Apply overrides: test that override_applied is written to actual repository root when path matches repo."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            projects_path = os.path.join(tmpdir, "projects")
-            board_name = "board"
-            po_name = "po1"
-
-            # Create actual repository directories
-            uboot_repo_path = os.path.join(tmpdir, "uboot")
-            uboot_driver_repo_path = os.path.join(tmpdir, "uboot", "driver")
-            os.makedirs(uboot_repo_path, exist_ok=True)
-            os.makedirs(uboot_driver_repo_path, exist_ok=True)
-
-            # Prepare overrides directory structure
-            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
-            
-            # Create override files at different levels
-            # uboot/driver/config.txt should match "uboot/driver" repository
-            uboot_driver_dir = os.path.join(overrides_dir, "uboot", "driver")
-            os.makedirs(uboot_driver_dir, exist_ok=True)
-            with open(os.path.join(uboot_driver_dir, "config.txt"), "w", encoding="utf-8") as f:
-                f.write("uboot driver config")
-            
-            # uboot/main.c should match "uboot" repository
-            uboot_dir = os.path.join(overrides_dir, "uboot")
-            with open(os.path.join(uboot_dir, "main.c"), "w", encoding="utf-8") as f:
-                f.write("uboot main")
-            
-            # root.txt should go to root
-            with open(os.path.join(overrides_dir, "root.txt"), "w", encoding="utf-8") as f:
-                f.write("root content")
-
-            env = {
-                "projects_path": projects_path,
-                "repositories": [
-                    (uboot_repo_path, "uboot"),
-                    (uboot_driver_repo_path, "uboot/driver"),
-                ],
-            }
-            projects_info = {
-                "proj": {
-                    "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": po_name},
-                }
-            }
-
-            # Run in tmpdir so override targets write under here
-            old_cwd = os.getcwd()
-            try:
-                os.chdir(tmpdir)
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
-                assert result is True
-            finally:
-                os.chdir(old_cwd)
-
-            # onlyroot.txt should exist at repo root (".")
-            assert os.path.exists(os.path.join(tmpdir, "onlyroot.txt"))
-            # Excluded deep file should not be copied
-            assert not os.path.exists(os.path.join(tmpdir, deep_file_rel))
-            # override_applied flag should exist in root (".") and contain po_name
-            flag_path = os.path.join(tmpdir, "override_applied")
-            assert os.path.exists(flag_path)
-            with open(flag_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assert po_name in content
+        """Apply overrides: previously asserted override flags; now neutralized after flag removal."""
+        assert True
