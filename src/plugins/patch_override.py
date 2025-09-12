@@ -40,6 +40,10 @@ def parse_po_config(po_config):
         else:
             po_name = token
             apply_pos.append(po_name)
+
+    # Filter apply_pos to exclude items in exclude_pos
+    apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
+
     return apply_pos, exclude_pos, exclude_files
 
 
@@ -69,7 +73,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
-    apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:
@@ -513,7 +516,6 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
-    apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:
@@ -1627,14 +1629,13 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
 
     # Get enabled pos from config
     po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
-    enabled_pos = set()
+    apply_pos = []
     if po_config:
-        apply_pos, exclude_pos, _ = parse_po_config(po_config)
-        enabled_pos = {po for po in apply_pos if po not in exclude_pos}
+        apply_pos, _, _ = parse_po_config(po_config)
 
     # Only list POs enabled in configuration
     po_infos = []
-    for po_name in sorted(enabled_pos):
+    for po_name in sorted(apply_pos):
         po_path = os.path.join(po_dir, po_name)
         if not os.path.isdir(po_path):
             continue
