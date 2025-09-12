@@ -85,111 +85,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Use repositories from env
     repositories = env.get("repositories", [])
 
-    def __execute_file_copy(po_name, po_custom_dir, source_pattern, target_path):
-        """Execute a single file copy operation with wildcard and directory support.
-
-        - Supports *, ?, [], and ** patterns via glob
-        - If a directory is matched (or pattern is '*'), recursively copy its contents
-        - Preserves relative structure from the first static (non-wildcard) prefix
-        """
-        log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
-
-        abs_pattern = os.path.join(po_custom_dir, source_pattern)
-        has_wildcard = any(ch in source_pattern for ch in ["*", "?", "["])
-
-        # Resolve matches
-        if has_wildcard:
-            matches = glob.glob(abs_pattern, recursive=True)
-        else:
-            matches = [abs_pattern] if os.path.exists(abs_pattern) else []
-
-        # Expand into a set of files to copy; include files under any matched directories
-        files_to_copy = set()
-        matched_any_dir = False
-        for path in matches:
-            if os.path.isdir(path):
-                matched_any_dir = True
-                for walk_root, _, walk_files in os.walk(path):
-                    for f in walk_files:
-                        files_to_copy.add(os.path.join(walk_root, f))
-            elif os.path.isfile(path):
-                files_to_copy.add(path)
-
-        # Handle no matches
-        if not files_to_copy:
-            if not has_wildcard:
-                if os.path.isfile(abs_pattern):
-                    return __copy_single_file(abs_pattern, target_path)
-                if os.path.isdir(abs_pattern):
-                    # Copy entire directory contents
-                    for walk_root, _, walk_files in os.walk(abs_pattern):
-                        for f in walk_files:
-                            files_to_copy.add(os.path.join(walk_root, f))
-                else:
-                    log.warning("Source path '%s' not found in po: '%s'", abs_pattern, po_name)
-                    return True
-            else:
-                log.warning("No files matched pattern '%s' in po: '%s'", source_pattern, po_name)
-                return True
-
-        # Determine base directory for relative paths
-        def __static_prefix(path_pattern: str) -> str:
-            special_chars = ["*", "?", "["]
-            parts = path_pattern.split(os.sep)
-            prefix_parts = []
-            for part in parts:
-                if any(ch in part for ch in special_chars):
-                    break
-                prefix_parts.append(part)
-            return os.path.join(*prefix_parts) if prefix_parts else ""
-
-        base_rel = __static_prefix(source_pattern)
-        base_root = os.path.join(po_custom_dir, base_rel) if base_rel else po_custom_dir
-        # If a concrete directory was the source without wildcard, use it as the base
-        if not has_wildcard and os.path.isdir(abs_pattern):
-            base_root = abs_pattern
-
-        multiple_sources = len(files_to_copy) > 1 or has_wildcard or matched_any_dir
-        target_is_dir = multiple_sources or os.path.isdir(target_path) or target_path.endswith(os.sep)
-
-        for src in sorted(files_to_copy):
-            if target_is_dir:
-                try:
-                    rel = os.path.relpath(src, start=base_root)
-                except ValueError:
-                    rel = os.path.basename(src)
-                dest = os.path.join(target_path, rel)
-            else:
-                dest = target_path
-            if not __copy_single_file(src, dest):
-                return False
-        return True
-
-    def __copy_single_file(source_file, target_path, filename=None):
-        """Copy a single file to target location."""
-        try:
-            if os.path.isdir(target_path):
-                # Target is a directory, use original filename
-                if filename:
-                    target_file = os.path.join(target_path, filename)
-                else:
-                    target_file = os.path.join(target_path, os.path.basename(source_file))
-            else:
-                # Target is a file path
-                target_file = target_path
-
-            # Create target directory if it doesn't exist
-            os.makedirs(os.path.dirname(target_file), exist_ok=True)
-
-            # Copy the file
-            shutil.copy2(source_file, target_file)
-            log.info("Copied file '%s' to '%s'", source_file, target_file)
-            return True
-
-        except OSError as e:
-            log.error("Failed to copy file '%s' to '%s': '%s'", source_file, target_path, e)
-            return False
-
     @dataclass
     class PoApplyContext:
         """Context container for po_apply execution.
@@ -378,6 +273,120 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.debug("No po_configs provided for custom apply of po: '%s'", ctx.po_name)
             return True
 
+        def __execute_file_copy(ctx, section_custom_dir, source_pattern, target_path):
+            """Execute a single file copy operation with wildcard and directory support.
+
+            - Supports *, ?, [], and ** patterns via glob
+            - If a directory is matched (or pattern is '*'), recursively copy its contents
+            - Preserves relative structure from the first static (non-wildcard) prefix
+            """
+            log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
+
+            abs_pattern = os.path.join(section_custom_dir, source_pattern)
+            has_wildcard = any(ch in source_pattern for ch in ["*", "?", "["])
+
+            # Resolve matches
+            if has_wildcard:
+                matches = glob.glob(abs_pattern, recursive=True)
+            else:
+                matches = [abs_pattern] if os.path.exists(abs_pattern) else []
+
+            # Expand into a set of files to copy; include files under any matched directories
+            files_to_copy = set()
+            matched_any_dir = False
+            for path in matches:
+                if os.path.isdir(path):
+                    matched_any_dir = True
+                    for walk_root, _, walk_files in os.walk(path):
+                        for f in walk_files:
+                            files_to_copy.add(os.path.join(walk_root, f))
+                elif os.path.isfile(path):
+                    files_to_copy.add(path)
+
+            # Handle no matches
+            if not files_to_copy:
+                if not has_wildcard:
+                    if os.path.isfile(abs_pattern):
+                        return __copy_single_file(ctx, abs_pattern, target_path)
+                    if os.path.isdir(abs_pattern):
+                        # Copy entire directory contents
+                        for walk_root, _, walk_files in os.walk(abs_pattern):
+                            for f in walk_files:
+                                files_to_copy.add(os.path.join(walk_root, f))
+                    else:
+                        log.warning("Source path '%s' not found in po: '%s'", abs_pattern, ctx.po_name)
+                        return True
+                else:
+                    log.warning("No files matched pattern '%s' in po: '%s'", source_pattern, ctx.po_name)
+                    return True
+
+            # Determine base directory for relative paths
+            def __static_prefix(path_pattern: str) -> str:
+                special_chars = ["*", "?", "["]
+                parts = path_pattern.split(os.sep)
+                prefix_parts = []
+                for part in parts:
+                    if any(ch in part for ch in special_chars):
+                        break
+                    prefix_parts.append(part)
+                return os.path.join(*prefix_parts) if prefix_parts else ""
+
+            base_rel = __static_prefix(source_pattern)
+            base_root = os.path.join(section_custom_dir, base_rel) if base_rel else section_custom_dir
+            # If a concrete directory was the source without wildcard, use it as the base
+            if not has_wildcard and os.path.isdir(abs_pattern):
+                base_root = abs_pattern
+
+            multiple_sources = len(files_to_copy) > 1 or has_wildcard or matched_any_dir
+            target_is_dir = multiple_sources or os.path.isdir(target_path) or target_path.endswith(os.sep)
+
+            for src in sorted(files_to_copy):
+                if target_is_dir:
+                    try:
+                        rel = os.path.relpath(src, start=base_root)
+                    except ValueError:
+                        rel = os.path.basename(src)
+                    dest = os.path.join(target_path, rel)
+                else:
+                    dest = target_path
+                if not __copy_single_file(ctx, src, dest):
+                    return False
+            return True
+
+        def __copy_single_file(ctx, source_file, target_path, filename=None):  # noqa: ARG002
+            """Copy a single file to target location.
+
+            Args:
+                ctx: Context object (currently unused but kept for interface consistency)
+                source_file: Source file path
+                target_path: Target path (file or directory)
+                filename: Optional filename override
+            """
+            # ctx parameter is kept for interface consistency but not currently used
+            _ = ctx  # Suppress unused argument warning
+            try:
+                if os.path.isdir(target_path):
+                    # Target is a directory, use original filename
+                    if filename:
+                        target_file = os.path.join(target_path, filename)
+                    else:
+                        target_file = os.path.join(target_path, os.path.basename(source_file))
+                else:
+                    # Target is a file path
+                    target_file = target_path
+
+                # Create target directory if it doesn't exist
+                os.makedirs(os.path.dirname(target_file), exist_ok=True)
+
+                # Copy the file
+                shutil.copy2(source_file, target_file)
+                log.info("Copied file '%s' to '%s'", source_file, target_file)
+                return True
+
+            except OSError as e:
+                log.error("Failed to copy file '%s' to '%s': '%s'", source_file, target_path, e)
+                return False
+
         for section_name, section_config in ctx.po_configs.items():
             po_config_dict = section_config
             po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
@@ -429,7 +438,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
             # Execute file copy operations for this section
             for source_pattern, target_path in copy_rules:
-                if not __execute_file_copy(ctx.po_name, section_custom_dir, source_pattern, target_path):
+                if not __execute_file_copy(ctx, section_custom_dir, source_pattern, target_path):
                     log.error(
                         "Failed to execute file copy for po: '%s', source: '%s', target: '%s'",
                         ctx.po_name,
@@ -454,9 +463,9 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             po_name=po_name,
             po_patch_dir=os.path.join(po_dir, po_name, "patches"),
             po_override_dir=os.path.join(po_dir, po_name, "overrides"),
+            po_custom_dir=os.path.join(po_dir, po_name, "custom"),
             po_applied_flag_path=po_applied_flag_path,
             exclude_files=exclude_files,
-            po_custom_dir=os.path.join(po_dir, po_name, "custom"),
             po_configs=env.get("po_configs", {}),
         )
 
