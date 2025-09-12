@@ -3,7 +3,6 @@ Patch and override operations for project management.
 """
 
 import fnmatch
-import glob
 import os
 import re
 import shutil
@@ -85,14 +84,15 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Use repositories from env
     repositories = env.get("repositories", [])
 
-    def __execute_command(ctx, command, cwd=None, description=""):
+    def __execute_command(ctx, command, cwd=None, description="", shell=False):
         """Execute command and log it to po_applied file.
 
         Args:
             ctx: PoApplyContext object containing po_applied_flag_path
-            command: Command to execute (list of strings)
+            command: Command to execute (list of strings or string)
             cwd: Working directory for command execution
             description: Optional description for the command
+            shell: Whether to use shell for command execution
 
         Returns:
             subprocess.CompletedProcess: Result of command execution
@@ -120,6 +120,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 capture_output=True,
                 text=True,
                 check=False,
+                shell=shell,
             )
 
             # Log command to po_applied file
@@ -292,7 +293,9 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     os.makedirs(dest_dir, exist_ok=True)
                 try:
                     # Use __execute_command for copy operation
-                    result = __execute_command(ctx, ["cp", src_file, dest_file], description="Copy override file")
+                    result = __execute_command(
+                        ctx, ["cp", "-rf", src_file, dest_file], description="Copy override file"
+                    )
 
                     if result.returncode != 0:
                         log.error("Failed to copy override file '%s' to '%s': %s", src_file, dest_file, result.stderr)
@@ -330,122 +333,32 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         def __execute_file_copy(ctx, section_custom_dir, source_pattern, target_path):
             """Execute a single file copy operation with wildcard and directory support.
 
-            - Supports *, ?, [], and ** patterns via glob
-            - If a directory is matched (or pattern is '*'), recursively copy its contents
-            - Preserves relative structure from the first static (non-wildcard) prefix
+            - Supports *, ?, [], and ** patterns via cp command
+            - cp -rf handles both files and directories automatically
             """
             log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
 
             abs_pattern = os.path.join(section_custom_dir, source_pattern)
-            has_wildcard = any(ch in source_pattern for ch in ["*", "?", "["])
 
-            # Resolve matches
-            if has_wildcard:
-                matches = glob.glob(abs_pattern, recursive=True)
-            else:
-                matches = [abs_pattern] if os.path.exists(abs_pattern) else []
-
-            # Expand into a set of files to copy; include files under any matched directories
-            files_to_copy = set()
-            matched_any_dir = False
-            for path in matches:
-                if os.path.isdir(path):
-                    matched_any_dir = True
-                    for walk_root, _, walk_files in os.walk(path):
-                        for f in walk_files:
-                            files_to_copy.add(os.path.join(walk_root, f))
-                elif os.path.isfile(path):
-                    files_to_copy.add(path)
-
-            # Handle no matches
-            if not files_to_copy:
-                if not has_wildcard:
-                    if os.path.isfile(abs_pattern):
-                        return __copy_single_file(ctx, abs_pattern, target_path)
-                    if os.path.isdir(abs_pattern):
-                        # Copy entire directory contents
-                        for walk_root, _, walk_files in os.walk(abs_pattern):
-                            for f in walk_files:
-                                files_to_copy.add(os.path.join(walk_root, f))
-                    else:
-                        log.warning("Source path '%s' not found in po: '%s'", abs_pattern, ctx.po_name)
-                        return True
-                else:
-                    log.warning("No files matched pattern '%s' in po: '%s'", source_pattern, ctx.po_name)
-                    return True
-
-            # Determine base directory for relative paths
-            def __static_prefix(path_pattern: str) -> str:
-                special_chars = ["*", "?", "["]
-                parts = path_pattern.split(os.sep)
-                prefix_parts = []
-                for part in parts:
-                    if any(ch in part for ch in special_chars):
-                        break
-                    prefix_parts.append(part)
-                return os.path.join(*prefix_parts) if prefix_parts else ""
-
-            base_rel = __static_prefix(source_pattern)
-            base_root = os.path.join(section_custom_dir, base_rel) if base_rel else section_custom_dir
-            # If a concrete directory was the source without wildcard, use it as the base
-            if not has_wildcard and os.path.isdir(abs_pattern):
-                base_root = abs_pattern
-
-            multiple_sources = len(files_to_copy) > 1 or has_wildcard or matched_any_dir
-            target_is_dir = multiple_sources or os.path.isdir(target_path) or target_path.endswith(os.sep)
-
-            for src in sorted(files_to_copy):
-                if target_is_dir:
-                    try:
-                        rel = os.path.relpath(src, start=base_root)
-                    except ValueError:
-                        rel = os.path.basename(src)
-                    dest = os.path.join(target_path, rel)
-                else:
-                    dest = target_path
-                if not __copy_single_file(ctx, src, dest):
-                    return False
-            return True
-
-        def __copy_single_file(ctx, source_file, target_path, filename=None):  # noqa: ARG002
-            """Copy a single file to target location.
-
-            Args:
-                ctx: Context object (currently unused but kept for interface consistency)
-                source_file: Source file path
-                target_path: Target path (file or directory)
-                filename: Optional filename override
-            """
-            # ctx parameter is kept for interface consistency but not currently used
-            _ = ctx  # Suppress unused argument warning
             try:
-                if os.path.isdir(target_path):
-                    # Target is a directory, use original filename
-                    if filename:
-                        target_file = os.path.join(target_path, filename)
-                    else:
-                        target_file = os.path.join(target_path, os.path.basename(source_file))
-                else:
-                    # Target is a file path
-                    target_file = target_path
-
                 # Create target directory if it doesn't exist
-                target_dir = os.path.dirname(target_file)
+                target_dir = os.path.dirname(target_path)
                 if target_dir:
                     os.makedirs(target_dir, exist_ok=True)
 
-                # Use __execute_command for copy operation
-                result = __execute_command(ctx, ["cp", source_file, target_file], description="Copy custom file")
+                # Use cp -rf for copy operation (handles wildcards, files and directories)
+                # Use shell=True to allow wildcard expansion
+                result = __execute_command(
+                    ctx, f"cp -rf {abs_pattern} {target_path}", description="Copy custom file", shell=True
+                )
 
                 if result.returncode != 0:
-                    log.error("Failed to copy file '%s' to '%s': %s", source_file, target_file, result.stderr)
+                    log.error("Failed to copy '%s' to '%s': %s", abs_pattern, target_path, result.stderr)
                     return False
 
-                log.info("Copied file '%s' to '%s'", source_file, target_file)
                 return True
-
             except OSError as e:
-                log.error("Failed to copy file '%s' to '%s': '%s'", source_file, target_path, e)
+                log.error("Failed to copy '%s' to '%s': %s", abs_pattern, target_path, e)
                 return False
 
         for section_name, section_config in ctx.po_configs.items():
@@ -524,7 +437,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         try:
             os.makedirs(po_path, exist_ok=True)
             with open(po_applied_flag_path, "w", encoding="utf-8") as f:
-                f.write(f"applied for project {project_name}\n")
+                f.write(f"# Applied for project {project_name}\n")
                 f.write("# Operation log - commands executed during po_apply:\n")
                 f.write("# Commands can be re-executed manually for debugging\n\n")
         except OSError as e:

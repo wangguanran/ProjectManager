@@ -1277,10 +1277,10 @@ class TestPatchOverrideUpdate:
                 content = f.read()
 
             # Verify logging format
-            assert "applied for project" in content, "Should contain project info"
+            assert "# Applied for project" in content, "Should contain project info"
             assert "Operation log" in content, "Should contain operation log header"
             assert "git apply" in content, "Should contain git apply command"
-            assert "cp " in content, "Should contain cp commands"
+            assert "cp -rf" in content, "Should contain cp -rf commands"
             assert "Copy override file" in content, "Should contain override description"
 
     def test_po_apply_uses_cp_command_instead_of_shutil(self):
@@ -1486,12 +1486,12 @@ class TestPatchOverrideUpdate:
             lines = content.split("\n")
 
             # Check header
-            assert lines[0].startswith("applied for project"), "Should start with project info"
+            assert lines[0].startswith("# Applied for project"), "Should start with project info"
             assert "# Operation log" in content, "Should contain operation log header"
             assert "# Commands can be re-executed" in content, "Should contain re-execution note"
 
             # Check that there are no timestamps in command lines
-            command_lines = [line for line in lines if line.startswith("cp ") or line.startswith("git ")]
+            command_lines = [line for line in lines if line.startswith("cp -rf") or line.startswith("git ")]
             for line in command_lines:
                 # Should not contain timestamp pattern [YYYY-MM-DD HH:MM:SS]
                 assert not (line.startswith("[") and "]" in line), f"Command line should not contain timestamp: {line}"
