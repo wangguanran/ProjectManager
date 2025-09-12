@@ -313,16 +313,15 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             path_parts = rel_path.split(os.sep)
             if len(path_parts) == 1:
                 return "."
-            elif len(path_parts) >= 2:
+            if len(path_parts) >= 2:
                 for i in range(len(path_parts), 0, -1):
                     potential_repo_name = os.path.join(*path_parts[:i])
                     repo_path = find_repo_path_by_name(potential_repo_name)
                     if repo_path:
                         return repo_path
                 return path_parts[0]
-            else:
-                log.error("Invalid override file path: '%s'", rel_path)
-                return None
+            log.error("Invalid override file path: '%s'", rel_path)
+            return None
 
         # 1) Group files by repo_root before copying
         repo_to_files = {}
@@ -374,6 +373,13 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     po_configs = env.get("po_configs", {})
 
     for po_name in apply_pos:
+        # Check applied flag per PO and skip if already applied
+        po_path = os.path.join(po_dir, po_name)
+        applied_flag = os.path.join(po_path, "po_applied")
+        if os.path.isfile(applied_flag):
+            log.info("po '%s' already applied, skipping", po_name)
+            continue
+
         # Always process standard patches and overrides
         po_patch_dir = os.path.join(po_dir, po_name, "patches")
         if not __apply_patch(po_name, po_patch_dir, exclude_files):
@@ -400,6 +406,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     if not __apply_custom_po(po_name, po_custom_dir, po_config_dict):
                         log.error("po apply aborted due to custom po error in po: '%s'", po_name)
                         return False
+
+        # Mark this PO as applied
+        try:
+            os.makedirs(po_path, exist_ok=True)
+            with open(applied_flag, "w", encoding="utf-8") as f:
+                f.write(f"applied for project {project_name}\n")
+            log.info("po '%s' has been processed and marked as applied", po_name)
+        except OSError as e:
+            log.error("Failed to write applied flag for po '%s': '%s'", po_name, e)
+            return False
 
         log.info("po '%s' has been processed", po_name)
     log.info("po apply finished for project: '%s'", project_name)

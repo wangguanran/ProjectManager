@@ -648,6 +648,80 @@ class TestPatchOverrideApply:
                 result = self.PatchOverride.po_apply(env, projects_info, "proj")
                 assert result is False  # Should fail due to second patch
 
+            # The applied flag should NOT be created on failure
+            po_path = os.path.join(projects_path, board_name, "po", po_name)
+            applied_flag = os.path.join(po_path, "po_applied")
+            assert not os.path.exists(applied_flag)
+
+    def test_po_apply_skips_when_flag_exists(self):
+        """When po_applied flag exists, po_apply should skip processing and not run git apply."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            repo1_path = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_path, exist_ok=True)
+
+            # Prepare patches directory with a patch that would be applied if not skipped
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
+            os.makedirs(patches_dir, exist_ok=True)
+            patch_file = os.path.join(patches_dir, "should_not_apply.patch")
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write("diff --git a/x b/x\n")
+
+            # Create the applied flag to trigger skip
+            po_path = os.path.join(projects_path, board_name, "po", po_name)
+            os.makedirs(po_path, exist_ok=True)
+            with open(os.path.join(po_path, "po_applied"), "w", encoding="utf-8") as f:
+                f.write("applied\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo1_path, "repo1")],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            with patch("subprocess.run") as mock_run:
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+                mock_run.assert_not_called()
+
+    def test_po_apply_creates_flag_after_success(self):
+        """After successful apply, po_applied flag should be created under PO directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # No patches/overrides -> success path
+            po_base = os.path.join(projects_path, board_name, "po", po_name)
+            os.makedirs(po_base, exist_ok=True)
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            assert result is True
+
+            applied_flag = os.path.join(po_base, "po_applied")
+            assert os.path.exists(applied_flag)
+            with open(applied_flag, "r", encoding="utf-8") as f:
+                content = f.read()
+                assert "project proj" in content
+
 
 class TestPatchOverrideRevert:
     """Test cases for po_revert method."""
