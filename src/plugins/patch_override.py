@@ -258,8 +258,8 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.error("Invalid override file path: '%s'", rel_path)
             return None
 
-        # 1) Group files by repo_root before copying
-        repo_to_files: Dict[str, List[Tuple[str, str]]] = {}
+        # 1) Group files by repo_root before copying/deleting
+        repo_to_files: Dict[str, List[Tuple[str, str, bool]]] = {}  # (src_file, dest_file, is_remove)
         for current_dir, _, files in os.walk(ctx.po_override_dir):
             for fname in files:
                 if fname == ".gitkeep":
@@ -277,39 +277,77 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if repo_root is None:
                     continue
                 src_file = os.path.join(current_dir, fname)
-                dest_file = rel_path
-                repo_to_files.setdefault(repo_root, []).append((src_file, dest_file))
 
-        # 2) Perform copies per repo_root (no applied flags)
+                # Check if this is a remove operation
+                is_remove = fname.endswith(".remove")
+                if is_remove:
+                    # For remove operations, the target file is the same path without .remove suffix
+                    dest_file = rel_path[:-7]  # Remove '.remove' suffix
+                    log.debug("remove operation detected for file: '%s'", dest_file)
+                else:
+                    dest_file = rel_path
+
+                repo_to_files.setdefault(repo_root, []).append((src_file, dest_file, is_remove))
+
+        # 2) Perform copies/deletes per repo_root (no applied flags)
         for repo_root, file_list in repo_to_files.items():
             log.debug(
                 "override repo_root: '%s'",
                 repo_root,
             )
-            for src_file, dest_file in file_list:
-                log.debug("override src_file: '%s', dest_file: '%s'", src_file, dest_file)
-                dest_dir = os.path.dirname(dest_file)
-                if dest_dir:
-                    os.makedirs(dest_dir, exist_ok=True)
-                try:
-                    # Use __execute_command for copy operation
-                    result = __execute_command(
-                        ctx, ["cp", "-rf", src_file, dest_file], description="Copy override file"
-                    )
+            for src_file, dest_file, is_remove in file_list:
+                log.debug("override src_file: '%s', dest_file: '%s', is_remove: %s", src_file, dest_file, is_remove)
 
-                    if result.returncode != 0:
-                        log.error("Failed to copy override file '%s' to '%s': %s", src_file, dest_file, result.stderr)
+                if is_remove:
+                    # Perform delete operation
+                    try:
+                        # Check if target file exists
+                        if os.path.exists(dest_file):
+                            # Use __execute_command for delete operation
+                            result = __execute_command(
+                                ctx, ["rm", "-rf", dest_file], description=f"Remove file {dest_file}"
+                            )
+
+                            if result.returncode != 0:
+                                log.error("Failed to remove file '%s': %s", dest_file, result.stderr)
+                                return False
+
+                            log.info("Removed file '%s'", dest_file)
+                        else:
+                            log.debug("File '%s' does not exist, skipping removal", dest_file)
+                    except OSError as e:
+                        log.error(
+                            "Failed to remove file '%s': '%s'",
+                            dest_file,
+                            e,
+                        )
                         return False
+                else:
+                    # Perform copy operation
+                    dest_dir = os.path.dirname(dest_file)
+                    if dest_dir:
+                        os.makedirs(dest_dir, exist_ok=True)
+                    try:
+                        # Use __execute_command for copy operation
+                        result = __execute_command(
+                            ctx, ["cp", "-rf", src_file, dest_file], description="Copy override file"
+                        )
 
-                    log.info("Copied override file '%s' to '%s'", src_file, dest_file)
-                except OSError as e:
-                    log.error(
-                        "Failed to copy override file '%s' to '%s': '%s'",
-                        src_file,
-                        dest_file,
-                        e,
-                    )
-                    return False
+                        if result.returncode != 0:
+                            log.error(
+                                "Failed to copy override file '%s' to '%s': %s", src_file, dest_file, result.stderr
+                            )
+                            return False
+
+                        log.info("Copied override file '%s' to '%s'", src_file, dest_file)
+                    except OSError as e:
+                        log.error(
+                            "Failed to copy override file '%s' to '%s': '%s'",
+                            src_file,
+                            dest_file,
+                            e,
+                        )
+                        return False
 
         return True
 
@@ -869,8 +907,20 @@ def po_new(
             if working_result.returncode == 0 and working_result.stdout.strip():
                 working_files = set(working_result.stdout.strip().split("\n"))
 
+            # Get deleted files (files that were tracked but are now missing)
+            deleted_result = subprocess.run(
+                ["git", "ls-files", "--deleted"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            deleted_files = set()
+            if deleted_result.returncode == 0 and deleted_result.stdout.strip():
+                deleted_files = set(deleted_result.stdout.strip().split("\n"))
+
             # Process all files
-            all_files = staged_files | working_files
+            all_files = staged_files | working_files | deleted_files
 
             def is_ignored(file_path):
                 for pattern in ignore_patterns:
@@ -896,7 +946,12 @@ def po_new(
                     status = status_result.stdout.strip()[:2]
 
                     # Enhance status description for better understanding
-                    if file_path in staged_files and file_path in working_files:
+                    if file_path in deleted_files:
+                        if file_path in staged_files:
+                            status = f"{status} (staged+deleted)"
+                        else:
+                            status = f"{status} (deleted)"
+                    elif file_path in staged_files and file_path in working_files:
                         status = f"{status} (staged+modified)"
                     elif file_path in staged_files:
                         status = f"{status} (staged)"
@@ -1059,6 +1114,72 @@ def po_new(
             log.error("Failed to create override for file %s: %s", file_path, e)
             return False
 
+    def __create_remove_file_for_deleted_file(repo_name, file_path, overrides_dir, all_file_infos=None):
+        """Create a .remove file for a deleted file or .gitkeep for deleted directory."""
+        try:
+            # Check if this is a directory deletion by looking for other deleted files in the same directory
+            # This is a heuristic approach - if multiple files in the same directory are deleted,
+            # it might indicate a directory deletion
+            deleted_files_in_same_dir = []
+            if all_file_infos:
+                for other_repo, other_path, other_status in all_file_infos:
+                    if other_repo == repo_name and "deleted" in other_status:
+                        other_dir = os.path.dirname(other_path)
+                        current_dir = os.path.dirname(file_path)
+                        if other_dir == current_dir and other_path != file_path:
+                            deleted_files_in_same_dir.append(other_path)
+
+            # If there are multiple deleted files in the same directory, treat as directory deletion
+            is_directory_deletion = len(deleted_files_in_same_dir) > 0
+
+            if is_directory_deletion:
+                # For directory deletion, create .gitkeep file to preserve the directory structure
+                dir_path = os.path.dirname(file_path)
+                if repo_name == "root":
+                    dest_dir = os.path.join(overrides_dir, dir_path) if dir_path else overrides_dir
+                else:
+                    dest_dir = (
+                        os.path.join(overrides_dir, repo_name, dir_path)
+                        if dir_path
+                        else os.path.join(overrides_dir, repo_name)
+                    )
+
+                # Create directory structure
+                os.makedirs(dest_dir, exist_ok=True)
+
+                # Create .gitkeep file
+                gitkeep_file = os.path.join(dest_dir, ".gitkeep")
+                with open(gitkeep_file, "w", encoding="utf-8") as f:
+                    f.write("# Directory preservation marker\n")
+                    f.write(f"# Original directory: {dir_path}\n")
+                    f.write(f"# Repository: {repo_name}\n")
+                    f.write(f"# Created by po_new on {__import__('datetime').datetime.now().isoformat()}\n")
+                    f.write("# This directory was deleted, .gitkeep prevents it from being removed\n")
+
+                return True
+
+            # For individual file deletion, create .remove file
+            if repo_name == "root":
+                # For root repository, use the full relative path
+                dest_file = os.path.join(overrides_dir, f"{file_path}.remove")
+            else:
+                dest_file = os.path.join(overrides_dir, repo_name, f"{file_path}.remove")
+
+            # Create overrides directory and subdirectories if they don't exist
+            os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+
+            # Create empty .remove file as a marker
+            with open(dest_file, "w", encoding="utf-8") as f:
+                f.write(f"# Remove marker for deleted file: {file_path}\n")
+                f.write(f"# This file was deleted from repository: {repo_name}\n")
+                f.write(f"# Created by po_new on {__import__('datetime').datetime.now().isoformat()}\n")
+
+            return True
+
+        except (OSError, IOError) as e:
+            log.error("Failed to create remove file for %s: %s", file_path, e)
+            return False
+
     def __process_multiple_files(file_infos, po_path):
         """Process multiple files with a single choice for all files."""
         if not file_infos:
@@ -1073,21 +1194,41 @@ def po_new(
         for i, (repo_name, file_path, status) in enumerate(file_infos, 1):
             print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
 
+        # Check if there are any deleted files
+        has_deleted_files = any("deleted" in status for _, _, status in file_infos)
+
         print("\nChoose action for ALL selected files:")
         print("  1. Create patches (for tracked files with modifications)")
         print("  2. Create overrides (for any file)")
-        print("  3. Skip all files")
+        if has_deleted_files:
+            print("  3. Create remove files (for deleted files)")
+            print("  4. Skip all files")
+        else:
+            print("  3. Skip all files")
 
         while True:
-            choice = input("Choice (1/2/3): ").strip()
-            if choice == "1":
-                return __batch_create_patches(file_infos, po_path)
-            if choice == "2":
-                return __batch_create_overrides(file_infos, po_path)
-            if choice == "3":
-                print("  - Skipped all files")
-                return 0
-            print("Invalid choice. Please enter 1, 2, or 3.")
+            if has_deleted_files:
+                choice = input("Choice (1/2/3/4): ").strip()
+                if choice == "1":
+                    return __batch_create_patches(file_infos, po_path)
+                if choice == "2":
+                    return __batch_create_overrides(file_infos, po_path)
+                if choice == "3":
+                    return __batch_create_remove_files(file_infos, po_path)
+                if choice == "4":
+                    print("  - Skipped all files")
+                    return 0
+                print("Invalid choice. Please enter 1, 2, 3, or 4.")
+            else:
+                choice = input("Choice (1/2/3): ").strip()
+                if choice == "1":
+                    return __batch_create_patches(file_infos, po_path)
+                if choice == "2":
+                    return __batch_create_overrides(file_infos, po_path)
+                if choice == "3":
+                    print("  - Skipped all files")
+                    return 0
+                print("Invalid choice. Please enter 1, 2, or 3.")
 
     def __batch_create_patches(file_infos, po_path):
         """Create patches for multiple files."""
@@ -1119,6 +1260,25 @@ def po_new(
                 print(f"    ✗ Failed to create override for {file_path}")
 
         print(f"  Completed: {success_count}/{len(file_infos)} overrides created")
+        return success_count
+
+    def __batch_create_remove_files(file_infos, po_path):
+        """Create remove files for deleted files."""
+        overrides_dir = os.path.join(po_path, "overrides")
+        success_count = 0
+
+        print("  Creating remove files for deleted files...")
+        for repo_name, file_path, status in file_infos:
+            if "deleted" in status:
+                if __create_remove_file_for_deleted_file(repo_name, file_path, overrides_dir, file_infos):
+                    print(f"    ✓ Created remove file for {file_path}")
+                    success_count += 1
+                else:
+                    print(f"    ✗ Failed to create remove file for {file_path}")
+            else:
+                print(f"    - Skipped {file_path} (not deleted)")
+
+        print(f"  Completed: {success_count}/{len([f for f in file_infos if 'deleted' in f[2]])} remove files created")
         return success_count
 
     def __interactive_file_selection(po_path, repositories, project_cfg):

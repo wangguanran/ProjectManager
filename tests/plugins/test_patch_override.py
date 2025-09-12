@@ -7,6 +7,8 @@ Tests for patch_override module.
 # pylint: disable=protected-access
 
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -385,6 +387,90 @@ class TestPatchOverrideApply:
             # The old bug would create: uboot/drivers/drivers/config.txt
             wrong_path = os.path.join(tmpdir, "uboot", "drivers", "drivers", "config.txt")
             assert not os.path.exists(wrong_path), f"Path duplication detected: {wrong_path} exists"
+
+    def test_po_apply_overrides_remove_operation(self):
+        """Test that files with .remove suffix are deleted instead of copied."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # Prepare overrides directory structure
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+
+            # Create a .remove file
+            remove_file = os.path.join(overrides_dir, "target_file.remove")
+            with open(remove_file, "w", encoding="utf-8") as f:
+                f.write("remove marker")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Create target file that should be removed
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                target_file = os.path.join(tmpdir, "target_file")
+                with open(target_file, "w", encoding="utf-8") as f:
+                    f.write("original content")
+
+                # Verify target file exists before removal
+                assert os.path.exists(target_file)
+
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+                # Verify target file was removed
+                assert not os.path.exists(target_file)
+
+            finally:
+                os.chdir(old_cwd)
+
+    def test_po_apply_overrides_remove_nonexistent_file(self):
+        """Test that removing a non-existent file doesn't cause errors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # Prepare overrides directory structure
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+
+            # Create a .remove file for a non-existent target
+            remove_file = os.path.join(overrides_dir, "nonexistent_file.remove")
+            with open(remove_file, "w", encoding="utf-8") as f:
+                f.write("remove marker")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Run in tmpdir
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+
+            finally:
+                os.chdir(old_cwd)
 
     def test_custom_copy_star_includes_subdirs(self):
         """'*' should recursively copy all files including subdirectories from PROJECT_PO_DIR."""
@@ -1206,7 +1292,7 @@ class TestPatchOverrideUpdate:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
             project_name = "test_project"
-            po_name = "test_po"
+            po_name = "po_test"
 
             # Create directory structure
             po_dir = os.path.join(projects_path, board_name, "po", po_name)
@@ -1221,7 +1307,6 @@ class TestPatchOverrideUpdate:
             os.makedirs(repo_dir, exist_ok=True)
 
             # Initialize git repo
-            import subprocess
 
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
@@ -1289,7 +1374,7 @@ class TestPatchOverrideUpdate:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
             project_name = "test_project"
-            po_name = "test_po"
+            po_name = "po_test"
 
             # Create directory structure
             po_dir = os.path.join(projects_path, board_name, "po", po_name)
@@ -1307,7 +1392,6 @@ class TestPatchOverrideUpdate:
             os.makedirs(repo_dir, exist_ok=True)
 
             # Initialize git repo
-            import subprocess
 
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
@@ -1358,7 +1442,7 @@ class TestPatchOverrideUpdate:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
             project_name = "test_project"
-            po_name = "test_po"
+            po_name = "po_test"
 
             # Create directory structure
             po_dir = os.path.join(projects_path, board_name, "po", po_name)
@@ -1376,7 +1460,6 @@ class TestPatchOverrideUpdate:
             os.makedirs(repo_dir, exist_ok=True)
 
             # Initialize git repo
-            import subprocess
 
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
@@ -1433,7 +1516,7 @@ class TestPatchOverrideUpdate:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
             project_name = "test_project"
-            po_name = "test_po"
+            po_name = "po_test"
 
             # Create directory structure
             po_dir = os.path.join(projects_path, board_name, "po", po_name)
@@ -1451,7 +1534,6 @@ class TestPatchOverrideUpdate:
             os.makedirs(repo_dir, exist_ok=True)
 
             # Initialize git repo
-            import subprocess
 
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
@@ -1498,3 +1580,164 @@ class TestPatchOverrideUpdate:
 
             # Check that descriptions are present
             assert "Copy override file" in content, "Should contain operation descriptions"
+
+    def test_po_new_detects_deleted_files(self):
+        """Test that po_new detects deleted files correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "po_test"
+
+            # Create a git repository
+            repo_dir = os.path.join(tmpdir, "repo")
+            os.makedirs(repo_dir)
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create and commit a file
+            test_file = os.path.join(repo_dir, "test.txt")
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("test content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Add test file"], cwd=repo_dir, check=True)
+
+            # Delete the file
+            os.remove(test_file)
+
+            # Setup environment
+            env = {"projects_path": projects_path, "repositories": [(repo_dir, "root")], "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "board_path": os.path.join(projects_path, board_name),
+                    "config": {},
+                }
+            }
+
+            # Mock the interactive selection to avoid user input
+            with patch("builtins.input", return_value="3"):  # Skip all files
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
+
+            # Check that po_new succeeded
+            assert result, "po_new should succeed"
+
+    def test_po_new_creates_remove_files_for_deleted_files(self):
+        """Test that po_new creates .remove files for deleted files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "po_test"
+
+            # Create a git repository
+            repo_dir = os.path.join(tmpdir, "repo")
+            os.makedirs(repo_dir)
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create and commit a file
+            test_file = os.path.join(repo_dir, "test.txt")
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("test content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Add test file"], cwd=repo_dir, check=True)
+
+            # Delete the file
+            os.remove(test_file)
+
+            # Setup environment
+            env = {"projects_path": projects_path, "repositories": [(repo_dir, "root")], "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "board_path": os.path.join(projects_path, board_name),
+                    "config": {},
+                }
+            }
+
+            # Mock the interactive selection to create remove files
+            # First input is for confirmation (yes), second is for file selection (select all files), third is for action choice
+            with patch(
+                "builtins.input", side_effect=["yes", "all", "3"]
+            ):  # Confirm creation, select all files, then create remove files
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=False)
+
+            # Check that po_new succeeded
+            assert result, "po_new should succeed"
+
+            # Check that .remove file was created
+            remove_file = os.path.join(projects_path, board_name, "po", po_name, "overrides", "test.txt.remove")
+            assert os.path.exists(remove_file), "Remove file should be created"
+
+            # Check the content of the remove file
+            with open(remove_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert "Remove marker for deleted file: test.txt" in content
+            assert "This file was deleted from repository: root" in content
+
+    def test_po_new_handles_directory_deletion_with_gitkeep(self):
+        """Test that po_new creates .gitkeep for directory deletion."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "po_test"
+
+            # Create a git repository
+            repo_dir = os.path.join(tmpdir, "repo")
+            os.makedirs(repo_dir)
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create a directory with multiple files
+            test_dir = os.path.join(repo_dir, "testdir")
+            os.makedirs(test_dir)
+
+            file1 = os.path.join(test_dir, "file1.txt")
+            file2 = os.path.join(test_dir, "file2.txt")
+
+            with open(file1, "w", encoding="utf-8") as f:
+                f.write("content1")
+            with open(file2, "w", encoding="utf-8") as f:
+                f.write("content2")
+
+            subprocess.run(["git", "add", "testdir/"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Add test directory"], cwd=repo_dir, check=True)
+
+            # Delete the entire directory
+            shutil.rmtree(test_dir)
+
+            # Setup environment
+            env = {"projects_path": projects_path, "repositories": [(repo_dir, "root")], "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "board_path": os.path.join(projects_path, board_name),
+                    "config": {},
+                }
+            }
+
+            # Mock the interactive selection to create remove files
+            # First input is for confirmation (yes), second is for file selection (select all files), third is for action choice
+            with patch(
+                "builtins.input", side_effect=["yes", "all", "3"]
+            ):  # Confirm creation, select all files, then create remove files
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=False)
+
+            # Check that po_new succeeded
+            assert result, "po_new should succeed"
+
+            # Check that .gitkeep file was created for the directory
+            gitkeep_file = os.path.join(projects_path, board_name, "po", po_name, "overrides", "testdir", ".gitkeep")
+            assert os.path.exists(gitkeep_file), "Gitkeep file should be created for deleted directory"
+
+            # Check the content of the gitkeep file
+            with open(gitkeep_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert "Directory preservation marker" in content
+            assert "Original directory: testdir" in content
+            assert "This directory was deleted, .gitkeep prevents it from being removed" in content
