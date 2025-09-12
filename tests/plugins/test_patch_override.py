@@ -1287,3 +1287,69 @@ class TestPatchOverrideUpdate:
         assert not apply_pos
         assert exclude_pos == set()
         assert not exclude_files
+
+    def test_po_apply_overrides_with_actual_repo_matching(self):
+        """Apply overrides: test that override_applied is written to actual repository root when path matches repo."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # Create actual repository directories
+            uboot_repo_path = os.path.join(tmpdir, "uboot")
+            uboot_driver_repo_path = os.path.join(tmpdir, "uboot", "driver")
+            os.makedirs(uboot_repo_path, exist_ok=True)
+            os.makedirs(uboot_driver_repo_path, exist_ok=True)
+
+            # Prepare overrides directory structure
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            
+            # Create override files at different levels
+            # uboot/driver/config.txt should match "uboot/driver" repository
+            uboot_driver_dir = os.path.join(overrides_dir, "uboot", "driver")
+            os.makedirs(uboot_driver_dir, exist_ok=True)
+            with open(os.path.join(uboot_driver_dir, "config.txt"), "w", encoding="utf-8") as f:
+                f.write("uboot driver config")
+            
+            # uboot/main.c should match "uboot" repository
+            uboot_dir = os.path.join(overrides_dir, "uboot")
+            with open(os.path.join(uboot_dir, "main.c"), "w", encoding="utf-8") as f:
+                f.write("uboot main")
+            
+            # root.txt should go to root
+            with open(os.path.join(overrides_dir, "root.txt"), "w", encoding="utf-8") as f:
+                f.write("root content")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [
+                    (uboot_repo_path, "uboot"),
+                    (uboot_driver_repo_path, "uboot/driver"),
+                ],
+            }
+            projects_info = {
+                "proj": {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            # Run in tmpdir so override targets write under here
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                assert result is True
+            finally:
+                os.chdir(old_cwd)
+
+            # onlyroot.txt should exist at repo root (".")
+            assert os.path.exists(os.path.join(tmpdir, "onlyroot.txt"))
+            # Excluded deep file should not be copied
+            assert not os.path.exists(os.path.join(tmpdir, deep_file_rel))
+            # override_applied flag should exist in root (".") and contain po_name
+            flag_path = os.path.join(tmpdir, "override_applied")
+            assert os.path.exists(flag_path)
+            with open(flag_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert po_name in content

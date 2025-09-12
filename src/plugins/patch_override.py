@@ -266,7 +266,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     continue
                 patch_flag = os.path.join(patch_target, "patch_applied")
                 patch_file = os.path.join(current_dir, fname)
-                log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
+                log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
                 if patch_target in patch_applied_dirs:
                     log.debug(
                         "patch flag already set for repo: '%s', skipping",
@@ -295,6 +295,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         text=True,
                         check=False,
                     )
+                    log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
                     log.debug(
                         "git apply result: returncode: '%s', stdout: '%s', stderr: '%s'",
                         result.returncode,
@@ -336,16 +337,45 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
     def __apply_override(po_name, po_override_dir, exclude_files):
         """Apply overrides for the specified po."""
-        override_applied_dirs = set()
         log.debug("po_name: '%s', po_override_dir: '%s'", po_name, po_override_dir)
         if not os.path.isdir(po_override_dir):
             log.debug("No overrides dir for po: '%s'", po_name)
             return True
         log.debug("applying overrides for po: '%s'", po_name)
+
+        def find_repo_path_by_name(repo_name):
+            """Find repository path by name."""
+            for repo_path, rname in repositories:
+                if rname == repo_name:
+                    return repo_path
+            return None
+
+        def find_actual_repo_root(rel_path):
+            """Find the actual repository root for the given relative path."""
+            path_parts = rel_path.split(os.sep)
+            if len(path_parts) == 1:
+                # Root level override file (e.g., overrides/root.txt)
+                return "."
+            elif len(path_parts) >= 2:
+                # Try to find the actual repository that contains this path
+                # Check from the most specific path to the least specific
+                for i in range(len(path_parts), 0, -1):
+                    potential_repo_name = os.path.join(*path_parts[:i])
+                    repo_path = find_repo_path_by_name(potential_repo_name)
+                    if repo_path:
+                        return repo_path
+                
+                # If no repository found, fall back to the first path component
+                return path_parts[0]
+            else:
+                log.error("Invalid override file path: '%s'", rel_path)
+                return None
+
+        # 1) Group files by repo_root before copying
+        repo_to_files = {}
         for current_dir, _, files in os.walk(po_override_dir):
             for fname in files:
                 if fname == ".gitkeep":
-                    # log.debug("ignore .gitkeep file in '%s'", current_dir)
                     continue
                 rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
                 log.debug("override rel_path: '%s'", rel_path)
@@ -357,62 +387,46 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         po_name,
                     )
                     continue
-                path_parts = rel_path.split(os.sep)
-                if len(path_parts) == 1:
-                    # Root level override file (e.g., overrides/root.txt)
-                    repo_root = "."
-                elif len(path_parts) >= 2:
-                    # Override file in subdirectory (e.g., overrides/uboot/driver/config.txt)
-                    # Include all subdirectories in override_target, not just the first level
-                    # Repo root is the top-level directory of the destination path
-                    repo_root = path_parts[0]
-                else:
-                    log.error("Invalid override file path: '%s'", rel_path)
+                # Find the actual repository root for this override file
+                repo_root = find_actual_repo_root(rel_path)
+                if repo_root is None:
                     continue
-
-                override_flag = os.path.join(repo_root, "override_applied")
-                log.debug(
-                    "override repo_root: '%s', override_flag: '%s'",
-                    repo_root,
-                    override_flag,
-                )
-                if repo_root in override_applied_dirs:
-                    log.debug(
-                        "override flag already set for repo root: '%s', skipping",
-                        repo_root,
-                    )
-                    continue
-                if os.path.exists(override_flag):
-                    try:
-                        with open(override_flag, "r", encoding="utf-8") as f:
-                            applied_pos_in_flag = f.read().strip().split("\n")
-                        if po_name in applied_pos_in_flag:
-                            log.info(
-                                "override already applied for repo root: '%s' by po: '%s', skipping",
-                                repo_root,
-                                po_name,
-                            )
-                            override_applied_dirs.add(repo_root)
-                            continue
-                    except OSError:
-                        # If file exists but can't be read, treat as not applied
-                        pass
                 src_file = os.path.join(current_dir, fname)
                 dest_file = rel_path
+                repo_to_files.setdefault(repo_root, []).append((src_file, dest_file))
+
+        # 2) After copying per repo_root, write flag once
+        for repo_root, file_list in repo_to_files.items():
+            override_flag = os.path.join(repo_root, "override_applied")
+            log.debug(
+                "override repo_root: '%s', override_flag: '%s'",
+                repo_root,
+                override_flag,
+            )
+            # Skip entire repo if same po was already applied
+            if os.path.exists(override_flag):
+                try:
+                    with open(override_flag, "r", encoding="utf-8") as f:
+                        applied_pos_in_flag = f.read().strip().split("\n")
+                    if po_name in applied_pos_in_flag:
+                        log.info(
+                            "override already applied for repo root: '%s' by po: '%s', skipping",
+                            repo_root,
+                            po_name,
+                        )
+                        continue
+                except OSError:
+                    # If file exists but can't be read, treat as not applied
+                    pass
+
+            # Perform file copies
+            for src_file, dest_file in file_list:
                 log.debug("override src_file: '%s', dest_file: '%s'", src_file, dest_file)
                 dest_dir = os.path.dirname(dest_file)
                 if dest_dir:  # Only create directory if it's not empty
                     os.makedirs(dest_dir, exist_ok=True)
                 try:
                     shutil.copy2(src_file, dest_file)
-                    with open(override_flag, "a", encoding="utf-8") as f:
-                        f.write(f"{po_name}\n")
-                    override_applied_dirs.add(repo_root)
-                    log.info(
-                        "override applied and flag set for repo root: '%s', file: '%s'",
-                        repo_root,
-                        dest_file,
-                    )
                 except OSError as e:
                     log.error(
                         "Failed to copy override file '%s' to '%s': '%s'",
@@ -421,6 +435,20 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         e,
                     )
                     return False
+
+            # After all copies succeed, write flag once
+            try:
+                with open(override_flag, "a", encoding="utf-8") as f:
+                    f.write(f"{po_name}\n")
+                log.info(
+                    "override flags set for repo: '%s' after applying %d files",
+                    repo_root,
+                    len(file_list),
+                )
+            except OSError as e:
+                log.error("Failed to write override flag for repo '%s': '%s'", repo_root, e)
+                return False
+
         return True
 
     # Get po configurations from env
