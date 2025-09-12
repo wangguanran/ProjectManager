@@ -8,7 +8,8 @@ import os
 import re
 import shutil
 import subprocess
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
 
 from src.log_manager import log
 from src.operations.registry import register
@@ -220,13 +221,31 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.error("Failed to copy file '%s' to '%s': '%s'", source_file, target_path, e)
             return False
 
-    def __apply_patch(po_name, po_patch_dir, exclude_files):
+    @dataclass
+    class PoApplyContext:
+        """Context container for po_apply execution.
+
+        Holds frequently used paths and config for a single PO during apply:
+        - po_name: current PO name
+        - po_patch_dir: directory containing patch files
+        - po_override_dir: directory containing override files
+        - po_applied_flag_path: path to the applied-flag file for this PO
+        - exclude_files: mapping of PO name to a set of excluded relative file paths
+        """
+
+        po_name: str
+        po_patch_dir: str
+        po_override_dir: str
+        po_applied_flag_path: str
+        exclude_files: Dict[str, set]
+
+    def __apply_patch(ctx: PoApplyContext):
         """Apply patches for the specified po."""
-        log.debug("po_name: '%s', po_patch_dir: '%s'", po_name, po_patch_dir)
-        if not os.path.isdir(po_patch_dir):
-            log.debug("No patches dir for po: '%s'", po_name)
+        log.debug("po_name: '%s', po_patch_dir: '%s'", ctx.po_name, ctx.po_patch_dir)
+        if not os.path.isdir(ctx.po_patch_dir):
+            log.debug("No patches dir for po: '%s'", ctx.po_name)
             return True
-        log.debug("applying patches for po: '%s'", po_name)
+        log.debug("applying patches for po: '%s'", ctx.po_name)
 
         def find_repo_path_by_name(repo_name):
             for repo_path, rname in repositories:
@@ -234,11 +253,11 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     return repo_path
             return None
 
-        for current_dir, _, files in os.walk(po_patch_dir):
+        for current_dir, _, files in os.walk(ctx.po_patch_dir):
             for fname in files:
                 if fname == ".gitkeep":
                     continue
-                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
+                rel_path = os.path.relpath(os.path.join(current_dir, fname), ctx.po_patch_dir)
                 path_parts = rel_path.split(os.sep)
                 if len(path_parts) == 1:
                     repo_name = "root"
@@ -248,11 +267,11 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     log.error("Invalid patch file path: '%s'", rel_path)
                     continue
 
-                if po_name in exclude_files and rel_path in exclude_files[po_name]:
+                if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
                     log.debug(
                         "patch file '%s' in po '%s' is excluded by config",
                         rel_path,
-                        po_name,
+                        ctx.po_name,
                     )
                     continue
                 patch_target = find_repo_path_by_name(repo_name)
@@ -293,13 +312,13 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
         return True
 
-    def __apply_override(po_name, po_override_dir, exclude_files):
+    def __apply_override(ctx: PoApplyContext):
         """Apply overrides for the specified po."""
-        log.debug("po_name: '%s', po_override_dir: '%s'", po_name, po_override_dir)
-        if not os.path.isdir(po_override_dir):
-            log.debug("No overrides dir for po: '%s'", po_name)
+        log.debug("po_name: '%s', po_override_dir: '%s'", ctx.po_name, ctx.po_override_dir)
+        if not os.path.isdir(ctx.po_override_dir):
+            log.debug("No overrides dir for po: '%s'", ctx.po_name)
             return True
-        log.debug("applying overrides for po: '%s'", po_name)
+        log.debug("applying overrides for po: '%s'", ctx.po_name)
 
         def find_repo_path_by_name(repo_name):
             """Find repository path by name."""
@@ -324,18 +343,18 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             return None
 
         # 1) Group files by repo_root before copying
-        repo_to_files = {}
-        for current_dir, _, files in os.walk(po_override_dir):
+        repo_to_files: Dict[str, List[Tuple[str, str]]] = {}
+        for current_dir, _, files in os.walk(ctx.po_override_dir):
             for fname in files:
                 if fname == ".gitkeep":
                     continue
-                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
+                rel_path = os.path.relpath(os.path.join(current_dir, fname), ctx.po_override_dir)
                 log.debug("override rel_path: '%s'", rel_path)
-                if po_name in exclude_files and rel_path in exclude_files[po_name]:
+                if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
                     log.debug(
                         "override file '%s' in po '%s' is excluded by config",
                         rel_path,
-                        po_name,
+                        ctx.po_name,
                     )
                     continue
                 repo_root = find_actual_repo_root(rel_path)
@@ -375,18 +394,27 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     for po_name in apply_pos:
         # Check applied flag per PO and skip if already applied
         po_path = os.path.join(po_dir, po_name)
-        applied_flag = os.path.join(po_path, "po_applied")
-        if os.path.isfile(applied_flag):
+        po_applied_flag_path = os.path.join(po_path, "po_applied")
+        if os.path.isfile(po_applied_flag_path):
             log.info("po '%s' already applied, skipping", po_name)
             continue
 
         # Always process standard patches and overrides
         po_patch_dir = os.path.join(po_dir, po_name, "patches")
-        if not __apply_patch(po_name, po_patch_dir, exclude_files):
+        po_override_dir = os.path.join(po_dir, po_name, "overrides")
+
+        ctx = PoApplyContext(
+            po_name=po_name,
+            po_patch_dir=po_patch_dir,
+            po_override_dir=po_override_dir,
+            po_applied_flag_path=po_applied_flag_path,
+            exclude_files=exclude_files,
+        )
+
+        if not __apply_patch(ctx):
             log.error("po apply aborted due to patch error in po: '%s'", po_name)
             return False
-        po_override_dir = os.path.join(po_dir, po_name, "overrides")
-        if not __apply_override(po_name, po_override_dir, exclude_files):
+        if not __apply_override(ctx):
             log.error("po apply aborted due to override error in po: '%s'", po_name)
             return False
 
@@ -410,7 +438,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         # Mark this PO as applied
         try:
             os.makedirs(po_path, exist_ok=True)
-            with open(applied_flag, "w", encoding="utf-8") as f:
+            with open(po_applied_flag_path, "w", encoding="utf-8") as f:
                 f.write(f"applied for project {project_name}\n")
             log.info("po '%s' has been processed and marked as applied", po_name)
         except OSError as e:
