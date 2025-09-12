@@ -422,25 +422,52 @@ def _find_repositories():
     """
     current_dir = os.getcwd()
     manifest = os.path.join(current_dir, ".repo", "manifest.xml")
+    log.debug("manifest: %s", manifest)
     repositories = []
-    if os.path.exists(manifest):
-        # manifest mode
+
+    def add_repo_if_exists(path_attr):
+        if not path_attr:
+            return
+        repo_path = os.path.join(current_dir, path_attr)
+        if os.path.exists(os.path.join(repo_path, ".git")):
+            repo_name = path_attr if path_attr != "." else "root"
+            repositories.append((repo_path, repo_name))
+
+    def parse_manifest_file(manifest_file, include_base_dir=None, visited=None):
+        if visited is None:
+            visited = set()
         try:
-            tree = ET.parse(manifest)
+            real_path = os.path.realpath(manifest_file)
+            if real_path in visited:
+                return
+            visited.add(real_path)
+            tree = ET.parse(manifest_file)
             root = tree.getroot()
             for project in root.findall(".//project"):
-                path = project.get("path")
-                if path:
-                    repo_path = os.path.join(current_dir, path)
-                    if os.path.exists(os.path.join(repo_path, ".git")):
-                        repo_name = path if path != "." else "root"
-                        repositories.append((repo_path, repo_name))
+                add_repo_if_exists(project.get("path"))
+            for inc in root.findall(".//include"):
+                name = inc.get("name")
+                if not name:
+                    continue
+                candidates = []
+                if include_base_dir:
+                    candidates.append(os.path.join(include_base_dir, name))
+                candidates.append(os.path.join(os.path.dirname(manifest_file), name))
+                include_path = next((c for c in candidates if os.path.exists(c)), None)
+                if include_path is None:
+                    log.warning("Include file not found: %s (searched: %s)", name, ", ".join(candidates))
+                    continue
+                parse_manifest_file(include_path, include_base_dir=os.path.dirname(include_path), visited=visited)
         except ET.ParseError as e:
-            log.error("Failed to parse .repo manifest: %s", e)
+            log.error("Failed to parse manifest '%s': %s", manifest_file, e)
+        except FileNotFoundError:
+            log.error("Manifest file not found: %s", manifest_file)
+
+    if os.path.exists(manifest):
+        include_base = os.path.join(current_dir, ".repo", "manifests")
+        parse_manifest_file(manifest, include_base_dir=include_base, visited=set())
     elif os.path.exists(os.path.join(current_dir, ".git")):
-        # single repo mode
         repositories.append((current_dir, "root"))
-    # Print repositories for debug
     log.debug("repositories found: %s", json.dumps(repositories, indent=2, ensure_ascii=False))
     return repositories
 
