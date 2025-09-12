@@ -85,6 +85,54 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Use repositories from env
     repositories = env.get("repositories", [])
 
+    def __execute_command(ctx, command, cwd=None, description=""):
+        """Execute command and log it to po_applied file.
+
+        Args:
+            ctx: PoApplyContext object containing po_applied_flag_path
+            command: Command to execute (list of strings)
+            cwd: Working directory for command execution
+            description: Optional description for the command
+
+        Returns:
+            subprocess.CompletedProcess: Result of command execution
+        """
+
+        # Format command for logging
+        if isinstance(command, list):
+            cmd_str = " ".join(f'"{arg}"' if " " in arg else arg for arg in command)
+        else:
+            cmd_str = str(command)
+
+        # Add working directory info if specified
+        if cwd:
+            cmd_str = f"cd {cwd} && {cmd_str}"
+
+        # Add description if provided
+        if description:
+            cmd_str = f"# {description}\n{cmd_str}"
+
+        # Execute command
+        try:
+            result = subprocess.run(
+                command,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            # Log command to po_applied file
+            if ctx.po_applied_flag_path:
+                with open(ctx.po_applied_flag_path, "a", encoding="utf-8") as f:
+                    f.write(f"{cmd_str}\n")
+
+            return result
+
+        except Exception as e:
+            log.error("Command execution failed: %s", e)
+            raise
+
     @dataclass
     class PoApplyContext:
         """Context container for po_apply execution.
@@ -149,12 +197,11 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 patch_file = os.path.join(current_dir, fname)
                 log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
                 try:
-                    result = subprocess.run(
+                    result = __execute_command(
+                        ctx,
                         ["git", "apply", patch_file],
                         cwd=patch_target,
-                        capture_output=True,
-                        text=True,
-                        check=False,
+                        description=f"Apply patch {os.path.basename(patch_file)} to {repo_name}",
                     )
                     log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
                     log.debug(
@@ -244,7 +291,14 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 if dest_dir:
                     os.makedirs(dest_dir, exist_ok=True)
                 try:
-                    shutil.copy2(src_file, dest_file)
+                    # Use __execute_command for copy operation
+                    result = __execute_command(ctx, ["cp", src_file, dest_file], description="Copy override file")
+
+                    if result.returncode != 0:
+                        log.error("Failed to copy override file '%s' to '%s': %s", src_file, dest_file, result.stderr)
+                        return False
+
+                    log.info("Copied override file '%s' to '%s'", src_file, dest_file)
                 except OSError as e:
                     log.error(
                         "Failed to copy override file '%s' to '%s': '%s'",
@@ -376,10 +430,17 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     target_file = target_path
 
                 # Create target directory if it doesn't exist
-                os.makedirs(os.path.dirname(target_file), exist_ok=True)
+                target_dir = os.path.dirname(target_file)
+                if target_dir:
+                    os.makedirs(target_dir, exist_ok=True)
 
-                # Copy the file
-                shutil.copy2(source_file, target_file)
+                # Use __execute_command for copy operation
+                result = __execute_command(ctx, ["cp", source_file, target_file], description="Copy custom file")
+
+                if result.returncode != 0:
+                    log.error("Failed to copy file '%s' to '%s': %s", source_file, target_file, result.stderr)
+                    return False
+
                 log.info("Copied file '%s' to '%s'", source_file, target_file)
                 return True
 
@@ -457,7 +518,18 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.info("po '%s' already applied, skipping", po_name)
             continue
 
-        log.info("po '%s' is being applied", po_name)
+        log.info("po '%s' starting to apply patch and override", po_name)
+
+        # Create po_applied file header first
+        try:
+            os.makedirs(po_path, exist_ok=True)
+            with open(po_applied_flag_path, "w", encoding="utf-8") as f:
+                f.write(f"applied for project {project_name}\n")
+                f.write("# Operation log - commands executed during po_apply:\n")
+                f.write("# Commands can be re-executed manually for debugging\n\n")
+        except OSError as e:
+            log.error("Failed to create applied flag for po '%s': '%s'", po_name, e)
+            return False
 
         ctx = PoApplyContext(
             po_name=po_name,
@@ -478,16 +550,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         # Apply custom from unified custom directory via ctx
         if not __apply_custom(ctx):
             log.error("po apply aborted due to custom po error in po: '%s'", po_name)
-            return False
-
-        # Mark this PO as applied
-        try:
-            os.makedirs(po_path, exist_ok=True)
-            with open(po_applied_flag_path, "w", encoding="utf-8") as f:
-                f.write(f"applied for project {project_name}\n")
-            log.info("po '%s' has been processed and marked as applied", po_name)
-        except OSError as e:
-            log.error("Failed to write applied flag for po '%s': '%s'", po_name, e)
             return False
 
         log.info("po '%s' has been processed", po_name)

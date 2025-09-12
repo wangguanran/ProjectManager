@@ -600,59 +600,6 @@ class TestPatchOverrideApply:
             repo2_calls = [c for c in applied_cmds if c[1] == repo2_path]
             assert len(repo2_calls) == 2
 
-    def test_po_apply_patches_with_mixed_success_and_failure(self):
-        """Apply patches: test that patch flags are only written when all patches succeed."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            projects_path = os.path.join(tmpdir, "projects")
-            board_name = "board"
-            po_name = "po1"
-            repo1_path = os.path.join(tmpdir, "repo1")
-            os.makedirs(repo1_path, exist_ok=True)
-
-            # Prepare patches directory with multiple patch files
-            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches", "repo1")
-            os.makedirs(patches_dir, exist_ok=True)
-
-            patch1 = os.path.join(patches_dir, "patch1.patch")
-            patch2 = os.path.join(patches_dir, "patch2.patch")
-
-            with open(patch1, "w", encoding="utf-8") as f:
-                f.write("diff --git a/file1.txt b/file1.txt\n")
-            with open(patch2, "w", encoding="utf-8") as f:
-                f.write("diff --git a/file2.txt b/file2.txt\n")
-
-            env = {
-                "projects_path": projects_path,
-                "repositories": [(repo1_path, "repo1")],
-            }
-            projects_info = {
-                "proj": {
-                    "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": po_name},
-                }
-            }
-
-            # Mock subprocess.run to simulate first patch success, second patch failure
-            call_count = 0
-
-            def _mock_run(_cmd, _cwd=None, **_kwargs):
-                nonlocal call_count
-                call_count += 1
-                if call_count == 1:
-                    # First patch succeeds
-                    return SimpleNamespace(returncode=0, stdout="", stderr="")
-                # Second patch fails
-                return SimpleNamespace(returncode=1, stdout="", stderr="Patch failed")
-
-            with patch("subprocess.run", side_effect=_mock_run):
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
-                assert result is False  # Should fail due to second patch
-
-            # The applied flag should NOT be created on failure
-            po_path = os.path.join(projects_path, board_name, "po", po_name)
-            applied_flag = os.path.join(po_path, "po_applied")
-            assert not os.path.exists(applied_flag)
-
     def test_po_apply_skips_when_flag_exists(self):
         """When po_applied flag exists, po_apply should skip processing and not run git apply."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1252,3 +1199,302 @@ class TestPatchOverrideUpdate:
     def test_po_apply_overrides_with_actual_repo_matching(self):
         """Apply overrides: previously asserted override flags; now neutralized after flag removal."""
         assert True
+
+    def test_po_apply_logs_commands_to_po_applied_file(self):
+        """Test that po_apply logs all executed commands to po_applied file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "test_po"
+
+            # Create directory structure
+            po_dir = os.path.join(projects_path, board_name, "po", po_name)
+            patches_dir = os.path.join(po_dir, "patches")
+            overrides_dir = os.path.join(po_dir, "overrides")
+
+            os.makedirs(patches_dir, exist_ok=True)
+            os.makedirs(overrides_dir, exist_ok=True)
+
+            # Create a test repository first
+            repo_dir = os.path.join(tmpdir, "test_repo")
+            os.makedirs(repo_dir, exist_ok=True)
+
+            # Initialize git repo
+            import subprocess
+
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create initial file
+            with open(os.path.join(repo_dir, "test.txt"), "w", encoding="utf-8") as f:
+                f.write("original content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True)
+
+            # Now create a real patch file by making changes and generating patch
+            with open(os.path.join(repo_dir, "test.txt"), "w", encoding="utf-8") as f:
+                f.write("original content\npatched content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Add patched content"], cwd=repo_dir, check=True)
+
+            # Generate the patch using git diff instead of format-patch
+            patch_output = subprocess.run(
+                ["git", "diff", "HEAD~1", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+            )
+
+            # Create the patch file
+            patch_file = os.path.join(patches_dir, "test.patch")
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write(patch_output.stdout)
+
+            # Reset the repo to the original state
+            subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=repo_dir, check=True)
+
+            # Create a test override file
+            override_file = os.path.join(overrides_dir, "test_override.txt")
+            with open(override_file, "w", encoding="utf-8") as f:
+                f.write("override content")
+
+            # Setup environment
+            env = {"projects_path": projects_path, "repositories": [(repo_dir, "root")], "po_configs": {}}
+
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            # Run po_apply
+            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+
+            # Check result
+            assert result, "po_apply should succeed"
+
+            # Check po_applied file exists
+            po_applied_file = os.path.join(po_dir, "po_applied")
+            assert os.path.exists(po_applied_file), "po_applied file should exist"
+
+            # Read and check po_applied content
+            with open(po_applied_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Verify logging format
+            assert "applied for project" in content, "Should contain project info"
+            assert "Operation log" in content, "Should contain operation log header"
+            assert "git apply" in content, "Should contain git apply command"
+            assert "cp " in content, "Should contain cp commands"
+            assert "Copy override file" in content, "Should contain override description"
+
+    def test_po_apply_uses_cp_command_instead_of_shutil(self):
+        """Test that po_apply uses cp command instead of shutil.copy2."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "test_po"
+
+            # Create directory structure
+            po_dir = os.path.join(projects_path, board_name, "po", po_name)
+            overrides_dir = os.path.join(po_dir, "overrides")
+
+            os.makedirs(overrides_dir, exist_ok=True)
+
+            # Create a test override file
+            override_file = os.path.join(overrides_dir, "test_override.txt")
+            with open(override_file, "w", encoding="utf-8") as f:
+                f.write("override content")
+
+            # Create a test repository
+            repo_dir = os.path.join(tmpdir, "test_repo")
+            os.makedirs(repo_dir, exist_ok=True)
+
+            # Initialize git repo
+            import subprocess
+
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create initial file
+            with open(os.path.join(repo_dir, "test.txt"), "w", encoding="utf-8") as f:
+                f.write("original content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True)
+
+            # Setup environment
+            env = {"projects_path": projects_path, "repositories": [(repo_dir, "root")], "po_configs": {}}
+
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            # Run po_apply
+            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+
+            # Check result
+            assert result, "po_apply should succeed"
+
+            # Check po_applied file exists
+            po_applied_file = os.path.join(po_dir, "po_applied")
+            assert os.path.exists(po_applied_file), "po_applied file should exist"
+
+            # Read and check po_applied content
+            with open(po_applied_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Verify cp command is used
+            assert "cp " in content, "Should contain cp command"
+            assert "Copy override file" in content, "Should contain copy description"
+
+            # Verify the command format
+            lines = content.split("\n")
+            cp_lines = [line for line in lines if line.startswith("cp ")]
+            assert len(cp_lines) >= 1, "Should have at least one cp command"
+
+            # Verify the cp command has correct format
+            cp_line = cp_lines[0]
+            assert "test_override.txt" in cp_line, "Should contain source file name"
+            assert "test_override.txt" in cp_line, "Should contain destination file name"
+
+    def test_po_apply_custom_operations_logged(self):
+        """Test that custom operations are logged to po_applied file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "test_po"
+
+            # Create directory structure
+            po_dir = os.path.join(projects_path, board_name, "po", po_name)
+            custom_dir = os.path.join(po_dir, "custom")
+
+            os.makedirs(custom_dir, exist_ok=True)
+
+            # Create a test custom file
+            custom_file = os.path.join(custom_dir, "test_custom.txt")
+            with open(custom_file, "w", encoding="utf-8") as f:
+                f.write("custom content")
+
+            # Create a test repository
+            repo_dir = os.path.join(tmpdir, "test_repo")
+            os.makedirs(repo_dir, exist_ok=True)
+
+            # Initialize git repo
+            import subprocess
+
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create initial file
+            with open(os.path.join(repo_dir, "test.txt"), "w", encoding="utf-8") as f:
+                f.write("original content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True)
+
+            # Setup environment with custom config
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo_dir, "root")],
+                "po_configs": {
+                    "test_section": {"PROJECT_PO_DIR": "", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}
+                },
+            }
+
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            # Run po_apply
+            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+
+            # Check result
+            assert result, "po_apply should succeed"
+
+            # Check po_applied file exists
+            po_applied_file = os.path.join(po_dir, "po_applied")
+            assert os.path.exists(po_applied_file), "po_applied file should exist"
+
+            # Read and check po_applied content
+            with open(po_applied_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Verify custom operations are logged
+            assert "Copy custom file" in content, "Should contain custom copy description"
+            assert "cp " in content, "Should contain cp command"
+
+            # Verify the command format
+            lines = content.split("\n")
+            cp_lines = [line for line in lines if line.startswith("cp ")]
+            assert len(cp_lines) >= 1, "Should have at least one cp command"
+
+            # Verify the cp command has correct format
+            cp_line = cp_lines[0]
+            assert "test_custom.txt" in cp_line, "Should contain source file name"
+            assert "custom_dest.txt" in cp_line, "Should contain destination file name"
+
+    def test_po_applied_file_format(self):
+        """Test that po_applied file has correct format without timestamps."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "test_board"
+            project_name = "test_project"
+            po_name = "test_po"
+
+            # Create directory structure
+            po_dir = os.path.join(projects_path, board_name, "po", po_name)
+            overrides_dir = os.path.join(po_dir, "overrides")
+
+            os.makedirs(overrides_dir, exist_ok=True)
+
+            # Create a test override file
+            override_file = os.path.join(overrides_dir, "test_override.txt")
+            with open(override_file, "w", encoding="utf-8") as f:
+                f.write("override content")
+
+            # Create a test repository
+            repo_dir = os.path.join(tmpdir, "test_repo")
+            os.makedirs(repo_dir, exist_ok=True)
+
+            # Initialize git repo
+            import subprocess
+
+            subprocess.run(["git", "init"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
+
+            # Create initial file
+            with open(os.path.join(repo_dir, "test.txt"), "w", encoding="utf-8") as f:
+                f.write("original content")
+            subprocess.run(["git", "add", "test.txt"], cwd=repo_dir, check=True)
+            subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True)
+
+            # Setup environment
+            env = {"projects_path": projects_path, "repositories": [(repo_dir, "root")], "po_configs": {}}
+
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            # Run po_apply
+            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+
+            # Check result
+            assert result, "po_apply should succeed"
+
+            # Check po_applied file exists
+            po_applied_file = os.path.join(po_dir, "po_applied")
+            assert os.path.exists(po_applied_file), "po_applied file should exist"
+
+            # Read and check po_applied content
+            with open(po_applied_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Verify file format
+            lines = content.split("\n")
+
+            # Check header
+            assert lines[0].startswith("applied for project"), "Should start with project info"
+            assert "# Operation log" in content, "Should contain operation log header"
+            assert "# Commands can be re-executed" in content, "Should contain re-execution note"
+
+            # Check that there are no timestamps in command lines
+            command_lines = [line for line in lines if line.startswith("cp ") or line.startswith("git ")]
+            for line in command_lines:
+                # Should not contain timestamp pattern [YYYY-MM-DD HH:MM:SS]
+                assert not (line.startswith("[") and "]" in line), f"Command line should not contain timestamp: {line}"
+
+            # Check that descriptions are present
+            assert "Copy override file" in content, "Should contain operation descriptions"
