@@ -414,7 +414,7 @@ class TestPatchOverrideApply:
                 "repositories": [],
                 "po_configs": {
                     "po-custom": {
-                        "PROJECT_PO_DIR": custom_dir,
+                        "PROJECT_PO_DIR": "",
                         "PROJECT_PO_FILE_COPY": f"*:{dest_dir}{os.sep}",
                     }
                 },
@@ -462,7 +462,7 @@ class TestPatchOverrideApply:
                 "repositories": [],
                 "po_configs": {
                     "po-custom": {
-                        "PROJECT_PO_DIR": custom_dir,
+                        "PROJECT_PO_DIR": "",
                         "PROJECT_PO_FILE_COPY": f"data/*:{dest_data}",
                     }
                 },

@@ -82,40 +82,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Use repositories from env
     repositories = env.get("repositories", [])
 
-    def __apply_custom_po(po_name, po_custom_dir, po_config_dict):
-        """Apply custom po configuration for the specified po."""
-        log.debug("po_name: '%s', po_custom_dir: '%s'", po_name, po_custom_dir)
-
-        file_copy_config = po_config_dict.get("PROJECT_PO_FILE_COPY", "")
-        if not file_copy_config:
-            log.warning("No PROJECT_PO_FILE_COPY configuration found for po: '%s'", po_name)
-            return True
-
-        log.debug("File copy config for po '%s': '%s'", po_name, file_copy_config)
-
-        # Parse file copy configuration
-        copy_rules = []
-        for line in file_copy_config.split("\\"):
-            line = line.strip()
-            if not line:
-                continue
-            if ":" in line:
-                source, target = line.split(":", 1)
-                copy_rules.append((source.strip(), target.strip()))
-
-        # Execute file copy operations
-        for source_pattern, target_path in copy_rules:
-            if not __execute_file_copy(po_name, po_custom_dir, source_pattern, target_path):
-                log.error(
-                    "Failed to execute file copy for po: '%s', source: '%s', target: '%s'",
-                    po_name,
-                    source_pattern,
-                    target_path,
-                )
-                return False
-
-        return True
-
     def __execute_file_copy(po_name, po_custom_dir, source_pattern, target_path):
         """Execute a single file copy operation with wildcard and directory support.
 
@@ -225,19 +191,23 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     class PoApplyContext:
         """Context container for po_apply execution.
 
-        Holds frequently used paths and config for a single PO during apply:
+        Holds frequently used paths and configuration for a single PO during apply:
         - po_name: current PO name
-        - po_patch_dir: directory containing patch files
-        - po_override_dir: directory containing override files
+        - po_patch_dir: directory containing patch files (po/<po_name>/patches)
+        - po_override_dir: directory containing override files (po/<po_name>/overrides)
+        - po_custom_dir: unified custom root directory (po/<po_name>/custom)
         - po_applied_flag_path: path to the applied-flag file for this PO
         - exclude_files: mapping of PO name to a set of excluded relative file paths
+        - po_configs: custom configuration sections from env used to drive custom apply
         """
 
         po_name: str
         po_patch_dir: str
         po_override_dir: str
+        po_custom_dir: str
         po_applied_flag_path: str
         exclude_files: Dict[str, set]
+        po_configs: Dict
 
     def __apply_patch(ctx: PoApplyContext):
         """Apply patches for the specified po."""
@@ -388,8 +358,84 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
         return True
 
-    # Get po configurations from env
-    po_configs = env.get("po_configs", {})
+    def __apply_custom(ctx: PoApplyContext):
+        """Apply all custom configurations for the specified po.
+
+        - All custom files are expected under po/<po_name>/custom[/subdir]
+        - Each section in po_configs may specify PROJECT_PO_DIR as a subdir under custom
+        - PROJECT_PO_FILE_COPY rules are executed relative to the resolved custom subdir
+        """
+        log.debug("po_name: '%s', po_custom_dir: '%s'", ctx.po_name, ctx.po_custom_dir)
+        if not os.path.isdir(ctx.po_custom_dir):
+            log.debug("No custom dir for po: '%s'", ctx.po_name)
+            return True
+        log.debug("applying custom for po: '%s'", ctx.po_name)
+
+        if not isinstance(ctx.po_configs, dict) or not ctx.po_configs:
+            log.debug("No po_configs provided for custom apply of po: '%s'", ctx.po_name)
+            return True
+
+        for section_name, section_config in ctx.po_configs.items():
+            po_config_dict = section_config
+            po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
+
+            # Without normalization: use custom root when empty; otherwise join relative to custom root
+            section_custom_dir = os.path.join(ctx.po_custom_dir, po_subdir) if po_subdir else ctx.po_custom_dir
+            if not os.path.isdir(section_custom_dir):
+                log.debug(
+                    "Custom directory '%s' not found for po '%s' (section '%s')",
+                    section_custom_dir,
+                    ctx.po_name,
+                    section_name,
+                )
+                continue
+
+            log.info(
+                "Processing custom po '%s' with directory '%s' (from section '%s')",
+                ctx.po_name,
+                (
+                    os.path.relpath(
+                        section_custom_dir, start=os.path.join(os.path.dirname(ctx.po_custom_dir), ctx.po_name)
+                    )
+                    if os.path.isdir(section_custom_dir)
+                    else section_custom_dir
+                ),
+                section_name,
+            )
+
+            file_copy_config = po_config_dict.get("PROJECT_PO_FILE_COPY", "")
+            if not file_copy_config:
+                log.warning(
+                    "No PROJECT_PO_FILE_COPY configuration found for po: '%s' (section '%s')",
+                    ctx.po_name,
+                    section_name,
+                )
+                continue
+
+            log.debug("File copy config for po '%s': '%s'", ctx.po_name, file_copy_config)
+
+            # Parse file copy configuration
+            copy_rules = []
+            for line in file_copy_config.split("\\"):
+                line = line.strip()
+                if not line:
+                    continue
+                if ":" in line:
+                    source, target = line.split(":", 1)
+                    copy_rules.append((source.strip(), target.strip()))
+
+            # Execute file copy operations for this section
+            for source_pattern, target_path in copy_rules:
+                if not __execute_file_copy(ctx.po_name, section_custom_dir, source_pattern, target_path):
+                    log.error(
+                        "Failed to execute file copy for po: '%s', source: '%s', target: '%s'",
+                        ctx.po_name,
+                        source_pattern,
+                        target_path,
+                    )
+                    return False
+
+        return True
 
     for po_name in apply_pos:
         # Check applied flag per PO and skip if already applied
@@ -399,16 +445,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.info("po '%s' already applied, skipping", po_name)
             continue
 
-        # Always process standard patches and overrides
-        po_patch_dir = os.path.join(po_dir, po_name, "patches")
-        po_override_dir = os.path.join(po_dir, po_name, "overrides")
+        log.info("po '%s' is being applied", po_name)
 
         ctx = PoApplyContext(
             po_name=po_name,
-            po_patch_dir=po_patch_dir,
-            po_override_dir=po_override_dir,
+            po_patch_dir=os.path.join(po_dir, po_name, "patches"),
+            po_override_dir=os.path.join(po_dir, po_name, "overrides"),
             po_applied_flag_path=po_applied_flag_path,
             exclude_files=exclude_files,
+            po_custom_dir=os.path.join(po_dir, po_name, "custom"),
+            po_configs=env.get("po_configs", {}),
         )
 
         if not __apply_patch(ctx):
@@ -417,23 +463,10 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         if not __apply_override(ctx):
             log.error("po apply aborted due to override error in po: '%s'", po_name)
             return False
-
-        # Check for custom po configurations in common.ini
-        for section_name, section_config in po_configs.items():
-            po_config_dict = section_config
-            po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
-            if po_subdir:
-                po_custom_dir = os.path.join(po_dir, po_name, po_subdir)
-                if os.path.isdir(po_custom_dir):
-                    log.info(
-                        "Processing custom po '%s' with directory '%s' (from section '%s')",
-                        po_name,
-                        po_subdir,
-                        section_name,
-                    )
-                    if not __apply_custom_po(po_name, po_custom_dir, po_config_dict):
-                        log.error("po apply aborted due to custom po error in po: '%s'", po_name)
-                        return False
+        # Apply custom from unified custom directory via ctx
+        if not __apply_custom(ctx):
+            log.error("po apply aborted due to custom po error in po: '%s'", po_name)
+            return False
 
         # Mark this PO as applied
         try:
