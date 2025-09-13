@@ -48,6 +48,8 @@ Follow the conventional commit format:
 4. **No period at the end of the subject line**
 5. **Separate subject from body with blank line**
 6. **Use body to explain what and why vs. how**
+7. **Avoid line breaks in commit message body**: Use single line descriptions or proper multi-line format
+8. **Escape special characters**: Use `\n` for actual line breaks in multi-line messages
 
 ## Analysis Steps
 
@@ -57,6 +59,78 @@ When analyzing changes with `git diff --cached | cat`:
 2. Determine the scope if applicable
 3. Write a clear, concise description
 4. Consider if additional body text is needed for complex changes
+
+## Multi-line Commit Messages
+
+When creating multi-line commit messages, follow these rules:
+
+### Correct Format
+```bash
+git commit -m "type: short description" -m "Detailed explanation of changes" -m "- Bullet point 1" -m "- Bullet point 2"
+```
+
+### Incorrect Format (causes display issues)
+```bash
+git commit -m "type: short description\n- Bullet point 1\n- Bullet point 2"
+```
+
+**Result**: The `\n` characters appear literally in the commit message instead of creating line breaks:
+```
+test: demonstrate incorrect format
+
+This is a test\n- Bullet point 1\n- Bullet point 2
+```
+
+### Best Practices for Multi-line Messages
+1. Use separate `-m` flags for each line
+2. Start bullet points with `- ` (dash and space)
+3. Keep each line under 72 characters
+4. Use present tense for bullet points
+5. Group related changes together
+6. **No empty lines between bullet points** - each `-m` flag creates one line
+7. Only use empty lines to separate the subject from the body (automatic)
+
+### Example of Correct Multi-line Commit
+```bash
+git commit -m "docs(commit-message): improve multi-line commit message examples" \
+  -m "- Add detailed explanation of incorrect format with actual result example" \
+  -m "- Show how \\n characters appear literally instead of creating line breaks" \
+  -m "- Add complete example showing both command and resulting commit message" \
+  -m "- Improve clarity of multi-line commit message formatting guidelines" \
+  -m "- Enhance documentation with practical before/after examples"
+```
+
+**Result**: Clean, properly formatted commit message:
+```
+docs(commit-message): improve multi-line commit message examples
+
+- Add detailed explanation of incorrect format with actual result example
+- Show how \n characters appear literally instead of creating line breaks
+- Add complete example showing both command and resulting commit message
+- Improve clarity of multi-line commit message formatting guidelines
+- Enhance documentation with practical before/after examples
+```
+
+### Wrong Way (creates unwanted empty lines)
+```bash
+git commit -m "docs: improve examples" \
+  -m "- First point" \
+  -m "" \
+  -m "- Second point" \
+  -m "" \
+  -m "- Third point"
+```
+
+**Result**: Unwanted empty lines between points:
+```
+docs: improve examples
+
+- First point
+
+- Second point
+
+- Third point
+```
 
 ## Common Patterns
 
