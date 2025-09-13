@@ -23,10 +23,10 @@ alwaysApply: false
 3. **Minimal Coverage**: Start with basic happy path test
 4. **Verify Execution**: Ensure test runs and passes
 5. **Code Quality Check**: After test PASS, run formatting and linting:
-   - Execute `./format.sh` to format the code
-   - Run `pylint` to check code quality
+   - Execute `make format` to format the code
+   - Run `make lint` to check code quality
    - Fix any formatting or linting errors
-   - **Run complete test suite with `pytest`** - Validate against full test suite
+   - **Run complete test suite with `make test`** - Validate against full test suite
 6. **Expand Coverage**: Add edge cases and error scenarios only after quality checks pass
 7. **Move to Next**: Proceed to next function only after current is complete
 
@@ -331,7 +331,7 @@ def setup_method(self):
 2. **Create Basic Test** - Generate minimal test case for happy path
 3. **Run and Verify** - Execute test and ensure it passes
 4. **Code Quality Check** - After test PASS:
-   - Run `./format.sh` to format the code
+   - Run `make format` to format the code
    - Execute `pylint` to check code quality
    - Fix any formatting or linting errors
    - **Execute `pytest` to run complete test suite** - Validate against all tests
@@ -342,7 +342,7 @@ def setup_method(self):
 
 ```bash
 # Step 1: Format code
-./format.sh
+make format
 
 # Step 2: Lint check
 pylint test_file.py
@@ -397,7 +397,7 @@ pytest
 
 ### After Each Test PASS:
 
-1. **Format Code**: Run `./format.sh` to ensure consistent code formatting
+1. **Format Code**: Run `make format` to ensure consistent code formatting
 2. **Lint Check**: Execute `pylint` to identify code quality issues
 3. **Fix Issues**: Address any formatting or linting errors
 4. **Re-run Tests**: **Run complete test suite with `pytest`** - Do NOT run individual test files
@@ -425,7 +425,7 @@ python -m pytest tests/test_specific.py
 ### Quality Check Commands:
 ```bash
 # Format the code
-./format.sh
+make format
 
 # Run pylint for code quality
 pylint test_file.py
@@ -455,7 +455,7 @@ pytest
 ### After Creating Test Classes:
 
 - [ ] **Run complete test suite** - Execute `pytest` to validate against full test suite
-- [ ] **Format code** - Run `./format.sh` to ensure consistent formatting
+- [ ] **Format code** - Run `make format` to ensure consistent formatting
 - [ ] **Lint check** - Execute `pylint` to identify code quality issues
 - [ ] **Fix any issues** - Address formatting or linting errors
 - [ ] **Re-run complete suite** - Execute `pytest` again after fixes

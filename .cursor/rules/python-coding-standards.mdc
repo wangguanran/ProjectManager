@@ -5,91 +5,139 @@ description: Python coding standards - no Chinese comments, use f-strings
 
 # Python Coding Standards
 
-## Code Style Requirements
+## 1. Development Workflow - Task Decomposition and Testing
 
-### 1. Comments and Documentation
+### 1.1 Task Decomposition Requirements
+- **Break down complex modifications into smaller, manageable tasks**
+- **Identify and locate corresponding test files** for each script being modified
+- **Complete one task at a time** - avoid implementing multiple requirements simultaneously
+- **Define clear, specific subtasks** with measurable outcomes
+
+### 1.2 Test-Driven Development Process
+For each subtask, follow this sequence:
+1. **Write test cases first** - Add corresponding test cases for the task
+2. **Implement the feature** - Write code to make tests pass
+3. **Verify test execution** - Ensure all test cases pass
+4. **Format code** - Run `make format` to format the code
+5. **Fix linting errors** - Resolve any linting issues
+6. **Add test case documentation** - **MANDATORY**: Record test case in test-case.mdc following the template
+7. **Stage changes** - Use `git add` to stage the changes
+8. **Move to next task** - Only proceed to the next subtask after completing the current one
+
+### 1.3 Quality Gates
+Each task completion must satisfy:
+- ✅ All test cases pass
+- ✅ Code is properly formatted
+- ✅ No linting errors
+- ✅ Test case documented in test-case.mdc
+- ✅ Changes are staged in git
+- ✅ Task is fully functional
+
+### 1.4 Example Workflow
+```bash
+# 1. Identify test file
+find . -name "*test*" -type f | grep script_name
+
+# 2. Write test case
+# Add test to corresponding test file
+
+# 3. Implement feature
+# Write code to pass the test
+
+# 4. Run tests
+make test
+
+# 5. Format code
+make format
+
+# 6. Check linting
+make lint
+
+# 7. Document test case
+# Add test case record to test-case.mdc following the template
+
+# 8. Stage changes
+git add script_name.py tests/test_script_name.py .cursor/rules/test-case.mdc
+
+# 9. Proceed to next task
+```
+
+## 2. Test Case Documentation Requirements
+
+### 2.1 Mandatory Test Case Recording
+- **Every code modification MUST be accompanied by test case documentation**
+- **Test cases must be recorded in test-case.mdc following the established template**
+- **Test case ID must follow M##-TC#### naming convention**
+- **All required fields must be populated before proceeding to next task**
+
+### 2.2 Test Case Documentation Process
+1. **Identify the function/method being modified**
+2. **Generate unique test case ID** using M##-TC#### format
+3. **Fill in all required fields** in the test case template
+4. **Add test case record to test-case.mdc**
+5. **Verify documentation completeness** before staging changes
+
+### 2.3 Test Case Template Fields (Required)
+- 测试用例ID (Test Case ID)
+- 模块 (Module)
+- 函数/方法 (Function/Method)
+- 测试类型 (Test Type)
+- 测试名称 (Test Name)
+- 优先级 (Priority)
+- 测试场景 (Test Scenario)
+- 测试步骤 (Test Steps)
+- 输入数据 (Input Data)
+- 预期结果 (Expected Result)
+- 测试文件 (Test File)
+- 测试方法 (Test Method)
+- 自动化 (Automation)
+- 状态 (Status)
+- 创建日期 (Created Date)
+
+### 2.4 Quality Assurance
+- [ ] Test case ID follows naming convention
+- [ ] All required fields are populated
+- [ ] Test scenario is clearly described
+- [ ] Test steps are detailed and executable
+- [ ] Expected results are specific and measurable
+- [ ] Test case is added to test-case.mdc
+- [ ] Documentation is staged with code changes
+
+## 3. Code Style Requirements
+
+### 3.1 Comments and Documentation
 - **NO Chinese comments**: All comments must be written in English
 - Use clear, descriptive English comments for code documentation
 - Follow PEP 257 docstring conventions for function and class documentation
 
-### 2. String Formatting
+### 3.2 String Formatting
 - **Use f-string expressions**: Prefer using f"" format strings
 - **Avoid .format() method**: Avoid using `.format()` method when possible
 - **Avoid % operator**: Avoid using `%` operator for string formatting
-- Examples:
-  ```python
-  # ✅ Use f-strings (preferred)
-  name = "John"
-  message = f"Hello {name}"
-  
-  # ❌ Avoid .format() method
-  name = "John"
-  message = "Hello {}".format(name)
-  
-  # ❌ Avoid % operator
-  name = "John"
-  message = "Hello %s" % name
-  ```
 
-### 3. General Python Best Practices
+### 3.3 General Python Best Practices
 - Follow PEP 8 style guidelines
 - Use meaningful variable and function names
 - Keep functions small and focused
 - Add type hints where appropriate
 - Use proper exception handling
 
-### 4. Code Examples
-
-#### Correct Comment Style:
-```python
-# This function calculates the total price including tax
-def calculate_total(price, tax_rate):
-    """
-    Calculate total price with tax included.
-    
-    Args:
-        price (float): Base price
-        tax_rate (float): Tax rate as decimal
-        
-    Returns:
-        float: Total price with tax
-    """
-    tax_amount = price * tax_rate
-    total = price + tax_amount
-    return total
-```
-
-#### Correct String Formatting:
-```python
-# Using f-string for single variable
-user_name = "Alice"
-greeting = f"Welcome, {user_name}!"
-
-# Using f-string for numbers
-age = 25
-info = f"User is {age} years old"
-
-# Multiple variables with f-string
-name = "Bob"
-age = 30
-city = "New York"
-profile = f"Name: {name}, Age: {age}, City: {city}"
-
-# Complex expressions in f-string
-price = 19.99
-tax_rate = 0.08
-total = f"Total: ${price * (1 + tax_rate):.2f}"
-```
-
-### 5. Code Formatting
-- **Always run format.sh after modifying Python code**: Execute `./format.sh` to format code
-- This ensures consistent code style across the project
-- Formatting should be done before committing changes
-- The format.sh script applies consistent indentation, spacing, and style rules
-
-### 6. File Structure
+### 3.4 File Structure
 - All Python files should follow these standards
 - Import statements at the top
 - Constants defined after imports
 - Classes and functions with proper documentation
 - Main execution code in `if __name__ == "__main__":` block
+
+## 4. Code Formatting and Quality
+
+### 4.1 Code Formatting
+- **Always run format.sh after modifying Python code**: Execute `make format` to format code
+- This ensures consistent code style across the project
+- Formatting should be done before committing changes
+- The format.sh script applies consistent indentation, spacing, and style rules
+
+### 4.2 Linting and Quality Checks
+- Run `make lint` to check code quality
+- Fix all linting errors before proceeding
+- Ensure code follows project standards
