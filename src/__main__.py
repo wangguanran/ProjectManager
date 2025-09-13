@@ -191,6 +191,61 @@ def _load_all_projects(projects_path, common_configs):
         if project in invalid_projects:
             continue
         project_info["config"] = merge_config(project)
+
+    # Write project information to board directories
+    def __write_projects_info_to_boards(projects_info, projects_path):
+        """
+        Write project information to board directories.
+
+        Args:
+            projects_info (dict): Dictionary containing project information
+            projects_path (str): Path to projects directory
+        """
+        try:
+            # Group projects by board_name
+            board_projects = {}
+            for project_name, project_info in projects_info.items():
+                board_name = project_info.get("board_name")
+                if board_name:
+                    if board_name not in board_projects:
+                        board_projects[board_name] = []
+                    board_projects[board_name].append(
+                        {
+                            "project_name": project_name,
+                            "config": project_info.get("config", {}),
+                            "parent": project_info.get("parent"),
+                            "children": project_info.get("children", []),
+                            "ini_file": project_info.get("ini_file"),
+                        }
+                    )
+
+            # Write project information to each board directory
+            for board_name, projects in board_projects.items():
+                board_path = os.path.join(projects_path, board_name)
+                if not os.path.exists(board_path):
+                    log.warning("Board directory does not exist: %s", board_path)
+                    continue
+
+                # Prepare project data for JSON output
+                project_data = {
+                    "board_name": board_name,
+                    "board_path": board_path,
+                    "last_updated": datetime.now().isoformat(),
+                    "projects": projects,
+                }
+
+                # Write to projects.json in board directory
+                projects_json_path = os.path.join(board_path, "projects.json")
+                with open(projects_json_path, "w", encoding="utf-8") as f:
+                    json.dump(project_data, f, indent=2, ensure_ascii=False)
+
+                log.debug("Project information written to: %s", projects_json_path)
+
+        except (OSError, IOError, ValueError) as e:
+            log.error("Failed to write project information to board directories: %s", e)
+
+    __write_projects_info_to_boards(projects_info, projects_path)
+
     return projects_info
 
 
