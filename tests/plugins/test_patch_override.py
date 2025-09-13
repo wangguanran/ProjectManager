@@ -34,117 +34,122 @@ class TestPatchOverrideApply:
     def test_po_apply_basic_success(self):
         """Test po_apply with basic successful case."""
         # Arrange
-        env = {
-            "projects_path": "/tmp/projects",
-            "repositories": [("/tmp/repo1", "repo1"), ("/tmp/repo2", "repo2")],
-        }
-        projects_info = {"test_project": {"board_name": "test_board", "config": {"PROJECT_PO_CONFIG": "po1"}}}
-        project_name = "test_project"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {
+                "projects_path": os.path.join(tmpdir, "projects"),
+                "repositories": [(os.path.join(tmpdir, "repo1"), "repo1"), (os.path.join(tmpdir, "repo2"), "repo2")],
+            }
+            projects_info = {"test_project": {"board_name": "test_board", "config": {"PROJECT_PO_CONFIG": "po1"}}}
+            project_name = "test_project"
 
-        with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
+            with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
 
-            mock_join.side_effect = lambda *args: "/".join(args)
-            mock_isdir.return_value = False  # No patches directory exists
+                mock_join.side_effect = lambda *args: "/".join(args)
+                mock_isdir.return_value = False  # No patches directory exists
 
-            # Act
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+                # Act
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
 
-            # Assert
-            assert result is True
-            # Check that the method was called with the expected arguments
-            mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
-            mock_log.info.assert_any_call("po apply finished for project: '%s'", project_name)
+                # Assert
+                assert result is True
+                # Check that the method was called with the expected arguments
+                mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
+                mock_log.info.assert_any_call("po apply finished for project: '%s'", project_name)
 
     def test_po_apply_missing_board_name(self):
         """Test po_apply when board_name is missing from project config."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {"test_project": {}}  # No board_name
-        project_name = "test_project"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {"test_project": {}}  # No board_name
+            project_name = "test_project"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
+                # Assert
+                assert result is False
+                mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
 
     def test_po_apply_empty_po_config(self):
         """Test po_apply when PROJECT_PO_CONFIG is empty."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
+                }
             }
-        }
-        project_name = "test_project"
+            project_name = "test_project"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
 
-            # Assert
-            assert result is True
-            mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
+                # Assert
+                assert result is True
+                mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
 
     def test_po_apply_with_excluded_po(self):
         """Test po_apply when PO is excluded in config."""
         # Arrange
-        env = {
-            "projects_path": "/tmp/projects",
-            "repositories": [("/tmp/repo1", "repo1")],
-        }
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "config": {"PROJECT_PO_CONFIG": "po1 -po1"},  # po1 is excluded
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {
+                "projects_path": os.path.join(tmpdir, "projects"),
+                "repositories": [(os.path.join(tmpdir, "repo1"), "repo1")],
             }
-        }
-        project_name = "test_project"
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "config": {"PROJECT_PO_CONFIG": "po1 -po1"},  # po1 is excluded
+                }
+            }
+            project_name = "test_project"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
 
-            # Assert
-            assert result is True
-            mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
+                # Assert
+                assert result is True
+                mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
 
     def test_po_apply_with_excluded_files(self):
         """Test po_apply with excluded files in config."""
         # Arrange
-        env = {
-            "projects_path": "/tmp/projects",
-            "repositories": [("/tmp/repo1", "repo1")],
-        }
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "config": {
-                    # Exclude specific files
-                    "PROJECT_PO_CONFIG": "po1[file1.txt file2.txt]",
-                },
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {
+                "projects_path": os.path.join(tmpdir, "projects"),
+                "repositories": [(os.path.join(tmpdir, "repo1"), "repo1")],
             }
-        }
-        project_name = "test_project"
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "config": {
+                        # Exclude specific files
+                        "PROJECT_PO_CONFIG": "po1[file1.txt file2.txt]",
+                    },
+                }
+            }
+            project_name = "test_project"
 
-        with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
-            mock_isdir.return_value = False
+            with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
+                mock_isdir.return_value = False
 
-            # Act
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+                # Act
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
 
-            # Assert
-            assert result is True
-            mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
+                # Assert
+                assert result is True
+                mock_log.info.assert_any_call("start po_apply for project: '%s'", project_name)
 
     def test_po_apply_patches_with_exclude_and_flag(self):
         """Apply patches: run git apply, respect exclude list."""
@@ -775,66 +780,69 @@ class TestPatchOverrideRevert:
     def test_po_revert_basic_success(self):
         """Test po_revert with basic successful case."""
         # Arrange
-        env = {
-            "projects_path": "/tmp/projects",
-            "repositories": [("/tmp/repo1", "repo1"), ("/tmp/repo2", "repo2")],
-        }
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "config": {"PROJECT_PO_CONFIG": "po1"},
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {
+                "projects_path": os.path.join(tmpdir, "projects"),
+                "repositories": [(os.path.join(tmpdir, "repo1"), "repo1"), (os.path.join(tmpdir, "repo2"), "repo2")],
             }
-        }
-        project_name = "test_project"
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "config": {"PROJECT_PO_CONFIG": "po1"},
+                }
+            }
+            project_name = "test_project"
 
-        with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
-            mock_isdir.return_value = False  # No patches directory exists
+            with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
+                mock_isdir.return_value = False  # No patches directory exists
 
-            # Act
-            result = self.PatchOverride.po_revert(env, projects_info, project_name)
+                # Act
+                result = self.PatchOverride.po_revert(env, projects_info, project_name)
 
-            # Assert
-            assert result is True
-            mock_log.info.assert_any_call("start po_revert for project: '%s'", project_name)
-            mock_log.info.assert_any_call("po revert finished for project: '%s'", project_name)
+                # Assert
+                assert result is True
+                mock_log.info.assert_any_call("start po_revert for project: '%s'", project_name)
+                mock_log.info.assert_any_call("po revert finished for project: '%s'", project_name)
 
     def test_po_revert_missing_board_name(self):
         """Test po_revert when board_name is missing from project config."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {"test_project": {}}  # No board_name
-        project_name = "test_project"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {"test_project": {}}  # No board_name
+            project_name = "test_project"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_revert(env, projects_info, project_name)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_revert(env, projects_info, project_name)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
+                # Assert
+                assert result is False
+                mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
 
     def test_po_revert_empty_po_config(self):
         """Test po_revert when PROJECT_PO_CONFIG is empty."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
+                }
             }
-        }
-        project_name = "test_project"
+            project_name = "test_project"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_revert(env, projects_info, project_name)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_revert(env, projects_info, project_name)
 
-            # Assert
-            assert result is True
-            mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
+                # Assert
+                assert result is True
+                mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
 
 
 class TestPatchOverrideNew:
@@ -856,106 +864,111 @@ class TestPatchOverrideNew:
     def test_po_new_invalid_name_format(self):
         """Test po_new with invalid PO name format."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "board_path": "/tmp/board",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "board_path": os.path.join(tmpdir, "board"),
+                }
             }
-        }
-        project_name = "test_project"
-        po_name = "invalid_name"  # Doesn't start with 'po'
+            project_name = "test_project"
+            po_name = "invalid_name"  # Doesn't start with 'po'
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with(
-                "po_name '%s' is invalid. It must start with 'po' and only contain lowercase letters, digits, and underscores.",
-                po_name,
-            )
+                # Assert
+                assert result is False
+                mock_log.error.assert_called_with(
+                    "po_name '%s' is invalid. It must start with 'po' and only contain lowercase letters, digits, and underscores.",
+                    po_name,
+                )
 
     def test_po_new_missing_board_info(self):
         """Test po_new when board info is missing."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        # Missing board_name and board_path
-        projects_info = {"test_project": {}}
-        project_name = "test_project"
-        po_name = "po_test"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            # Missing board_name and board_path
+            projects_info = {"test_project": {}}
+            project_name = "test_project"
+            po_name = "po_test"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with("Board info missing for project '%s'", project_name)
+                # Assert
+                assert result is False
+                mock_log.error.assert_called_with("Board info missing for project '%s'", project_name)
 
     def test_po_new_valid_name_format(self):
         """Test po_new with valid PO name format."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "board_path": "/tmp/board",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "board_path": os.path.join(tmpdir, "board"),
+                }
             }
-        }
-        project_name = "test_project"
-        po_name = "po_test"
+            project_name = "test_project"
+            po_name = "po_test"
 
-        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
-            "os.makedirs"
-        ) as mock_makedirs, patch("src.plugins.patch_override.log") as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
-            mock_exists.return_value = False  # PO directory doesn't exist
-            mock_makedirs.return_value = None
+            with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+                "os.makedirs"
+            ) as mock_makedirs, patch("src.plugins.patch_override.log") as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
+                mock_exists.return_value = False  # PO directory doesn't exist
+                mock_makedirs.return_value = None
 
-            # Act
-            result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
+                # Act
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is True
-            mock_log.info.assert_any_call(
-                "start po_new for project: '%s', po_name: '%s'",
-                project_name,
-                po_name,
-            )
+                # Assert
+                assert result is True
+                mock_log.info.assert_any_call(
+                    "start po_new for project: '%s', po_name: '%s'",
+                    project_name,
+                    po_name,
+                )
 
     def test_po_new_fails_when_po_exists(self):
         """po_new should fail if PO directory already exists."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "board_path": "/tmp/board",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "board_path": os.path.join(tmpdir, "board"),
+                }
             }
-        }
-        project_name = "test_project"
-        po_name = "po_test"
+            project_name = "test_project"
+            po_name = "po_test"
 
-        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
+            with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
 
-            # Simulate PO directory exists
-            def _exists_side_effect(path):
-                # Return True for any path ending with /po/po_test (po_path) and for po_dir
-                return path.endswith(f"po/{po_name}") or path.endswith("/po")
+                # Simulate PO directory exists
+                def _exists_side_effect(path):
+                    # Return True for any path ending with /po/po_test (po_path) and for po_dir
+                    return path.endswith(f"po/{po_name}") or path.endswith("/po")
 
-            mock_exists.side_effect = _exists_side_effect
+                mock_exists.side_effect = _exists_side_effect
 
-            # Act
-            result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
+                # Act
+                result = self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with("PO directory '%s' already exists", "/tmp/projects/test_board/po/po_test")
+                # Assert
+                assert result is False
+                expected_path = os.path.join(tmpdir, "projects", "test_board", "po", "po_test")
+                mock_log.error.assert_called_with("PO directory '%s' already exists", expected_path)
 
 
 class TestPatchOverrideDelete:
@@ -977,43 +990,45 @@ class TestPatchOverrideDelete:
     def test_po_del_invalid_name_format(self):
         """Test po_del with invalid PO name format."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "board_path": "/tmp/board",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "board_path": os.path.join(tmpdir, "board"),
+                }
             }
-        }
-        project_name = "test_project"
-        po_name = "invalid_name"  # Doesn't start with 'po'
+            project_name = "test_project"
+            po_name = "invalid_name"  # Doesn't start with 'po'
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_del(env, projects_info, project_name, po_name, force=True)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_del(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with(
-                "po_name '%s' is invalid. It must start with 'po' and only contain lowercase letters, digits, and underscores.",
-                po_name,
-            )
+                # Assert
+                assert result is False
+                mock_log.error.assert_called_with(
+                    "po_name '%s' is invalid. It must start with 'po' and only contain lowercase letters, digits, and underscores.",
+                    po_name,
+                )
 
     def test_po_del_missing_board_info(self):
         """Test po_del when board info is missing."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        # Missing board_name and board_path
-        projects_info = {"test_project": {}}
-        project_name = "test_project"
-        po_name = "po_test"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            # Missing board_name and board_path
+            projects_info = {"test_project": {}}
+            project_name = "test_project"
+            po_name = "po_test"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_del(env, projects_info, project_name, po_name, force=True)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_del(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with("Board info missing for project '%s'", project_name)
+                # Assert
+                assert result is False
+                mock_log.error.assert_called_with("Board info missing for project '%s'", project_name)
 
 
 class TestPatchOverrideList:
@@ -1035,67 +1050,70 @@ class TestPatchOverrideList:
     def test_po_list_missing_board_name(self):
         """Test po_list when board_name is missing from project config."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {"test_project": {}}  # No board_name
-        project_name = "test_project"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {"test_project": {}}  # No board_name
+            project_name = "test_project"
 
-        with patch("src.plugins.patch_override.log") as mock_log:
-            # Act
-            result = self.PatchOverride.po_list(env, projects_info, project_name)
+            with patch("src.plugins.patch_override.log") as mock_log:
+                # Act
+                result = self.PatchOverride.po_list(env, projects_info, project_name)
 
-            # Assert
-            assert not result
-            mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
+                # Assert
+                assert not result
+                mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
 
     def test_po_list_no_po_directory(self):
         """Test po_list when po directory doesn't exist."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "PROJECT_PO_CONFIG": "po1",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "PROJECT_PO_CONFIG": "po1",
+                }
             }
-        }
-        project_name = "test_project"
+            project_name = "test_project"
 
-        with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
-            mock_isdir.return_value = False  # po directory doesn't exist
+            with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
+                mock_isdir.return_value = False  # po directory doesn't exist
 
-            # Act
-            result = self.PatchOverride.po_list(env, projects_info, project_name)
+                # Act
+                result = self.PatchOverride.po_list(env, projects_info, project_name)
 
-            # Assert
-            assert not result
-            mock_log.warning.assert_called_with("No po directory found for '%s'", project_name)
+                # Assert
+                assert not result
+                mock_log.warning.assert_called_with("No po directory found for '%s'", project_name)
 
     def test_po_list_empty_config(self):
         """Test po_list when PROJECT_PO_CONFIG is empty."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "PROJECT_PO_CONFIG": "",  # Empty config
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "PROJECT_PO_CONFIG": "",  # Empty config
+                }
             }
-        }
-        project_name = "test_project"
+            project_name = "test_project"
 
-        with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
-            mock_isdir.return_value = True  # po directory exists
+            with patch("os.path.join") as mock_join, patch("os.path.isdir") as mock_isdir, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
+                mock_isdir.return_value = True  # po directory exists
 
-            # Act
-            result = self.PatchOverride.po_list(env, projects_info, project_name)
+                # Act
+                result = self.PatchOverride.po_list(env, projects_info, project_name)
 
-            # Assert
-            assert not result
-            mock_log.info.assert_called_with("start po_list for project: '%s'", project_name)
+                # Assert
+                assert not result
+                mock_log.info.assert_called_with("start po_list for project: '%s'", project_name)
 
 
 class TestPatchOverrideParseConfig:
@@ -1147,83 +1165,86 @@ class TestPatchOverrideUpdate:
     def test_po_update_fails_when_po_not_exists(self):
         """po_update should fail if PO directory does not exist."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "board_path": "/tmp/board",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "board_path": os.path.join(tmpdir, "board"),
+                }
             }
-        }
-        project_name = "test_project"
-        po_name = "po_test"
+            project_name = "test_project"
+            po_name = "po_test"
 
-        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
-            "src.plugins.patch_override.log"
-        ) as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
+            with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+                "src.plugins.patch_override.log"
+            ) as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
 
-            # Simulate PO directory not exists and po_dir may or may not exist
-            def _exists_side_effect(path):
-                # Return False for po_path; True for po_dir to bypass its creation logic
-                if path.endswith(f"po/{po_name}"):
+                # Simulate PO directory not exists and po_dir may or may not exist
+                def _exists_side_effect(path):
+                    # Return False for po_path; True for po_dir to bypass its creation logic
+                    if path.endswith(f"po/{po_name}"):
+                        return False
+                    if path.endswith("/po"):
+                        return True
                     return False
-                if path.endswith("/po"):
-                    return True
-                return False
 
-            mock_exists.side_effect = _exists_side_effect
+                mock_exists.side_effect = _exists_side_effect
 
-            # Act
-            result = self.PatchOverride.po_update(env, projects_info, project_name, po_name, force=True)
+                # Act
+                result = self.PatchOverride.po_update(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is False
-            mock_log.error.assert_called_with(
-                "PO directory '%s' does not exist for update",
-                "/tmp/projects/test_board/po/po_test",
-            )
+                # Assert
+                assert result is False
+                expected_path = os.path.join(tmpdir, "projects", "test_board", "po", "po_test")
+                mock_log.error.assert_called_with(
+                    "PO directory '%s' does not exist for update",
+                    expected_path,
+                )
 
     def test_po_update_succeeds_when_po_exists(self):
         """po_update should succeed in force mode when PO directory exists."""
         # Arrange
-        env = {"projects_path": "/tmp/projects"}
-        projects_info = {
-            "test_project": {
-                "board_name": "test_board",
-                "board_path": "/tmp/board",
-                "config": {},
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "test_project": {
+                    "board_name": "test_board",
+                    "board_path": os.path.join(tmpdir, "board"),
+                    "config": {},
+                }
             }
-        }
-        project_name = "test_project"
-        po_name = "po_test"
+            project_name = "test_project"
+            po_name = "po_test"
 
-        with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
-            "os.makedirs"
-        ) as mock_makedirs, patch("src.plugins.patch_override.log") as mock_log:
-            mock_join.side_effect = lambda *args: "/".join(args)
+            with patch("os.path.join") as mock_join, patch("os.path.exists") as mock_exists, patch(
+                "os.makedirs"
+            ) as mock_makedirs, patch("src.plugins.patch_override.log") as mock_log:
+                mock_join.side_effect = lambda *args: "/".join(args)
 
-            def _exists_side_effect(path):
-                # PO path exists -> update path
-                if path.endswith(f"po/{po_name}"):
-                    return True
-                # po_dir exists
-                if path.endswith("/po"):
-                    return True
-                return False
+                def _exists_side_effect(path):
+                    # PO path exists -> update path
+                    if path.endswith(f"po/{po_name}"):
+                        return True
+                    # po_dir exists
+                    if path.endswith("/po"):
+                        return True
+                    return False
 
-            mock_exists.side_effect = _exists_side_effect
-            mock_makedirs.return_value = None
+                mock_exists.side_effect = _exists_side_effect
+                mock_makedirs.return_value = None
 
-            # Act
-            result = self.PatchOverride.po_update(env, projects_info, project_name, po_name, force=True)
+                # Act
+                result = self.PatchOverride.po_update(env, projects_info, project_name, po_name, force=True)
 
-            # Assert
-            assert result is True
-            mock_log.info.assert_any_call(
-                "start po_new for project: '%s', po_name: '%s'",
-                project_name,
-                po_name,
-            )
+                # Assert
+                assert result is True
+                mock_log.info.assert_any_call(
+                    "start po_new for project: '%s', po_name: '%s'",
+                    project_name,
+                    po_name,
+                )
 
     def test_parse_po_config_with_exclusions(self):
         """Test parse_po_config with excluded POs."""
@@ -1347,8 +1368,13 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run po_apply
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            # Run in tmpdir so files are created in temporary directory
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            finally:
+                os.chdir(old_cwd)
 
             # Check result
             assert result, "po_apply should succeed"
@@ -1408,8 +1434,13 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run po_apply
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            # Run in tmpdir so files are created in temporary directory
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            finally:
+                os.chdir(old_cwd)
 
             # Check result
             assert result, "po_apply should succeed"
@@ -1482,8 +1513,13 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run po_apply
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            # Run in tmpdir so files are created in temporary directory
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            finally:
+                os.chdir(old_cwd)
 
             # Check result
             assert result, "po_apply should succeed"
@@ -1550,8 +1586,13 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run po_apply
-            result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            # Run in tmpdir so files are created in temporary directory
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, project_name)
+            finally:
+                os.chdir(old_cwd)
 
             # Check result
             assert result, "po_apply should succeed"
