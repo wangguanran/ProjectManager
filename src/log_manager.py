@@ -9,6 +9,7 @@ import os
 from src.utils import get_filename
 
 LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
+LATEST_LOG_LINK = os.path.join(os.getcwd(), ".cache", "latest.log")
 
 # ANSI color codes for log levels
 LOG_COLORS = {
@@ -49,6 +50,9 @@ class LogManager:
     @staticmethod
     def _init_logger():
         """Initialize logger."""
+        # Generate log file path
+        log_file_path = get_filename("Log_", ".log", LOG_PATH)
+
         config = {
             "version": 1.0,
             "formatters": {
@@ -68,7 +72,7 @@ class LogManager:
                 },
                 "file": {
                     "class": "logging.FileHandler",
-                    "filename": get_filename("Log_", ".log", LOG_PATH),
+                    "filename": log_file_path,
                     "level": "DEBUG",
                     "mode": "w",
                     "formatter": "file_formatter",
@@ -96,7 +100,30 @@ class LogManager:
             },
         }
         logging.config.dictConfig(config)
+
+        # Create symbolic link to latest log file
+        LogManager._create_latest_log_link(log_file_path)
+
         return logging.getLogger("FileLogger")
+
+    @staticmethod
+    def _create_latest_log_link(log_file_path):
+        """Create symbolic link to latest log file."""
+        try:
+            # Ensure .cache directory exists
+            cache_dir = os.path.dirname(LATEST_LOG_LINK)
+            if not os.path.exists(cache_dir):
+                os.makedirs(cache_dir)
+
+            # Remove existing link if it exists
+            if os.path.exists(LATEST_LOG_LINK) or os.path.islink(LATEST_LOG_LINK):
+                os.remove(LATEST_LOG_LINK)
+
+            # Create symbolic link
+            os.symlink(log_file_path, LATEST_LOG_LINK)
+        except OSError as e:
+            # If symlink creation fails, log the error but don't crash
+            print(f"Warning: Failed to create log symlink: {e}")
 
     def get_logger(self):
         """Get logger instance."""
