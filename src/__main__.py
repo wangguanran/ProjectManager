@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from difflib import SequenceMatcher
 from importlib import import_module
 from typing import List, Optional, Tuple
@@ -419,11 +420,13 @@ def _find_repositories():
     """
     Return a list of (repo_path, repo_name) for all git repositories in current dir or .repo manifest.
     repo_name: relative path, root repo is 'root'.
+    Also writes repository information to projects/repositories.json file.
     """
     current_dir = os.getcwd()
     manifest = os.path.join(current_dir, ".repo", "manifest.xml")
     log.debug("manifest: %s", manifest)
     repositories = []
+    repo_type = None
 
     def add_repo_if_exists(path_attr):
         if not path_attr:
@@ -466,10 +469,59 @@ def _find_repositories():
     if os.path.exists(manifest):
         include_base = os.path.join(current_dir, ".repo", "manifests")
         parse_manifest_file(manifest, include_base_dir=include_base, visited=set())
+        repo_type = "manifest"
     elif os.path.exists(os.path.join(current_dir, ".git")):
         repositories.append((current_dir, "root"))
+        repo_type = "single"
+
     log.debug("repositories found: %s", json.dumps(repositories, indent=2, ensure_ascii=False))
+
+    # Write repository information to projects/repositories.json
+    _write_repositories_to_file(repositories, repo_type, current_dir)
+
     return repositories
+
+
+def _write_repositories_to_file(repositories, repo_type, current_dir):
+    """
+    Write repository information to projects/repositories.json file.
+
+    Args:
+        repositories: List of (repo_path, repo_name) tuples
+        repo_type: Type of repository discovery ("manifest" or "single")
+        current_dir: Current working directory
+    """
+    try:
+        # Create projects directory if it doesn't exist
+        projects_dir = os.path.join(current_dir, "projects")
+        os.makedirs(projects_dir, exist_ok=True)
+
+        # Prepare repository data
+        repo_data = {
+            "discovery_time": datetime.now().isoformat(),
+            "discovery_type": repo_type,
+            "current_directory": current_dir,
+            "repositories": [],
+        }
+
+        for repo_path, repo_name in repositories:
+            repo_info = {
+                "name": repo_name,
+                "path": repo_path,
+                "relative_path": os.path.relpath(repo_path, current_dir) if repo_path != current_dir else ".",
+                "is_git_repo": os.path.exists(os.path.join(repo_path, ".git")),
+            }
+            repo_data["repositories"].append(repo_info)
+
+        # Write to repositories.json file
+        repos_file = os.path.join(projects_dir, "repositories.json")
+        with open(repos_file, "w", encoding="utf-8") as f:
+            json.dump(repo_data, f, indent=2, ensure_ascii=False)
+
+        log.debug("Repository information written to: %s", repos_file)
+
+    except (OSError, IOError, ValueError) as e:
+        log.error("Failed to write repository information to file: %s", e)
 
 
 @func_time

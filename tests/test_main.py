@@ -6,6 +6,7 @@ Tests for __main__.py module.
 # pylint: disable=import-outside-toplevel
 # pylint: disable=too-many-public-methods
 
+import json
 import os
 import shutil
 import sys
@@ -1105,3 +1106,212 @@ class TestFuzzyOperationMatching:
         # "po" should match "po_apply" over "project_post_build"
         result = self.fuzzy_match("po", available_operations)
         assert result == "po_apply"
+
+
+class TestFindRepositories:
+    """Test cases for _find_repositories function with file writing functionality."""
+
+    def setup_method(self):
+        """Set up test environment for each test case."""
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from src.__main__ import _find_repositories, _write_repositories_to_file
+
+        self._find_repositories = _find_repositories
+        self._write_repositories_to_file = _write_repositories_to_file
+        self.temp_dir = None
+
+    def teardown_method(self):
+        """Clean up test environment after each test case."""
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _create_temp_directory(self):
+        """Create a temporary directory for testing."""
+        self.temp_dir = tempfile.mkdtemp()
+        return self.temp_dir
+
+    def test_find_repositories_single_git_repo(self):
+        """Test finding repositories in a single git repository."""
+        temp_dir = self._create_temp_directory()
+
+        # Create a git repository
+        git_dir = os.path.join(temp_dir, ".git")
+        os.makedirs(git_dir)
+
+        # Change to temp directory and test
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            repositories = self._find_repositories()
+
+            # Should find one repository
+            assert len(repositories) == 1
+            assert repositories[0][0] == temp_dir
+            assert repositories[0][1] == "root"
+
+            # Check if repositories.json was created
+            repos_file = os.path.join(temp_dir, "projects", "repositories.json")
+            assert os.path.exists(repos_file)
+
+            # Verify file content
+            with open(repos_file, "r", encoding="utf-8") as f:
+                repo_data = json.load(f)
+
+            assert repo_data["discovery_type"] == "single"
+            assert repo_data["current_directory"] == temp_dir
+            assert len(repo_data["repositories"]) == 1
+            assert repo_data["repositories"][0]["name"] == "root"
+            assert repo_data["repositories"][0]["path"] == temp_dir
+            assert repo_data["repositories"][0]["is_git_repo"] is True
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_find_repositories_manifest_repo(self):
+        """Test finding repositories using .repo manifest."""
+        temp_dir = self._create_temp_directory()
+
+        # Create .repo directory structure
+        repo_dir = os.path.join(temp_dir, ".repo")
+        manifests_dir = os.path.join(repo_dir, "manifests")
+        os.makedirs(manifests_dir)
+
+        # Create manifest.xml
+        manifest_content = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <project path="project1" name="project1" />
+    <project path="project2" name="project2" />
+    <include name="additional.xml" />
+</manifest>"""
+        manifest_file = os.path.join(repo_dir, "manifest.xml")
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            f.write(manifest_content)
+
+        # Create additional manifest
+        additional_manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <project path="project3" name="project3" />
+</manifest>"""
+        additional_file = os.path.join(manifests_dir, "additional.xml")
+        with open(additional_file, "w", encoding="utf-8") as f:
+            f.write(additional_manifest)
+
+        # Create project directories with .git
+        for project_name in ["project1", "project2", "project3"]:
+            project_dir = os.path.join(temp_dir, project_name)
+            os.makedirs(project_dir)
+            git_dir = os.path.join(project_dir, ".git")
+            os.makedirs(git_dir)
+
+        # Change to temp directory and test
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            repositories = self._find_repositories()
+
+            # Should find three repositories
+            assert len(repositories) == 3
+            repo_names = [repo[1] for repo in repositories]
+            assert "project1" in repo_names
+            assert "project2" in repo_names
+            assert "project3" in repo_names
+
+            # Check if repositories.json was created
+            repos_file = os.path.join(temp_dir, "projects", "repositories.json")
+            assert os.path.exists(repos_file)
+
+            # Verify file content
+            with open(repos_file, "r", encoding="utf-8") as f:
+                repo_data = json.load(f)
+
+            assert repo_data["discovery_type"] == "manifest"
+            assert repo_data["current_directory"] == temp_dir
+            assert len(repo_data["repositories"]) == 3
+
+            # Check repository information
+            repo_names_in_file = [repo["name"] for repo in repo_data["repositories"]]
+            assert "project1" in repo_names_in_file
+            assert "project2" in repo_names_in_file
+            assert "project3" in repo_names_in_file
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_find_repositories_no_git_repos(self):
+        """Test finding repositories when no git repositories exist."""
+        temp_dir = self._create_temp_directory()
+
+        # Change to temp directory and test
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            repositories = self._find_repositories()
+
+            # Should find no repositories
+            assert len(repositories) == 0
+
+            # Check if repositories.json was created
+            repos_file = os.path.join(temp_dir, "projects", "repositories.json")
+            assert os.path.exists(repos_file)
+
+            # Verify file content
+            with open(repos_file, "r", encoding="utf-8") as f:
+                repo_data = json.load(f)
+
+            assert repo_data["discovery_type"] is None
+            assert repo_data["current_directory"] == temp_dir
+            assert len(repo_data["repositories"]) == 0
+
+        finally:
+            os.chdir(original_cwd)
+
+    def test_write_repositories_to_file(self):
+        """Test _write_repositories_to_file function directly."""
+        temp_dir = self._create_temp_directory()
+
+        # Test data
+        repositories = [(os.path.join(temp_dir, "repo1"), "repo1"), (os.path.join(temp_dir, "repo2"), "repo2")]
+        repo_type = "test"
+
+        # Create git directories
+        for repo_path, _ in repositories:
+            os.makedirs(repo_path)
+            git_dir = os.path.join(repo_path, ".git")
+            os.makedirs(git_dir)
+
+        # Call function
+        self._write_repositories_to_file(repositories, repo_type, temp_dir)
+
+        # Check if file was created
+        repos_file = os.path.join(temp_dir, "projects", "repositories.json")
+        assert os.path.exists(repos_file)
+
+        # Verify file content
+        with open(repos_file, "r", encoding="utf-8") as f:
+            repo_data = json.load(f)
+
+        assert repo_data["discovery_type"] == "test"
+        assert repo_data["current_directory"] == temp_dir
+        assert len(repo_data["repositories"]) == 2
+
+        # Check individual repository information
+        repo1_info = next(repo for repo in repo_data["repositories"] if repo["name"] == "repo1")
+        assert repo1_info["path"] == os.path.join(temp_dir, "repo1")
+        assert repo1_info["relative_path"] == "repo1"
+        assert repo1_info["is_git_repo"] is True
+
+        repo2_info = next(repo for repo in repo_data["repositories"] if repo["name"] == "repo2")
+        assert repo2_info["path"] == os.path.join(temp_dir, "repo2")
+        assert repo2_info["relative_path"] == "repo2"
+        assert repo2_info["is_git_repo"] is True
+
+    def test_write_repositories_to_file_error_handling(self):
+        """Test error handling in _write_repositories_to_file function."""
+        # Test with invalid directory (should not raise exception)
+        repositories = [("/invalid/path", "test")]
+        self._write_repositories_to_file(repositories, "test", "/invalid/path")
+
+        # Function should complete without raising exception
+        # (error should be logged but not propagated)

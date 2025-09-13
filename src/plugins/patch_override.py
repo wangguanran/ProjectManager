@@ -72,7 +72,6 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
-    log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:
         log.debug("apply_pos: %s", str(apply_pos))

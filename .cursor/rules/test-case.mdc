@@ -22,7 +22,8 @@ description: 测试用例文档和跟踪
 - `M06`: Git操作
 - `M07`: 插件系统
 - `M08`: 集成测试
-- `M09-M99`: 预留扩展模块
+- `M09`: 仓库发现和文件写入
+- `M10-M99`: 预留扩展模块
 
 ### 示例
 - `M01-TC0001`: 日志管理器模块第1个测试用例
@@ -129,3 +130,13 @@ description: 测试用例文档和跟踪
 2. **状态跟踪**: 根据结果更新测试用例状态
 3. **失败分析**: 记录和跟踪测试失败
 4. **覆盖率报告**: 监控测试覆盖率指标
+
+## 测试用例记录表
+
+| 测试用例ID | 模块 | 函数/方法 | 测试类型 | 测试名称 | 优先级 | 测试场景 | 测试步骤 | 输入数据 | 预期结果 | 测试文件 | 测试方法 | 自动化 | 状态 | 创建日期 | 最后运行 | 依赖关系 | 备注 |
+|------------|------|----------|----------|----------|--------|----------|----------|----------|----------|----------|----------|--------|------|----------|----------|----------|------|
+| M09-TC0001 | __main__ | _find_repositories | 功能测试 | test_find_repositories_single_git_repo | 高 | 验证在单个git仓库中发现仓库并写入文件 | 1. 创建临时目录和.git目录<br>2. 调用_find_repositories()<br>3. 验证返回仓库列表<br>4. 验证repositories.json文件创建 | 临时目录包含.git目录 | 返回1个仓库，创建repositories.json文件 | tests/test_main.py | test_find_repositories_single_git_repo | 是 | 通过 | 2024-01-13 | 2024-01-13 | 无 | 需要临时目录 |
+| M09-TC0002 | __main__ | _find_repositories | 功能测试 | test_find_repositories_manifest_repo | 高 | 验证通过.repo manifest发现多个仓库并写入文件 | 1. 创建.repo目录结构和manifest.xml<br>2. 创建项目目录和.git目录<br>3. 调用_find_repositories()<br>4. 验证返回多个仓库<br>5. 验证repositories.json文件内容 | .repo/manifest.xml包含多个项目 | 返回3个仓库，创建包含所有仓库信息的repositories.json | tests/test_main.py | test_find_repositories_manifest_repo | 是 | 通过 | 2024-01-13 | 2024-01-13 | 无 | 需要临时目录和XML文件 |
+| M09-TC0003 | __main__ | _find_repositories | 边界测试 | test_find_repositories_no_git_repos | 中 | 验证在没有git仓库时函数行为 | 1. 创建空临时目录<br>2. 调用_find_repositories()<br>3. 验证返回空列表<br>4. 验证repositories.json文件创建 | 空目录 | 返回空列表，创建空的repositories.json文件 | tests/test_main.py | test_find_repositories_no_git_repos | 是 | 通过 | 2024-01-13 | 2024-01-13 | 无 | 需要临时目录 |
+| M09-TC0004 | __main__ | _write_repositories_to_file | 功能测试 | test_write_repositories_to_file | 高 | 验证_write_repositories_to_file函数直接调用 | 1. 创建测试数据和git目录<br>2. 调用_write_repositories_to_file()<br>3. 验证repositories.json文件创建<br>4. 验证文件内容正确 | 仓库列表和类型信息 | 创建包含正确仓库信息的repositories.json文件 | tests/test_main.py | test_write_repositories_to_file | 是 | 通过 | 2024-01-13 | 2024-01-13 | 无 | 需要临时目录 |
+| M09-TC0005 | __main__ | _write_repositories_to_file | 错误测试 | test_write_repositories_to_file_error_handling | 中 | 验证错误处理机制 | 1. 使用无效路径调用函数<br>2. 验证函数不抛出异常<br>3. 验证错误被记录 | 无效路径 | 函数完成执行，错误被记录但不传播 | tests/test_main.py | test_write_repositories_to_file_error_handling | 是 | 通过 | 2024-01-13 | 2024-01-13 | 无 | 测试异常处理 |
