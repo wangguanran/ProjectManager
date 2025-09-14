@@ -921,8 +921,11 @@ def po_new(
             all_files = staged_files | working_files | deleted_files
 
             def is_ignored(file_path):
+                # Create full path for matching: repo_name/file_path
+                full_path = f"{repo_name}/{file_path}" if repo_name != "root" else file_path
+
                 for pattern in ignore_patterns:
-                    if fnmatch.fnmatch(file_path, pattern):
+                    if fnmatch.fnmatch(file_path, pattern) or fnmatch.fnmatch(full_path, pattern):
                         return True
                 return False
 
@@ -1290,7 +1293,9 @@ def po_new(
             return
 
         # Load ignore patterns once for all repositories
-        ignore_patterns = __load_ignore_patterns(project_cfg)
+        # project_cfg contains the full project info, config is in project_cfg["config"]
+        project_config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
+        ignore_patterns = __load_ignore_patterns(project_config)
 
         all_modified_files = []
         for repo_path, repo_name in repositories:
@@ -1405,8 +1410,10 @@ def po_new(
         patterns = []
 
         # First, try to get ignore patterns from project configuration
-        if project_cfg and "config" in project_cfg:
-            po_ignore_config = project_cfg["config"].get("PROJECT_PO_IGNORE", "").strip()
+        log.debug("project_cfg type: %s, content: %s", type(project_cfg), project_cfg)
+        if project_cfg:
+            po_ignore_config = project_cfg.get("PROJECT_PO_IGNORE", "").strip()
+            log.debug("po_ignore_config: '%s'", po_ignore_config)
             if po_ignore_config:
                 config_patterns = [p.strip() for p in po_ignore_config.split() if p.strip()]
                 patterns.extend(config_patterns)
