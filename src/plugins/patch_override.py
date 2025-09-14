@@ -873,10 +873,9 @@ def po_new(
                 return False
             print("Please enter 'yes' or 'no'.")
 
-    def __get_modified_files(repo_path, repo_name, project_cfg):
+    def __get_modified_files(repo_path, repo_name, ignore_patterns):
         """Get modified files in a repository including staged files, with ignore support."""
         modified_files = []
-        ignore_patterns = __load_ignore_patterns(project_cfg)
         try:
             # Change to repository directory
             original_cwd = os.getcwd()
@@ -1290,9 +1289,12 @@ def po_new(
             print("No git repositories found.")
             return
 
+        # Load ignore patterns once for all repositories
+        ignore_patterns = __load_ignore_patterns(project_cfg)
+
         all_modified_files = []
         for repo_path, repo_name in repositories:
-            modified_files = __get_modified_files(repo_path, repo_name, project_cfg)
+            modified_files = __get_modified_files(repo_path, repo_name, ignore_patterns)
             if modified_files:
                 all_modified_files.extend(modified_files)
 
