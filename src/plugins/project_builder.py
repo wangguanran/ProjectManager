@@ -273,7 +273,6 @@ def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool
     Pre-build stage for the specified project.
     """
     log.info("Pre-build stage for project: %s", project_name)
-    project_diff(env, projects_info, project_name)
     # Apply patch/override; failures are fatal
     try:
         result = po_apply(env, projects_info, project_name)
@@ -283,6 +282,7 @@ def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool
     except Exception as exc:  # pylint: disable=broad-except
         log.error("Exception during po_apply for %s: %s", project_name, exc)
         return False
+    project_diff(env, projects_info, project_name)
     return True
 
 

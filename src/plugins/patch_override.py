@@ -181,7 +181,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     repo_name = os.path.join(*path_parts[:-1])
                 else:
                     log.error("Invalid patch file path: '%s'", rel_path)
-                    continue
+                    return False
 
                 if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
                     log.debug(
@@ -193,7 +193,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 patch_target = find_repo_path_by_name(repo_name)
                 if not patch_target:
                     log.error("Cannot find repo path for '%s'", repo_name)
-                    continue
+                    return False
                 patch_file = os.path.join(current_dir, fname)
                 log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
                 try:
@@ -578,7 +578,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     repo_name = os.path.join(*path_parts[:-1])
                 else:
                     log.error("Invalid patch file path: '%s'", rel_path)
-                    continue
+                    return False
 
                 def find_repo_path_by_name(repo_name):
                     for repo_path, rname in repositories:
@@ -589,7 +589,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 patch_target = find_repo_path_by_name(repo_name)
                 if not patch_target:
                     log.error("Cannot find repo path for '%s'", repo_name)
-                    continue
+                    return False
                 patch_file = os.path.join(current_dir, fname)
                 log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
                 try:
@@ -652,7 +652,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     override_target = os.path.join(*path_parts[:-1])
                 else:
                     log.error("Invalid override file path: '%s'", rel_path)
-                    continue
+                    return False
 
                 dest_file = (
                     os.path.join(override_target, *rel_path.split(os.sep)[1:])
@@ -969,6 +969,7 @@ def po_new(
         except (OSError, subprocess.SubprocessError) as e:
             log.error("Failed to get modified files for repository %s: %s", repo_name, e)
             print(f"Warning: Failed to get modified files for repository {repo_name}: {e}")
+            return None
 
         return modified_files
 
@@ -1300,6 +1301,8 @@ def po_new(
         all_modified_files = []
         for repo_path, repo_name in repositories:
             modified_files = __get_modified_files(repo_path, repo_name, ignore_patterns)
+            if modified_files is None:
+                return False
             if modified_files:
                 all_modified_files.extend(modified_files)
 

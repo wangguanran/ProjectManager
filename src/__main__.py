@@ -869,9 +869,13 @@ def main():
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
         try:
-            func(*func_args, **func_kwargs)
+            result = func(*func_args, **func_kwargs)
+            if result is False:
+                log.error("Operation '%s' failed", operate)
+                sys.exit(1)
         except TypeError as e:
             log.error("Failed to call operation '%s': %s", operate, e)
+            sys.exit(1)
     else:
         log.error("Operation '%s' is not supported.", operate)
 
