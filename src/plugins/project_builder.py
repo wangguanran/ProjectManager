@@ -362,17 +362,17 @@ def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.error("Validation hooks failed, aborting build")
             return False
 
+    # Execute pre-build stage
+    if not project_pre_build(env, projects_info, project_name):
+        log.error("Pre-build failed for project: %s", project_name)
+        return False
+
     # Execute pre-build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.PRE_BUILD, platform):
         pre_build_result = execute_hooks_with_fallback(HookType.PRE_BUILD, shared_context, platform)
         if not pre_build_result:
             log.error("Pre-build hooks failed, aborting build")
             return False
-
-    # Execute pre-build stage
-    if not project_pre_build(env, projects_info, project_name):
-        log.error("Pre-build failed for project: %s", project_name)
-        return False
 
     # Execute build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.BUILD, platform):
