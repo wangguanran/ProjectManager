@@ -6,14 +6,80 @@ REPO="wangguanran/ProjectManager"
 ARTIFACT_NAME="build-artifacts"     # 你的 artifact 名称
 WORKFLOW_NAME="Python application"  # 只获取该 workflow 的产物
 
-# 检查依赖
-if ! command -v jq &> /dev/null; then
-    echo "请先安装 jq 工具"
-    exit 1
+# 准备用户本地 bin 目录并加入 PATH（本次会话内生效）
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+export PATH="$BIN_DIR:$PATH"
+
+# 安装 jq（用户态，无需 sudo）
+install_jq() {
+  local arch
+  arch=$(uname -m)
+  local url=""
+  case "$arch" in
+    x86_64|amd64)
+      url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64"
+      ;;
+    aarch64|arm64)
+      url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-aarch64"
+      ;;
+    *)
+      echo "未支持的架构: $arch，请手动安装 jq" >&2
+      return 1
+      ;;
+  esac
+  echo "正在为 $arch 安装 jq 到 $BIN_DIR/jq ..."
+  curl -fsSL "$url" -o "$BIN_DIR/jq" && chmod +x "$BIN_DIR/jq"
+}
+
+# 退回方案：使用 python3 构建 unzip 的最小实现
+install_unzip_shim() {
+  if command -v python3 >/dev/null 2>&1; then
+    cat > "$BIN_DIR/unzip" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+zipfile=""
+outdir="."
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -d)
+      outdir="$2"; shift 2 ;;
+    -o)
+      shift ;;
+    -*)
+      # 忽略其他不相关参数
+      shift ;;
+    *)
+      zipfile="$1"; shift ;;
+  esac
+done
+if [[ -z "${zipfile}" ]]; then
+  echo "用法: unzip [-o] [-d 目录] ZIP文件" >&2
+  exit 2
 fi
-if ! command -v unzip &> /dev/null; then
-    echo "请先安装 unzip 工具"
-    exit 1
+python3 - "$zipfile" "$outdir" <<'PY'
+import sys, zipfile, os
+zip_path=sys.argv[1]
+outdir=sys.argv[2]
+os.makedirs(outdir, exist_ok=True)
+with zipfile.ZipFile(zip_path) as z:
+    z.extractall(outdir)
+print(f"已解压到 {outdir}")
+PY
+SH
+    chmod +x "$BIN_DIR/unzip"
+  else
+    echo "未找到 python3，无法创建 unzip 的用户态实现，请手动安装 unzip 或 python3" >&2
+    return 1
+  fi
+}
+
+# 确保依赖存在（无 sudo 安装）
+if ! command -v jq >/dev/null 2>&1; then
+  install_jq || exit 1
+fi
+if ! command -v unzip >/dev/null 2>&1; then
+  install_unzip_shim || exit 1
 fi
 
 # 获取 workflow 列表，找到目标 workflow_id

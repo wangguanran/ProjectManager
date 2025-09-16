@@ -8,6 +8,11 @@ REPO_OWNER="wangguanran"
 REPO_NAME="ProjectManager"
 GITHUB_API_BASE="https://api.github.com"
 
+# 准备用户本地 bin 目录并加入 PATH（本次会话内生效）
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+export PATH="$BIN_DIR:$PATH"
+
 # Function to display usage
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -66,16 +71,20 @@ check_curl() {
 # Function to check if jq is available
 check_jq() {
     if ! command -v jq &> /dev/null; then
-        echo "jq not found. Installing jq to $HOME/.local/bin..." >&2
-        mkdir -p "$HOME/.local/bin"
-        curl -L -o "$HOME/.local/bin/jq" https://github.com/stedolan/jq/releases/latest/download/jq-linux64
-        chmod +x "$HOME/.local/bin/jq"
-        # 检查 ~/.local/bin 是否在 PATH 中
-        if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-            export PATH="$HOME/.local/bin:$PATH"
-            echo "Added $HOME/.local/bin to PATH. Please run: source ~/.bashrc" >&2
-        fi
+        local arch
+        arch=$(uname -m)
+        local url=""
+        case "$arch" in
+            x86_64|amd64)
+                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" ;;
+            aarch64|arm64)
+                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-aarch64" ;;
+            *)
+                echo "Unsupported arch for jq: $arch" >&2; return 1 ;;
+        esac
+        echo "Installing jq to $BIN_DIR ..." >&2
+        curl -fsSL "$url" -o "$BIN_DIR/jq"
+        chmod +x "$BIN_DIR/jq"
     fi
 }
 
