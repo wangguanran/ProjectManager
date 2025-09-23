@@ -1302,7 +1302,7 @@ def po_new(
         for repo_path, repo_name in repositories:
             modified_files = __get_modified_files(repo_path, repo_name, ignore_patterns)
             if modified_files is None:
-                return False
+                return
             if modified_files:
                 all_modified_files.extend(modified_files)
 
