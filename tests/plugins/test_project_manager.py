@@ -3,6 +3,7 @@ Tests for project_manager functions.
 """
 
 import configparser
+import json
 import os
 import sys
 
@@ -1633,7 +1634,7 @@ class TestProjectDel:
 
 
 class TestBoardNew:
-    """Test cases for board_new method (currently TODO)."""
+    """Test cases for board_new method."""
 
     def setup_method(self):
         """Set up test environment for each test case."""
@@ -1644,63 +1645,83 @@ class TestBoardNew:
 
         self.ProjectManager = ProjectManager
 
-    def test_board_new_basic_call(self):
-        """Test board_new method basic call (currently TODO)."""
-        env = {}
+    def test_board_new_creates_expected_structure(self, tmp_path):
+        """Creating a board should produce expected directory structure and metadata."""
+
+        env = {"projects_path": str(tmp_path)}
         projects_info = {}
-        board_name = "test_board"
+        board_name = "board_alpha"
 
-        # Currently board_new is not implemented (TODO)
-        # This test verifies that the method exists and can be called
-        # without raising exceptions
-        try:
-            result = self.ProjectManager.board_new(env, projects_info, board_name)
-            # Since it's not implemented, it should return None or raise NotImplementedError
-            # For now, we just verify the method can be called
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+        result = self.ProjectManager.board_new(env, projects_info, board_name)
 
-    def test_board_new_with_different_parameters(self):
-        """Test board_new method with different parameter types."""
-        env = {"test": "value"}
-        projects_info = {"existing": {"board_name": "existing_board"}}
-        board_name = "new_board"
+        assert result is True
+        board_path = tmp_path / board_name
+        assert board_path.is_dir()
+        assert (board_path / "po").is_dir()
 
-        # Test with different parameter combinations
-        try:
-            result = self.ProjectManager.board_new(env, projects_info, board_name)
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+        ini_path = board_path / f"{board_name}.ini"
+        assert ini_path.is_file()
+        ini_content = ini_path.read_text(encoding="utf-8")
+        assert f"[{board_name}]" in ini_content
 
-    def test_board_new_empty_board_name(self):
-        """Test board_new method with empty board name."""
-        env = {}
-        projects_info = {}
-        board_name = ""
+        projects_json_path = board_path / "projects.json"
+        assert projects_json_path.is_file()
+        metadata = json.loads(projects_json_path.read_text(encoding="utf-8"))
+        assert metadata["board_name"] == board_name
+        assert metadata["board_path"] == str(board_path)
+        assert metadata["projects"] == []
 
-        try:
-            result = self.ProjectManager.board_new(env, projects_info, board_name)
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+    def test_board_new_uses_template_when_available(self, tmp_path):
+        """Template ini file should be adapted when present."""
 
-    def test_board_new_none_board_name(self):
-        """Test board_new method with None board name."""
-        env = {}
-        projects_info = {}
-        board_name = None
+        template_dir = tmp_path / "template"
+        template_dir.mkdir(parents=True)
+        template_ini = template_dir / "template.ini"
+        template_ini.write_text(
+            "[template]\nPROJECT_NAME=default\nCUSTOM=value\n",
+            encoding="utf-8",
+        )
 
-        try:
-            result = self.ProjectManager.board_new(env, projects_info, board_name)
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+        env = {"projects_path": str(tmp_path)}
+        board_name = "board_beta"
+
+        result = self.ProjectManager.board_new(env, {}, board_name)
+
+        assert result is True
+        ini_path = tmp_path / board_name / f"{board_name}.ini"
+        content_lines = ini_path.read_text(encoding="utf-8").splitlines()
+        assert content_lines[0] == f"[{board_name}]"
+        assert "PROJECT_NAME=default" in content_lines
+        assert "CUSTOM=value" in content_lines
+
+    def test_board_new_fails_if_board_already_exists(self, tmp_path):
+        """Creating a board with an existing name should fail without altering files."""
+
+        env = {"projects_path": str(tmp_path)}
+        board_name = "board_gamma"
+        board_path = tmp_path / board_name
+        (board_path / "po").mkdir(parents=True)
+        existing_marker = board_path / "existing.txt"
+        existing_marker.write_text("keep", encoding="utf-8")
+
+        result = self.ProjectManager.board_new(env, {}, board_name)
+
+        assert result is False
+        assert board_path.is_dir()
+        assert existing_marker.read_text(encoding="utf-8") == "keep"
+
+    def test_board_new_rejects_invalid_or_missing_parameters(self, tmp_path):
+        """Invalid parameters such as empty names or missing paths should fail."""
+
+        env_with_path = {"projects_path": str(tmp_path)}
+        assert (
+            self.ProjectManager.board_new(env_with_path, {}, "") is False
+        )
+        assert (
+            self.ProjectManager.board_new(env_with_path, {}, "invalid/name")
+            is False
+        )
+        assert self.ProjectManager.board_new({}, {}, "board_delta") is False
 
     def test_project_new_with_empty_projects_info(self):
         """Test project_new with empty projects_info."""
@@ -2262,7 +2283,7 @@ class TestBoardNew:
 
 
 class TestBoardDel:
-    """Test cases for board_del method (currently TODO)."""
+    """Test cases for board_del method."""
 
     def setup_method(self):
         """Set up test environment for each test case."""
@@ -2273,63 +2294,84 @@ class TestBoardDel:
 
         self.ProjectManager = ProjectManager
 
-    def test_board_del_basic_call(self):
-        """Test board_del method basic call (currently TODO)."""
-        env = {}
+    def test_board_del_removes_board_and_caches(self, tmp_path):
+        """Deleting a board should remove its directory, caches, and projects info."""
+
+        root_dir = tmp_path
+        projects_path = root_dir / "projects"
+        projects_path.mkdir()
+        env = {"projects_path": str(projects_path), "root_path": str(root_dir)}
+        board_name = "board_delta"
+
+        assert self.ProjectManager.board_new(env, {}, board_name) is True
+        board_path = projects_path / board_name
+
+        cache_dirs = [
+            root_dir / ".cache" / "projects" / board_name,
+            root_dir / ".cache" / "boards" / board_name,
+            root_dir / ".cache" / "build" / board_name,
+        ]
+        for cache_dir in cache_dirs:
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "marker.txt").write_text("marker", encoding="utf-8")
+
+        projects_info = {
+            "project_a": {
+                "board_name": board_name,
+                "board_path": str(board_path),
+                "ini_file": str(board_path / f"{board_name}.ini"),
+            },
+            "project_b": {"board_name": "other", "board_path": "", "ini_file": ""},
+        }
+
+        result = self.ProjectManager.board_del(env, projects_info, board_name)
+
+        assert result is True
+        assert not board_path.exists()
+        for cache_dir in cache_dirs:
+            assert not cache_dir.exists()
+        assert "project_a" not in projects_info
+        assert "project_b" in projects_info
+
+    def test_board_del_nonexistent_board(self, tmp_path):
+        """Deleting a board that does not exist should fail gracefully."""
+
+        env = {"projects_path": str(tmp_path)}
         projects_info = {}
-        board_name = "test_board"
 
-        # Currently board_del is not implemented (TODO)
-        # This test verifies that the method exists and can be called
-        # without raising exceptions
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            # Since it's not implemented, it should return None or raise NotImplementedError
-            # For now, we just verify the method can be called
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+        result = self.ProjectManager.board_del(env, projects_info, "missing_board")
 
-    def test_board_del_with_different_parameters(self):
-        """Test board_del method with different parameter types."""
-        env = {"test": "value"}
-        projects_info = {"existing": {"board_name": "existing_board"}}
-        board_name = "board_to_delete"
+        assert result is False
 
-        # Test with different parameter combinations
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+    def test_board_del_protected_board(self, tmp_path):
+        """Protected boards should not be deleted even if the directory exists."""
 
-    def test_board_del_empty_board_name(self):
-        """Test board_del method with empty board name."""
-        env = {}
-        projects_info = {}
-        board_name = ""
+        projects_path = tmp_path / "projects"
+        projects_path.mkdir()
+        board_name = "board_protected"
+        board_path = projects_path / board_name
+        (board_path / "po").mkdir(parents=True)
+        env = {
+            "projects_path": str(projects_path),
+            "root_path": str(tmp_path),
+            "protected_boards": {board_name},
+        }
 
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+        result = self.ProjectManager.board_del(env, {}, board_name)
 
-    def test_board_del_none_board_name(self):
-        """Test board_del method with None board name."""
-        env = {}
-        projects_info = {}
-        board_name = None
+        assert result is False
+        assert board_path.exists()
 
-        try:
-            result = self.ProjectManager.board_del(env, projects_info, board_name)
-            assert result is True
-        except NotImplementedError:
-            # Expected behavior for unimplemented method
-            pass
+    def test_board_del_invalid_parameters(self, tmp_path):
+        """Invalid inputs like empty names or missing paths should fail."""
+
+        env_with_path = {"projects_path": str(tmp_path)}
+        assert self.ProjectManager.board_del(env_with_path, {}, "") is False
+        assert (
+            self.ProjectManager.board_del(env_with_path, {}, "invalid/name")
+            is False
+        )
+        assert self.ProjectManager.board_del({}, {}, "board_theta") is False
 
     def test_project_del_with_empty_projects_info(self):
         """Test project_del with empty projects_info."""

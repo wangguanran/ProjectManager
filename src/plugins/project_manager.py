@@ -1,9 +1,10 @@
-"""
-Project management utility class for CLI operations.
-"""
+"""Project management utility class for CLI operations."""
 
+import json
 import os
-from typing import Dict
+import shutil
+from datetime import datetime
+from typing import Dict, List
 
 from configupdater import ConfigUpdater
 
@@ -306,10 +307,123 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
         projects_info (dict): All projects info.
         board_name (str): Board name.
     """
-    # TODO: implement board_new
-    _ = env
+
     _ = projects_info
-    _ = board_name
+
+    if not isinstance(board_name, str) or not board_name.strip():
+        log.error("Board name must be a non-empty string.")
+        print("Error: Board name must be a non-empty string.")
+        return False
+
+    board_name = board_name.strip()
+    if any(sep in board_name for sep in (os.sep, os.altsep) if sep):
+        log.error("Board name '%s' contains invalid path characters.", board_name)
+        print(f"Error: Board name '{board_name}' contains invalid path characters.")
+        return False
+
+    reserved_names = {"common", "template", "scripts", ".cache", ".git"}
+    if board_name in reserved_names:
+        log.error("Board name '%s' is reserved and cannot be used.", board_name)
+        print(f"Error: Board name '{board_name}' is reserved and cannot be used.")
+        return False
+
+    if not isinstance(env, dict):
+        log.error("Environment must be a dictionary containing 'projects_path'.")
+        print("Error: Environment must contain 'projects_path'.")
+        return False
+
+    projects_path = env.get("projects_path")
+    if not isinstance(projects_path, str) or not projects_path.strip():
+        log.error("Invalid 'projects_path' in environment: %s", projects_path)
+        print("Error: Invalid 'projects_path' in environment.")
+        return False
+
+    projects_path = os.path.abspath(projects_path)
+    try:
+        os.makedirs(projects_path, exist_ok=True)
+    except OSError as err:
+        log.error("Failed to ensure projects path '%s': %s", projects_path, err)
+        print(f"Error: Failed to ensure projects path '{projects_path}': {err}")
+        return False
+
+    board_path = os.path.join(projects_path, board_name)
+    if os.path.exists(board_path):
+        log.error("Board '%s' already exists at '%s'.", board_name, board_path)
+        print(f"Error: Board '{board_name}' already exists.")
+        return False
+
+    po_path = os.path.join(board_path, "po")
+    ini_path = os.path.join(board_path, f"{board_name}.ini")
+    projects_json_path = os.path.join(board_path, "projects.json")
+
+    template_ini_path = os.path.join(projects_path, "template", "template.ini")
+
+    def _generate_ini_lines() -> List[str]:
+        default_lines = [
+            f"[{board_name}]\n",
+            "PROJECT_NAME = \n",
+            "PROJECT_VERSION = \n",
+            "PROJECT_PO_CONFIG = \n",
+            "PROJECT_PO_IGNORE = \n",
+        ]
+        if not os.path.isfile(template_ini_path):
+            return default_lines
+        try:
+            with open(template_ini_path, "r", encoding="utf-8") as template_file:
+                lines = template_file.readlines()
+        except (OSError, UnicodeError) as err:
+            log.warning(
+                "Failed to read template ini '%s': %s. Using default template.",
+                template_ini_path,
+                err,
+            )
+            return default_lines
+
+        replaced = False
+        ini_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not replaced and stripped.startswith("[") and stripped.endswith("]"):
+                ini_lines.append(f"[{board_name}]\n")
+                replaced = True
+            else:
+                ini_lines.append(line)
+        if not ini_lines:
+            return default_lines
+        if not replaced:
+            ini_lines.insert(0, f"[{board_name}]\n")
+        return ini_lines
+
+    try:
+        os.makedirs(board_path, exist_ok=False)
+        os.makedirs(po_path, exist_ok=False)
+        ini_lines = _generate_ini_lines()
+        with open(ini_path, "w", encoding="utf-8") as ini_file:
+            ini_file.writelines(ini_lines)
+
+        board_metadata = {
+            "board_name": board_name,
+            "board_path": board_path,
+            "last_updated": datetime.now().isoformat(),
+            "projects": [],
+        }
+        with open(projects_json_path, "w", encoding="utf-8") as json_file:
+            json.dump(board_metadata, json_file, indent=2, ensure_ascii=False)
+    except FileExistsError:
+        log.error("Board directory structure for '%s' already exists.", board_name)
+        print(f"Error: Board '{board_name}' already exists.")
+        return False
+    except (OSError, UnicodeError, ValueError) as err:
+        log.error("Failed to create board '%s': %s", board_name, err)
+        print(f"Error: Failed to create board '{board_name}': {err}")
+        if os.path.isdir(board_path):
+            shutil.rmtree(board_path, ignore_errors=True)
+        return False
+
+    log.debug("Created new board '%s' at '%s'.", board_name, board_path)
+    print(f"Created new board '{board_name}' at '{board_path}'.")
+    print(f"Board ini file: {ini_path}")
+    print(f"PO directory: {po_path}")
     return True
 
 
@@ -322,8 +436,89 @@ def board_del(env: Dict, projects_info: Dict, board_name: str) -> bool:
         projects_info (dict): All projects info.
         board_name (str): Board name.
     """
-    # TODO: implement board_del
-    _ = env
-    _ = projects_info
-    _ = board_name
+    if not isinstance(board_name, str) or not board_name.strip():
+        log.error("Board name must be a non-empty string.")
+        print("Error: Board name must be a non-empty string.")
+        return False
+
+    board_name = board_name.strip()
+    if any(sep in board_name for sep in (os.sep, os.altsep) if sep):
+        log.error("Board name '%s' contains invalid path characters.", board_name)
+        print(f"Error: Board name '{board_name}' contains invalid path characters.")
+        return False
+
+    reserved_names = {"common", "template", "scripts", ".cache", ".git"}
+    if board_name in reserved_names:
+        log.error("Board '%s' is reserved and cannot be deleted.", board_name)
+        print(f"Error: Board '{board_name}' is reserved and cannot be deleted.")
+        return False
+
+    if not isinstance(env, dict):
+        log.error("Environment must be a dictionary containing 'projects_path'.")
+        print("Error: Environment must contain 'projects_path'.")
+        return False
+
+    projects_path = env.get("projects_path")
+    if not isinstance(projects_path, str) or not projects_path.strip():
+        log.error("Invalid 'projects_path' in environment: %s", projects_path)
+        print("Error: Invalid 'projects_path' in environment.")
+        return False
+
+    protected_boards = env.get("protected_boards", [])
+    if isinstance(protected_boards, (set, list, tuple)) and board_name in set(protected_boards):
+        log.error("Board '%s' is protected and cannot be deleted.", board_name)
+        print(f"Error: Board '{board_name}' is protected and cannot be deleted.")
+        return False
+
+    projects_path = os.path.abspath(projects_path)
+    board_path = os.path.join(projects_path, board_name)
+    if not os.path.isdir(board_path):
+        log.error("Board '%s' does not exist at '%s'.", board_name, board_path)
+        print(f"Error: Board '{board_name}' does not exist.")
+        return False
+
+    log.debug("Deleting board '%s' at '%s'.", board_name, board_path)
+
+    try:
+        shutil.rmtree(board_path)
+    except OSError as err:
+        log.error("Failed to delete board '%s': %s", board_name, err)
+        print(f"Error: Failed to delete board '{board_name}': {err}")
+        return False
+
+    root_path = env.get("root_path")
+    if not isinstance(root_path, str) or not root_path:
+        root_path = os.path.abspath(os.path.join(projects_path, os.pardir))
+
+    cache_paths = [
+        os.path.join(root_path, ".cache", "projects", board_name),
+        os.path.join(root_path, ".cache", "boards", board_name),
+        os.path.join(root_path, ".cache", "build", board_name),
+    ]
+    for cache_path in cache_paths:
+        if os.path.exists(cache_path):
+            try:
+                shutil.rmtree(cache_path)
+                log.debug("Removed cache directory '%s'.", cache_path)
+            except OSError as err:
+                log.warning("Failed to remove cache path '%s': %s", cache_path, err)
+
+    if isinstance(projects_info, dict):
+        removed_projects = [
+            name
+            for name, info in list(projects_info.items())
+            if isinstance(info, dict) and info.get("board_name") == board_name
+        ]
+        for name in removed_projects:
+            projects_info.pop(name, None)
+        if board_name in projects_info:
+            projects_info.pop(board_name, None)
+        if removed_projects:
+            log.debug(
+                "Removed %d project(s) associated with board '%s' from in-memory index.",
+                len(removed_projects),
+                board_name,
+            )
+
+    print(f"Deleted board '{board_name}'.")
     return True
