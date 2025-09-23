@@ -398,7 +398,21 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
 
     def _initialise_po_directory() -> None:
         if os.path.isdir(template_po_path):
-            shutil.copytree(template_po_path, po_path, dirs_exist_ok=True)
+            try:
+                shutil.copytree(template_po_path, po_path)
+            except FileExistsError:
+                # Destination should be empty for new boards, but fall back to
+                # copying contents to support environments that may create the
+                # directory earlier (e.g. via concurrent setup steps).
+                for root, _dirs, files in os.walk(template_po_path):
+                    rel_root = os.path.relpath(root, template_po_path)
+                    dest_root = po_path if rel_root == "." else os.path.join(po_path, rel_root)
+                    os.makedirs(dest_root, exist_ok=True)
+                    for file_name in files:
+                        shutil.copy2(
+                            os.path.join(root, file_name),
+                            os.path.join(dest_root, file_name),
+                        )
             return
 
         os.makedirs(po_path, exist_ok=False)
