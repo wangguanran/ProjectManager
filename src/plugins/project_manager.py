@@ -356,7 +356,9 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
     ini_path = os.path.join(board_path, f"{board_name}.ini")
     projects_json_path = os.path.join(board_path, "projects.json")
 
-    template_ini_path = os.path.join(projects_path, "template", "template.ini")
+    template_dir = os.path.join(projects_path, "template")
+    template_ini_path = os.path.join(template_dir, "template.ini")
+    template_po_path = os.path.join(template_dir, "po")
 
     def _generate_ini_lines() -> List[str]:
         default_lines = [
@@ -394,9 +396,19 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
             ini_lines.insert(0, f"[{board_name}]\n")
         return ini_lines
 
+    def _initialise_po_directory() -> None:
+        if os.path.isdir(template_po_path):
+            shutil.copytree(template_po_path, po_path, dirs_exist_ok=True)
+            return
+
+        os.makedirs(po_path, exist_ok=False)
+        default_po_root = os.path.join(po_path, "po_template")
+        for subdir in ("patches", "overrides"):
+            os.makedirs(os.path.join(default_po_root, subdir), exist_ok=True)
+
     try:
         os.makedirs(board_path, exist_ok=False)
-        os.makedirs(po_path, exist_ok=False)
+        _initialise_po_directory()
         ini_lines = _generate_ini_lines()
         with open(ini_path, "w", encoding="utf-8") as ini_file:
             ini_file.writelines(ini_lines)
@@ -502,6 +514,60 @@ def board_del(env: Dict, projects_info: Dict, board_name: str) -> bool:
                 log.debug("Removed cache directory '%s'.", cache_path)
             except OSError as err:
                 log.warning("Failed to remove cache path '%s': %s", cache_path, err)
+
+    def _update_projects_index(projects_path: str, board: str) -> None:
+        index_path = os.path.join(projects_path, "projects.json")
+        if not os.path.isfile(index_path):
+            return
+
+        try:
+            with open(index_path, "r", encoding="utf-8") as index_file:
+                data = json.load(index_file)
+        except (OSError, UnicodeError, json.JSONDecodeError) as err:
+            log.warning("Failed to read projects index '%s': %s", index_path, err)
+            return
+
+        changed = False
+        payload = data
+        if isinstance(data, dict):
+            if board in data:
+                data.pop(board, None)
+                changed = True
+            elif "boards" in data and isinstance(data["boards"], dict):
+                if board in data["boards"]:
+                    data["boards"].pop(board, None)
+                    changed = True
+            elif "boards" in data and isinstance(data["boards"], list):
+                filtered_boards = [item for item in data["boards"] if item != board]
+                if len(filtered_boards) != len(data["boards"]):
+                    data["boards"] = filtered_boards
+                    changed = True
+        elif isinstance(data, list):
+            filtered_data = [item for item in data if item != board]
+            if len(filtered_data) != len(data):
+                payload = filtered_data
+                changed = True
+        else:
+            log.debug(
+                "Projects index '%s' has unsupported format (%s). Skipping update.",
+                index_path,
+                type(data),
+            )
+            return
+
+        if changed:
+            try:
+                with open(index_path, "w", encoding="utf-8") as index_file:
+                    json.dump(payload, index_file, indent=2, ensure_ascii=False)
+                log.debug(
+                    "Updated projects index '%s' after deleting board '%s'.",
+                    index_path,
+                    board,
+                )
+            except (OSError, UnicodeError, ValueError) as err:
+                log.warning("Failed to update projects index '%s': %s", index_path, err)
+
+    _update_projects_index(projects_path, board_name)
 
     if isinstance(projects_info, dict):
         removed_projects = [

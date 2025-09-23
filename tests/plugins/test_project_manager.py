@@ -1658,6 +1658,9 @@ class TestBoardNew:
         board_path = tmp_path / board_name
         assert board_path.is_dir()
         assert (board_path / "po").is_dir()
+        assert (board_path / "po" / "po_template").is_dir()
+        assert (board_path / "po" / "po_template" / "patches").is_dir()
+        assert (board_path / "po" / "po_template" / "overrides").is_dir()
 
         ini_path = board_path / f"{board_name}.ini"
         assert ini_path.is_file()
@@ -1681,6 +1684,11 @@ class TestBoardNew:
             "[template]\nPROJECT_NAME=default\nCUSTOM=value\n",
             encoding="utf-8",
         )
+        template_po_dir = template_dir / "po" / "sample_po"
+        (template_po_dir / "patches").mkdir(parents=True)
+        (template_po_dir / "overrides").mkdir()
+        sample_patch = template_po_dir / "patches" / "placeholder.patch"
+        sample_patch.write_text("diff --git a/file b/file", encoding="utf-8")
 
         env = {"projects_path": str(tmp_path)}
         board_name = "board_beta"
@@ -1693,6 +1701,18 @@ class TestBoardNew:
         assert content_lines[0] == f"[{board_name}]"
         assert "PROJECT_NAME=default" in content_lines
         assert "CUSTOM=value" in content_lines
+        copied_patch = (
+            tmp_path
+            / board_name
+            / "po"
+            / "sample_po"
+            / "patches"
+            / "placeholder.patch"
+        )
+        assert copied_patch.is_file()
+        assert (
+            tmp_path / board_name / "po" / "sample_po" / "overrides"
+        ).is_dir()
 
     def test_board_new_fails_if_board_already_exists(self, tmp_path):
         """Creating a board with an existing name should fail without altering files."""
@@ -2372,6 +2392,55 @@ class TestBoardDel:
             is False
         )
         assert self.ProjectManager.board_del({}, {}, "board_theta") is False
+
+    def test_board_del_updates_projects_index(self, tmp_path):
+        """Global projects index should remove deleted boards when possible."""
+
+        projects_path = tmp_path / "projects"
+        projects_path.mkdir()
+        env = {"projects_path": str(projects_path), "root_path": str(tmp_path)}
+        board_name = "board_index"
+
+        assert self.ProjectManager.board_new(env, {}, board_name) is True
+
+        index_payload = {
+            "boards": {
+                board_name: {"path": f"/fake/{board_name}"},
+                "other": {"path": "/fake/other"},
+            }
+        }
+        index_path = projects_path / "projects.json"
+        index_path.write_text(json.dumps(index_payload), encoding="utf-8")
+
+        result = self.ProjectManager.board_del(env, {}, board_name)
+
+        assert result is True
+        updated_index = json.loads(index_path.read_text(encoding="utf-8"))
+        assert board_name not in updated_index.get("boards", {})
+        assert "other" in updated_index.get("boards", {})
+
+    def test_board_del_updates_projects_index_list_format(self, tmp_path):
+        """List-based indexes should also drop the deleted board entry."""
+
+        projects_path = tmp_path / "projects"
+        projects_path.mkdir()
+        env = {"projects_path": str(projects_path), "root_path": str(tmp_path)}
+        board_name = "board_index_list"
+
+        assert self.ProjectManager.board_new(env, {}, board_name) is True
+
+        index_path = projects_path / "projects.json"
+        index_path.write_text(
+            json.dumps([board_name, "other"], ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        result = self.ProjectManager.board_del(env, {}, board_name)
+
+        assert result is True
+        updated_index = json.loads(index_path.read_text(encoding="utf-8"))
+        assert board_name not in updated_index
+        assert "other" in updated_index
 
     def test_project_del_with_empty_projects_info(self):
         """Test project_del with empty projects_info."""
