@@ -316,10 +316,28 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
         return False
 
     board_name = board_name.strip()
+    if board_name in {".", ".."}:
+        log.error("Board name '%s' is not allowed.", board_name)
+        print(f"Error: Board name '{board_name}' is not allowed.")
+        return False
+
+    normalised_board_name = os.path.normpath(board_name)
+    if normalised_board_name in {".", ".."}:
+        log.error("Board name '%s' resolves to an invalid path.", board_name)
+        print(f"Error: Board name '{board_name}' resolves to an invalid path.")
+        return False
+
+    if os.path.isabs(normalised_board_name):
+        log.error("Board name '%s' must not resolve to an absolute path.", board_name)
+        print(f"Error: Board name '{board_name}' must not resolve to an absolute path.")
+        return False
+
     if any(sep in board_name for sep in (os.sep, os.altsep) if sep):
         log.error("Board name '%s' contains invalid path characters.", board_name)
         print(f"Error: Board name '{board_name}' contains invalid path characters.")
         return False
+
+    board_name = normalised_board_name
 
     reserved_names = {"common", "template", "scripts", ".cache", ".git"}
     if board_name in reserved_names:
@@ -346,7 +364,17 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
         print(f"Error: Failed to ensure projects path '{projects_path}': {err}")
         return False
 
-    board_path = os.path.join(projects_path, board_name)
+    board_path = os.path.abspath(os.path.join(projects_path, board_name))
+    if os.path.commonpath([projects_path, board_path]) != projects_path:
+        log.error(
+            "Board name '%s' resolves outside of projects path '%s'.",
+            board_name,
+            projects_path,
+        )
+        print(
+            f"Error: Board name '{board_name}' resolves outside of projects path '{projects_path}'."
+        )
+        return False
     if os.path.exists(board_path):
         log.error("Board '%s' already exists at '%s'.", board_name, board_path)
         print(f"Error: Board '{board_name}' already exists.")
@@ -468,10 +496,28 @@ def board_del(env: Dict, projects_info: Dict, board_name: str) -> bool:
         return False
 
     board_name = board_name.strip()
+    if board_name in {".", ".."}:
+        log.error("Board name '%s' is not allowed.", board_name)
+        print(f"Error: Board name '{board_name}' is not allowed.")
+        return False
+
+    normalised_board_name = os.path.normpath(board_name)
+    if normalised_board_name in {".", ".."}:
+        log.error("Board name '%s' resolves to an invalid path.", board_name)
+        print(f"Error: Board name '{board_name}' resolves to an invalid path.")
+        return False
+
+    if os.path.isabs(normalised_board_name):
+        log.error("Board name '%s' must not resolve to an absolute path.", board_name)
+        print(f"Error: Board name '{board_name}' must not resolve to an absolute path.")
+        return False
+
     if any(sep in board_name for sep in (os.sep, os.altsep) if sep):
         log.error("Board name '%s' contains invalid path characters.", board_name)
         print(f"Error: Board name '{board_name}' contains invalid path characters.")
         return False
+
+    board_name = normalised_board_name
 
     reserved_names = {"common", "template", "scripts", ".cache", ".git"}
     if board_name in reserved_names:
@@ -497,7 +543,17 @@ def board_del(env: Dict, projects_info: Dict, board_name: str) -> bool:
         return False
 
     projects_path = os.path.abspath(projects_path)
-    board_path = os.path.join(projects_path, board_name)
+    board_path = os.path.abspath(os.path.join(projects_path, board_name))
+    if os.path.commonpath([projects_path, board_path]) != projects_path:
+        log.error(
+            "Board name '%s' resolves outside of projects path '%s'.",
+            board_name,
+            projects_path,
+        )
+        print(
+            f"Error: Board name '{board_name}' resolves outside of projects path '{projects_path}'."
+        )
+        return False
     if not os.path.isdir(board_path):
         log.error("Board '%s' does not exist at '%s'.", board_name, board_path)
         print(f"Error: Board '{board_name}' does not exist.")
