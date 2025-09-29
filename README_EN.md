@@ -57,6 +57,12 @@ docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/projectmanager:l
 - Interactive file selection for PO creation
 - Support for .repo manifest and multi-repository environments
 
+## Documentation
+
+- [User Guide](docs/en/user/README.md) - Installation, configuration, and common commands
+- [Developer Guide](docs/en/developer/README.md) - Environment setup, standards, and workflow
+- [Documentation Index / 文档索引](docs/README.md) - Choose between the English and Chinese documentation portals
+
 ## Directory Structure
 
 ```

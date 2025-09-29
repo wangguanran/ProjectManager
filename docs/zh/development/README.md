@@ -79,4 +79,4 @@ ProjectManager/
 
 ## 其他语言版本
 
-- [English Version](README_EN.md) - 英文版文档
+- [English Version](../../en/development/README.md) - 英文版文档

@@ -504,4 +504,4 @@ pytest --collect-only
 
 ## 其他语言版本
 
-- [English Version](testing_EN.md) - 英文版文档
+- [English Version](../../en/development/testing.md) - 英文版文档

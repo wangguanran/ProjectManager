@@ -176,7 +176,7 @@ PROJECT_PO_IGNORE = vendor/* external/*
 
 ## 其他语言版本
 
-- [English Version](architecture_EN.md) - 英文版文档
+- [English Version](../../en/development/architecture.md) - 英文版文档
 
 ## PO（补丁/覆盖）架构
 
