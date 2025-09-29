@@ -244,4 +244,4 @@ def test_config_parser_validates_config():
 
 ## 其他语言版本
 
-- [English Version](requirements_EN.md)
+- [English Version](../../en/requirements/requirements.md)

@@ -110,19 +110,19 @@ PROJECT_PO_IGNORE=vendor/* external/*
 
 ## 下一步
 
-- 查看 [详细功能文档](../features/) 了解所有功能
-- 阅读 [最佳实践](../best-practices_CN.md) 学习最佳使用方法
-- 参考 [故障排除](../troubleshooting_CN.md) 解决常见问题
+- 查看 [命令参考](command-reference.md) 掌握全部命令参数。
+- 阅读 [配置管理](configuration.md) 深入理解 `.ini` 配置结构。
+- 浏览 [项目管理](../features/project-management.md) 与 [PO 忽略功能](../features/po-ignore-feature.md) 获得进阶技巧。
 
 ## 获取帮助
 
 - **命令行帮助**: `python -m src --help`
 - **特定命令帮助**: `python -m src <命令> --help`
 - **GitHub Issues**: [提交问题](https://github.com/wangguanran/ProjectManager/issues)
-- **文档**: 查看 [完整文档](../README_CN.md)
+- **文档**: 查看 [中文文档索引](../README.md)
 
 ---
 
 ## 其他语言版本
 
-- [English Version](getting-started_EN.md)
+- [English Version](../../en/user-guide/getting-started.md)

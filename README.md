@@ -54,22 +54,10 @@ ProjectManager 是一个适用于多主板、多项目环境的项目管理和�
 
 ## 📚 文档
 
-### 用户指南
-- **[快速开始](../docs/user-guide/getting-started_CN.md)** - 安装和基本使用
-- **[命令参考](../docs/user-guide/command-reference_CN.md)** - 完整命令说明
-- **[配置管理](../docs/user-guide/configuration_CN.md)** - 配置文件详解
-
-### 功能文档
-- **[PO忽略功能](../docs/features/po-ignore-feature_CN.md)** - 增强的PO忽略功能
-- **[项目管理](../docs/features/project-management_CN.md)** - 项目管理功能详解
-
-### 开发文档
-- **[开发指南](../docs/development/README_CN.md)** - 开发设置和贡献指南
-- **[系统架构](../docs/development/architecture_CN.md)** - 系统架构设计
-- **[测试策略](../docs/development/testing_CN.md)** - 测试程序和质量保证
-
-### 需求文档
-- **[功能需求](../docs/requirements/requirements_CN.md)** - 详细需求规格和测试用例
+### 核心文档
+- **[用户指南](docs/zh/user/README.md)** - 安装、配置与常用命令
+- **[开发者指南](docs/zh/developer/README.md)** - 环境搭建、规范与工作流
+- **[文档索引 / Documentation Index](docs/README.md)** - 选择中文或英文文档入口
 
 ## 🏗️ 项目结构
 
@@ -135,13 +123,13 @@ projects/
 ## 🌐 其他语言版本
 
 - [English Version](README_EN.md) - 英文版文档
-- [中文文档](../docs/README_CN.md) - 中文版文档索引
+- [中文与英文文档索引](docs/README.md) - 中文/英文文档导航
 
 ## 📞 获取帮助
 
 - **命令行帮助**: `python -m src --help`
 - **GitHub Issues**: [提交问题](https://github.com/wangguanran/ProjectManager/issues)
-- **文档**: 查看 [完整文档](../docs/README_CN.md)
+- **文档**: 查看 [完整文档](docs/README.md)
 - **讨论**: [GitHub Discussions](https://github.com/wangguanran/ProjectManager/discussions)
 
 ---
