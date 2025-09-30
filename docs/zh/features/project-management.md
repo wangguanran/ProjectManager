@@ -235,4 +235,4 @@ python -m src po_apply myproject
 
 ## 其他语言版本
 
-- [English Version](project-management_EN.md) - 英文版文档
+- [English Version](../../en/features/project-management.md) - 英文版文档

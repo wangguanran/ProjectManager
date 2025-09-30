@@ -375,4 +375,4 @@ python coverage_report.py --verbose
 
 ## 其他语言版本
 
-- [English Version](scripts_EN.md) - 英文版文档
+- [English Version](../../en/development/scripts.md) - 英文版文档

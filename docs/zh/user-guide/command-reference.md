@@ -341,4 +341,4 @@ python -m src po_list myproject --short
 
 ## 其他语言版本
 
-- [English Version](command-reference_EN.md)
+- [English Version](../../en/user-guide/command-reference.md)

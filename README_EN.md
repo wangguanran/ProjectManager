@@ -50,12 +50,18 @@ docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/projectmanager:l
 ## Main Features
 
 - Support for unified management of multiple boards and projects
-- Project/board creation, deletion, and building (some features are reserved)
+- Project/board creation, deletion, and building workflows
 - PO (patch/override) directory creation, deletion, and listing
 - Apply/rollback patches and overrides for projects
 - Automatic log archiving and performance analysis support
 - Interactive file selection for PO creation
 - Support for .repo manifest and multi-repository environments
+
+## Documentation
+
+- [User Guide](docs/en/user/README.md) - Installation, configuration, and common commands
+- [Developer Guide](docs/en/developer/README.md) - Environment setup, standards, and workflow
+- [Documentation Index / 文档索引](docs/README.md) - Choose between the English and Chinese documentation portals
 
 ## Directory Structure
 
@@ -102,7 +108,7 @@ python -m src <operation> <project_or_board_name> [parameters] [--options]
 ### Project Management Commands
 
 #### `project_new` - Create New Project
-**Status**: TODO (Not implemented)
+**Status**: ✅ Implemented
 
 **Usage**: `python -m src project_new <project_name>`
 
@@ -116,7 +122,7 @@ python -m src <operation> <project_or_board_name> [parameters] [--options]
 ---
 
 #### `project_del` - Delete Project
-**Status**: TODO (Not implemented)
+**Status**: ✅ Implemented
 
 **Usage**: `python -m src project_del <project_name>`
 
@@ -128,7 +134,7 @@ python -m src <operation> <project_or_board_name> [parameters] [--options]
 ---
 
 #### `project_build` - Build Project
-**Status**: TODO (Not implemented)
+**Status**: ✅ Implemented
 
 **Usage**: `python -m src project_build <project_name>`
 
@@ -142,7 +148,7 @@ python -m src <operation> <project_or_board_name> [parameters] [--options]
 ### Board Management Commands
 
 #### `board_new` - Create New Board
-**Status**: TODO (Not implemented)
+**Status**: ✅ Implemented
 
 **Usage**: `python -m src board_new <board_name>`
 
@@ -161,7 +167,7 @@ projects/<board_name>/
 ---
 
 #### `board_del` - Delete Board
-**Status**: TODO (Not implemented)
+**Status**: ✅ Implemented
 
 **Usage**: `python -m src board_del <board_name>`
 

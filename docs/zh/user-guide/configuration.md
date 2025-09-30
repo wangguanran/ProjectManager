@@ -275,4 +275,4 @@ python -m src po_list myproject --short
 
 ## 其他语言版本
 
-- [English Version](configuration_EN.md)
+- [English Version](../../en/user-guide/configuration.md)

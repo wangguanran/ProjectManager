@@ -166,4 +166,4 @@ docker run -v $(pwd)/projects:/app/projects ghcr.io/wangguanran/ProjectManager:l
 
 ## 其他语言版本
 
-- [English Version](github-packages_EN.md) - 英文版文档
+- [English Version](../../en/deployment/github-packages.md) - 英文版文档

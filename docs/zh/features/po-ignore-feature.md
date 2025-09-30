@@ -152,4 +152,4 @@ for pattern in config_patterns:
 
 ## 其他语言版本
 
-- [English Version](po-ignore-feature_EN.md) - 英文版文档
+- [English Version](../../en/features/po-ignore-feature.md) - 英文版文档
