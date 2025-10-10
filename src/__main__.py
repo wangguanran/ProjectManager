@@ -11,10 +11,12 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 from datetime import datetime
 from difflib import SequenceMatcher
 from importlib import import_module
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import configupdater
 
@@ -35,9 +37,41 @@ def _strip_comment(val):
     return val.split("#", 1)[0].split(";", 1)[0].strip()
 
 
+@dataclass(slots=True)
+class ProjectRecord:
+    """In-memory representation for a single project entry."""
+
+    board_name: str
+    board_path: Path
+    ini_file: Path
+    config: Dict[str, str] | None = None
+    parent: Optional[str] = None
+    children: List[str] = field(default_factory=list)
+
+    def to_mapping(self) -> Dict[str, object]:
+        """Return the serialisable structure expected by tests and callers."""
+
+        return {
+            "config": self.config or {},
+            "board_name": self.board_name,
+            "board_path": str(self.board_path),
+            "ini_file": str(self.ini_file),
+            "parent": self.parent,
+            "children": list(self.children),
+        }
+
+
+def _projects_root(projects_path: str | os.PathLike[str]) -> Path:
+    """Return the resolved projects directory path."""
+
+    if isinstance(projects_path, Path):
+        return projects_path
+    return Path(projects_path)
+
+
 @func_time
 @func_cprofile
-def _load_common_config(projects_path):
+def _load_common_config(projects_path: str | os.PathLike[str]) -> Tuple[Dict[str, Dict[str, str]], Dict[str, Dict[str, str]]]:
     """
     Load common.ini configuration file.
 
@@ -49,204 +83,182 @@ def _load_common_config(projects_path):
             - common_configs: dict containing [common] section config
             - po_configs: dict containing all po-* sections config
     """
-    common_config_path = os.path.join(projects_path, "common", "common.ini")
-    common_configs = {}
-    po_configs = {}
+    projects_root = _projects_root(projects_path)
+    common_config_path = projects_root / "common" / "common.ini"
+    common_configs: Dict[str, Dict[str, str]] = {}
+    po_configs: Dict[str, Dict[str, str]] = {}
 
-    if os.path.exists(common_config_path):
-        common_updater = configupdater.ConfigUpdater()
-        common_updater.read(common_config_path, encoding="utf-8")
-
-        # Load all sections from common.ini
-        for section_name in common_updater.sections():
-            section = common_updater[section_name]
-            section_dict = {k.upper(): _strip_comment(section[k].value) for k in section}
-
-            if section_name == "common":
-                common_configs[section_name] = section_dict
-            elif section_name.startswith("po-"):
-                po_configs[section_name] = section_dict
-            else:
-                # Other sections are also stored in common_configs for backward compatibility
-                common_configs[section_name] = section_dict
-
-        if "common" not in common_configs:
-            log.warning("[common] section not found in: '%s'", common_config_path)
-    else:
+    if not common_config_path.exists():
         log.warning("common config not found: '%s'", common_config_path)
+        return common_configs, po_configs
+
+    common_updater = configupdater.ConfigUpdater()
+    common_updater.read(common_config_path, encoding="utf-8")
+
+    def _section_to_dict(section: Mapping[str, object]) -> Dict[str, str]:
+        return {
+            key.upper(): _strip_comment(getattr(option, "value"))
+            for key, option in section.items()
+        }
+
+    for section_name in common_updater.sections():
+        section = common_updater[section_name]
+        section_dict = _section_to_dict(section)
+        if section_name == "common":
+            common_configs[section_name] = section_dict
+        elif section_name.startswith("po-"):
+            po_configs[section_name] = section_dict
+        else:
+            # Other sections are also stored in common_configs for backward compatibility
+            common_configs[section_name] = section_dict
+
+    if "common" not in common_configs:
+        log.warning("[common] section not found in: '%s'", common_config_path)
 
     return common_configs, po_configs
 
 
 @func_time
 @func_cprofile
-def _load_all_projects(projects_path, common_configs):
+def _load_all_projects(
+    projects_path: str | os.PathLike[str],
+    common_configs: Mapping[str, Mapping[str, str]],
+) -> Dict[str, Dict[str, object]]:
+    """Load project metadata from project boards and merge common configuration."""
+
+    projects_root = _projects_root(projects_path)
     exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
-    if not os.path.exists(projects_path):
-        log.warning("projects directory does not exist: '%s'", projects_path)
+    if not projects_root.exists():
+        log.warning("projects directory does not exist: '%s'", projects_root)
         return {}
-    projects_info = {}
-    raw_configs = {}
-    invalid_projects = set()
 
-    # Use the passed common_configs parameter
+    raw_configs: Dict[str, Dict[str, str]] = {}
+    project_records: Dict[str, ProjectRecord] = {}
 
-    for item in os.listdir(projects_path):
-        board_name = item
-        board_path = os.path.join(projects_path, board_name)
-        if not os.path.isdir(board_path) or board_name in exclude_dirs:
-            continue
-        ini_files = [f for f in os.listdir(board_path) if f.endswith(".ini")]
-        if not ini_files:
-            log.warning("No ini file found in board directory: '%s'", board_path)
-            continue
-        assert len(ini_files) == 1, f"Multiple ini files found in {board_path}: {ini_files}"
-        ini_file = os.path.join(board_path, ini_files[0])
-        has_duplicate = False
-        with open(ini_file, "r", encoding="utf-8") as f:
-            current_project = None
-            keys_in_project = set()
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith(";") or line.startswith("#"):
+    def _has_duplicate_keys(ini_file: Path) -> bool:
+        with ini_file.open("r", encoding="utf-8") as ini_fp:
+            current_project: Optional[str] = None
+            seen_keys: set[str] = set()
+            for line in ini_fp:
+                stripped = line.strip()
+                if not stripped or stripped.startswith(";") or stripped.startswith("#"):
                     continue
-                if line.startswith("[") and line.endswith("]"):
-                    current_project = line[1:-1].strip()
-                    keys_in_project = set()
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    current_project = stripped[1:-1].strip()
+                    seen_keys.clear()
                     continue
-                if "=" in line and current_project:
-                    key = line.split("=", 1)[0].strip()
-                    if key in keys_in_project:
+                if "=" in stripped and current_project:
+                    key = stripped.split("=", 1)[0].strip()
+                    if key in seen_keys:
                         log.error(
                             "Duplicate key '%s' found in project '%s' of file '%s'",
                             key,
                             current_project,
                             ini_file,
                         )
-                        has_duplicate = True
-                    else:
-                        keys_in_project.add(key)
-        if has_duplicate:
+                        return True
+                    seen_keys.add(key)
+        return False
+
+    for board_path in projects_root.iterdir():
+        if not board_path.is_dir() or board_path.name in exclude_dirs:
             continue
-        config = configupdater.ConfigUpdater()
-        config.read(ini_file, encoding="utf-8")
-        for project_name in config.sections():
-            config_dict = {k.upper(): _strip_comment(v.value) for k, v in config[project_name].items()}
-            raw_configs[project_name] = config_dict
-            projects_info[project_name] = {
-                "config": None,  # placeholder, will be merged later
-                "board_name": board_name,
-                "board_path": board_path,
-                "ini_file": ini_file,
-                "parent": None,  # parent project name
-                "children": [],  # list of children project names
+        ini_files = sorted(board_path.glob("*.ini"))
+        if not ini_files:
+            log.warning("No ini file found in board directory: '%s'", board_path)
+            continue
+        if len(ini_files) > 1:
+            raise AssertionError(f"Multiple ini files found in {board_path}: {ini_files}")
+        ini_file = ini_files[0]
+        if _has_duplicate_keys(ini_file):
+            continue
+        updater = configupdater.ConfigUpdater()
+        updater.read(ini_file, encoding="utf-8")
+        for project_name in updater.sections():
+            config_dict = {
+                key.upper(): _strip_comment(option.value)
+                for key, option in updater[project_name].items()
             }
+            raw_configs[project_name] = config_dict
+            project_records[project_name] = ProjectRecord(
+                board_name=board_path.name,
+                board_path=board_path,
+                ini_file=ini_file,
+            )
 
-    # Build parent-child relationships
-    def find_parent(project_name):
-        if "-" in project_name:
-            return project_name.rsplit("-", 1)[0]
-        return None
+    def _find_parent(project_name: str) -> Optional[str]:
+        return project_name.rsplit("-", 1)[0] if "-" in project_name else None
 
-    # First, assign parent for each project
-    for project_name, project_info in projects_info.items():
-        parent_name = find_parent(project_name)
-        project_info["parent"] = parent_name
+    for name, record in project_records.items():
+        record.parent = _find_parent(name)
 
-    # Then, assign children for each project
-    for project_name, project_info in projects_info.items():
-        parent_name = project_info["parent"]
-        if parent_name and parent_name in projects_info:
-            parent_project_info = projects_info[parent_name]
-            parent_project_info["children"].append(project_name)
+    for name, record in project_records.items():
+        if record.parent and record.parent in project_records:
+            project_records[record.parent].children.append(name)
 
-    merged_configs = {}
+    merged_configs: Dict[str, Dict[str, str]] = {}
 
-    def merge_config(project):
+    def _merge_config(project: str) -> Dict[str, str]:
         if project in merged_configs:
             return merged_configs[project]
-        if project in invalid_projects:
-            return {}
-        parent = find_parent(project)
-        merged = {}
-        # Merge common configuration first (only [common] section)
-        if "common" in common_configs:
-            for k, v in common_configs["common"].items():
-                merged[k] = v
-        # Then merge parent project configuration
+        parent = _find_parent(project)
+        merged: Dict[str, str] = {}
+        common_section = common_configs.get("common", {})
+        merged.update(common_section)
         if parent and parent in raw_configs:
-            parent_cfg = merge_config(parent)
-            for k, v in parent_cfg.items():
-                merged[k] = v
-        # Finally merge current project configuration
-        for k, v in raw_configs[project].items():
-            if k == "PROJECT_PO_CONFIG" and k in merged:
-                merged[k] = merged[k].strip() + " " + v.strip()
+            merged.update(_merge_config(parent))
+        for key, value in raw_configs[project].items():
+            if key == "PROJECT_PO_CONFIG" and key in merged:
+                merged[key] = f"{merged[key].strip()} {value.strip()}".strip()
             else:
-                merged[k] = v
+                merged[key] = value
         merged_configs[project] = merged
         return merged
 
-    for project, project_info in projects_info.items():
-        if project in invalid_projects:
-            continue
-        project_info["config"] = merge_config(project)
+    for project_name, record in project_records.items():
+        record.config = _merge_config(project_name)
 
-    # Write project information to board directories
-    def __write_projects_info_to_boards(projects_info, projects_path):
-        """
-        Write project information to board directories.
+    _write_projects_info_to_boards(project_records, projects_root)
 
-        Args:
-            projects_info (dict): Dictionary containing project information
-            projects_path (str): Path to projects directory
-        """
-        try:
-            # Group projects by board_name
-            board_projects = {}
-            for project_name, project_info in projects_info.items():
-                board_name = project_info.get("board_name")
-                if board_name:
-                    if board_name not in board_projects:
-                        board_projects[board_name] = []
-                    board_projects[board_name].append(
-                        {
-                            "project_name": project_name,
-                            "config": project_info.get("config", {}),
-                            "parent": project_info.get("parent"),
-                            "children": project_info.get("children", []),
-                            "ini_file": project_info.get("ini_file"),
-                        }
-                    )
+    return {name: record.to_mapping() for name, record in project_records.items()}
 
-            # Write project information to each board directory
-            for board_name, projects in board_projects.items():
-                board_path = os.path.join(projects_path, board_name)
-                if not os.path.exists(board_path):
-                    log.warning("Board directory does not exist: %s", board_path)
-                    continue
 
-                # Prepare project data for JSON output
-                project_data = {
-                    "board_name": board_name,
-                    "board_path": board_path,
-                    "last_updated": datetime.now().isoformat(),
-                    "projects": projects,
+def _write_projects_info_to_boards(
+    project_records: Mapping[str, ProjectRecord],
+    projects_root: Path,
+) -> None:
+    """Persist per-board project summaries for inspection."""
+
+    try:
+        board_projects: Dict[str, List[Dict[str, object]]] = {}
+        for project_name, record in project_records.items():
+            board_projects.setdefault(record.board_name, []).append(
+                {
+                    "project_name": project_name,
+                    "config": record.config or {},
+                    "parent": record.parent,
+                    "children": list(record.children),
+                    "ini_file": str(record.ini_file),
                 }
+            )
 
-                # Write to projects.json in board directory
-                projects_json_path = os.path.join(board_path, "projects.json")
-                with open(projects_json_path, "w", encoding="utf-8") as f:
-                    json.dump(project_data, f, indent=2, ensure_ascii=False)
-
-                log.debug("Project information written to: %s", projects_json_path)
-
-        except (OSError, IOError, ValueError) as e:
-            log.error("Failed to write project information to board directories: %s", e)
-
-    __write_projects_info_to_boards(projects_info, projects_path)
-
-    return projects_info
+        for board_name, projects in board_projects.items():
+            board_path = projects_root / board_name
+            if not board_path.exists():
+                log.warning("Board directory does not exist: %s", board_path)
+                continue
+            project_data = {
+                "board_name": board_name,
+                "board_path": str(board_path),
+                "last_updated": datetime.now().isoformat(),
+                "projects": projects,
+            }
+            projects_json_path = board_path / "projects.json"
+            with projects_json_path.open("w", encoding="utf-8") as json_file:
+                json.dump(project_data, json_file, indent=2, ensure_ascii=False)
+            log.debug("Project information written to: %s", projects_json_path)
+    except (OSError, IOError, ValueError) as error:
+        log.error("Failed to write project information to board directories: %s", error)
 
 
 @func_time
@@ -301,7 +313,7 @@ def _load_builtin_plugin_operations():
     func_ops = {}
     for name, info in func_ops_min.items():
         func = info["func"]
-        desc = getattr(func, "_operation_meta", {}).get("desc") or (
+        desc = info.get("desc") or (
             func.__doc__.strip().splitlines()[0] if func.__doc__ else "plugin operation"
         )
         sig = inspect.signature(func)
@@ -314,7 +326,7 @@ def _load_builtin_plugin_operations():
             "param_count": len(params),
             "required_params": required_params,
             "required_count": len(required_params),
-            "needs_repositories": bool(getattr(func, "_operation_meta", {}).get("needs_repositories", False)),
+            "needs_repositories": bool(info.get("needs_repositories", False)),
             "plugin_class": None,
         }
     # function ops override class ops if name clashes
@@ -585,11 +597,14 @@ def get_operation_meta_flag(func, operate, key):
     Retrieve a boolean flag from operation metadata for a given function, operation name, and config key.
     Checks class and parent classes' OPERATION_META only.
     """
-    # Try to get the plugin class from the function's metadata first
-    # Prefer function-based metadata first
-    meta = getattr(func, "_operation_meta", None)
-    if meta is not None and key in meta:
-        return bool(meta[key])
+    registry_meta = get_registered_operations().get(operate)
+    if registry_meta and key in registry_meta:
+        return bool(registry_meta[key])
+    plugin_class = getattr(func, "_plugin_class", None)
+    if plugin_class and hasattr(plugin_class, "OPERATION_META"):
+        class_meta = getattr(plugin_class, "OPERATION_META", {})
+        if isinstance(class_meta, dict) and key in class_meta.get(operate, {}):
+            return bool(class_meta[operate][key])
     log.error("Failed to get operation meta flag for '%s' with key '%s'", operate, key)
     return False
 
