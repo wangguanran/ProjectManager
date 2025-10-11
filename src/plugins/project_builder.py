@@ -35,7 +35,7 @@ def _safe_run(cmd: Sequence[str], cwd: Path, *, capture_output: bool = False) ->
 
     return subprocess.run(
         list(cmd),
-        cwd=str(cwd),
+        cwd=os.fspath(cwd),
         stdout=subprocess.PIPE if capture_output else subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=True,
@@ -107,7 +107,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
                     commit_hash = (
                         subprocess.check_output(
                             ["git", "rev-parse", f"{ref}:{file_path}"],
-                            cwd=str(repo_path),
+                            cwd=os.fspath(repo_path),
                             stderr=subprocess.DEVNULL,
                         )
                         .decode()
@@ -118,7 +118,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
                     with out_file.open("wb") as handle:
                         subprocess.run(
                             ["git", "show", f"{ref}:{file_path}"],
-                            cwd=str(repo_path),
+                            cwd=os.fspath(repo_path),
                             stdout=handle,
                             stderr=subprocess.DEVNULL,
                             check=True,
@@ -138,12 +138,12 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
         try:
             upstream = subprocess.check_output(
                 ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
-                cwd=str(repo_path),
+                cwd=os.fspath(repo_path),
                 stderr=subprocess.DEVNULL,
             ).decode().strip()
             commits = subprocess.check_output(
                 ["git", "rev-list", f"{upstream}..HEAD"],
-                cwd=str(repo_path),
+                cwd=os.fspath(repo_path),
                 stderr=subprocess.DEVNULL,
             ).decode().strip().splitlines()
             if not commits:
@@ -151,7 +151,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
             out_dir.mkdir(parents=True, exist_ok=True)
             subprocess.run(
                 ["git", "format-patch", f"{upstream}..HEAD", "-o", str(out_dir)],
-                cwd=str(repo_path),
+                cwd=os.fspath(repo_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=True,
@@ -168,7 +168,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
         print(f"Processing repo {idx + 1}/{len(repositories)}: {repo_name}")
         repo_path_obj = Path(repo_path)
         staged_files = (
-            subprocess.check_output(["git", "diff", "--name-only", "--cached"], cwd=repo_path)
+            subprocess.check_output(["git", "diff", "--name-only", "--cached"], cwd=os.fspath(repo_path))
             .decode()
             .strip()
             .splitlines()
@@ -176,7 +176,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
         working_files = (
             subprocess.check_output(
                 ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
-                cwd=repo_path,
+                cwd=os.fspath(repo_path),
             )
             .decode()
             .strip()
