@@ -1,44 +1,46 @@
-"""
-Utility functions collection.
-"""
+"""Utility helpers shared across the project."""
+
+from __future__ import annotations
 
 import os
 import sys
 import time
+from pathlib import Path
+from typing import Union
 
 import toml
 
+PathLike = Union[str, os.PathLike[str]]
 
-def path_from_root(*args):
+
+def path_from_root(*parts: PathLike) -> str:
+    """Join ``parts`` to the current working directory and return the path as ``str``.
+
+    ``path_from_root`` behaves like :class:`pathlib.Path`'s ``joinpath`` which means that if
+    any argument is an absolute path it will replace the accumulated result. This keeps the
+    helper intuitive while still allowing callers to pass pre-built :class:`Path` objects.
     """
-    Constructs an absolute path from path components relative to the current working directory.
 
-    Args:
-        *args: Variable length argument list for path components.
+    cwd = Path.cwd()
+    if not parts:
+        return str(cwd)
 
-    Returns:
-        str: The absolute path.
+    joined = cwd.joinpath(*(Path(p) for p in parts))
+    return str(joined)
+
+
+def get_filename(prefix: str, suffix: str, directory: PathLike) -> str:
+    """Return an absolute filename constructed from ``prefix`` and ``suffix``.
+
+    The filename is generated under ``directory`` (relative to the current working directory)
+    and suffixed with a timestamp so repeated calls do not collide.
     """
-    return os.path.join(os.getcwd(), *args)
 
+    target_dir = Path(path_from_root(directory))
+    target_dir.mkdir(parents=True, exist_ok=True)
 
-def get_filename(prefix, suffix, path):
-    """
-    Generates a unique filename with a timestamp.
-
-    Args:
-        prefix (str): The prefix for the filename.
-        suffix (str): The suffix for the filename.
-        path (str): The directory where the file will be located.
-
-    Returns:
-        str: The full path for the new file.
-    """
-    path = path_from_root(path)
-    if not os.path.exists(path):
-        os.makedirs(path)
-    date_str = time.strftime("%Y%m%d_%H%M%S")
-    return os.path.join(path, "".join((prefix, date_str, suffix)))
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    return str(target_dir / f"{prefix}{timestamp}{suffix}")
 
 
 def get_version():

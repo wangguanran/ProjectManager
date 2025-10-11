@@ -1,6 +1,6 @@
-"""
-Patch and override operations for project management.
-"""
+"""Patch and override operations for project management."""
+
+from __future__ import annotations
 
 import fnmatch
 import os
@@ -16,7 +16,7 @@ from src.operations.registry import register
 # from src.profiler import auto_profile  # unused
 
 
-def parse_po_config(po_config):
+def parse_po_config(po_config: str) -> Tuple[List[str], set[str], Dict[str, set[str]]]:
     """Parse PROJECT_PO_CONFIG string into components.
 
     Returns a tuple of (apply_pos: list[str], exclude_pos: set[str], exclude_files: dict[str, set[str]]).

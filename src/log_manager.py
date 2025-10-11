@@ -1,15 +1,20 @@
-"""
-Log manager module.
-"""
+"""Centralised logging utilities."""
+
+from __future__ import annotations
 
 import logging
 import logging.config
-import os
+from pathlib import Path
+from typing import Any, Dict
 
-from src.utils import get_filename
+from src.utils import get_filename, path_from_root
 
-LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
-LATEST_LOG_LINK = os.path.join(os.getcwd(), ".cache", "latest.log")
+LOG_PATH = Path(path_from_root(".cache", "logs"))
+LATEST_LOG_LINK = Path(path_from_root(".cache", "latest.log"))
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] "
+    "[%(funcName)-24s] [%(lineno)-4d] %(message)s"
+)
 
 # ANSI color codes for log levels
 LOG_COLORS = {
@@ -35,33 +40,46 @@ class ColoredFormatter(logging.Formatter):
 
 
 class LogManager:
-    """Log manager singleton class."""
+    """Singleton manager that configures and exposes the application logger."""
 
-    __instance = None
+    __instance: "LogManager | None" = None
 
     def __new__(cls):
         if cls.__instance is None:
             cls.__instance = super().__new__(cls)
+            cls.__instance._logger = None  # type: ignore[attr-defined]
         return cls.__instance
 
     def __init__(self):
-        self.logger = self._init_logger()
+        if getattr(self, "_logger", None) is None:
+            self._logger = self._init_logger()
 
     @staticmethod
-    def _init_logger():
-        """Initialize logger."""
-        # Generate log file path
-        log_file_path = get_filename("Log_", ".log", LOG_PATH)
+    def _init_logger() -> logging.Logger:
+        """Initialise and configure the main project logger."""
 
-        config = {
-            "version": 1.0,
+        log_directory = LOG_PATH
+        log_file_path = Path(get_filename("Log_", ".log", log_directory))
+
+        config = LogManager._build_logging_config(log_file_path)
+        logging.config.dictConfig(config)
+
+        LogManager._create_latest_log_link(log_file_path)
+        return logging.getLogger("FileLogger")
+
+    @staticmethod
+    def _build_logging_config(log_file_path: Path) -> Dict[str, Any]:
+        """Return the logging configuration dictionary."""
+
+        return {
+            "version": 1,
             "formatters": {
                 "console_formatter": {
                     "()": ColoredFormatter,
-                    "format": "[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] [%(funcName)-24s] [%(lineno)-4d] %(message)s",
+                    "format": LOG_FORMAT,
                 },
                 "file_formatter": {
-                    "format": "[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] [%(funcName)-24s] [%(lineno)-4d] %(message)s",
+                    "format": LOG_FORMAT,
                 },
             },
             "handlers": {
@@ -72,12 +90,12 @@ class LogManager:
                 },
                 "file": {
                     "class": "logging.FileHandler",
-                    "filename": log_file_path,
+                    "filename": str(log_file_path),
                     "level": "DEBUG",
                     "mode": "w",
                     "formatter": "file_formatter",
                     "encoding": "utf8",
-                    "delay": "True",
+                    "delay": True,
                 },
                 "file_base_time": {
                     "class": "logging.handlers.TimedRotatingFileHandler",
@@ -85,7 +103,7 @@ class LogManager:
                     "level": "DEBUG",
                     "formatter": "file_formatter",
                     "encoding": "utf8",
-                    "delay": "True",
+                    "delay": True,
                 },
             },
             "loggers": {
@@ -99,35 +117,26 @@ class LogManager:
                 },
             },
         }
-        logging.config.dictConfig(config)
-
-        # Create symbolic link to latest log file
-        LogManager._create_latest_log_link(log_file_path)
-
-        return logging.getLogger("FileLogger")
 
     @staticmethod
-    def _create_latest_log_link(log_file_path):
-        """Create symbolic link to latest log file."""
+    def _create_latest_log_link(log_file_path: Path) -> None:
+        """Create or refresh the ``latest.log`` symbolic link."""
+
         try:
-            # Ensure .cache directory exists
-            cache_dir = os.path.dirname(LATEST_LOG_LINK)
-            if not os.path.exists(cache_dir):
-                os.makedirs(cache_dir)
+            cache_dir = LATEST_LOG_LINK.parent
+            cache_dir.mkdir(parents=True, exist_ok=True)
 
-            # Remove existing link if it exists
-            if os.path.exists(LATEST_LOG_LINK) or os.path.islink(LATEST_LOG_LINK):
-                os.remove(LATEST_LOG_LINK)
+            if LATEST_LOG_LINK.exists() or LATEST_LOG_LINK.is_symlink():
+                LATEST_LOG_LINK.unlink()
 
-            # Create symbolic link
-            os.symlink(log_file_path, LATEST_LOG_LINK)
-        except OSError as e:
-            # If symlink creation fails, log the error but don't crash
-            print(f"Warning: Failed to create log symlink: {e}")
+            LATEST_LOG_LINK.symlink_to(log_file_path)
+        except OSError as exc:  # pragma: no cover - platform dependent
+            print(f"Warning: Failed to create log symlink: {exc}")
 
-    def get_logger(self):
-        """Get logger instance."""
-        return self.logger
+    def get_logger(self) -> logging.Logger:
+        """Return the configured logger instance."""
+
+        return self._logger
 
 
 log = LogManager().get_logger()

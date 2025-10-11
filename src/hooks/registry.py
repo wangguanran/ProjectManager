@@ -1,16 +1,45 @@
-"""
-Hook registry system for extensible project building operations.
-"""
+"""Registry primitives for registering and querying lifecycle hooks."""
 
+from __future__ import annotations
+
+import inspect
 import logging
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
 log = logging.getLogger(__name__)
 
-# Global hook registry instance
-_hooks: Dict[str, List[Dict[str, Any]]] = {}
-_platform_hooks: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+class HookInfoBase(TypedDict):
+    """Typed representation of the metadata stored for each hook."""
+
+    name: str
+    func: Callable[..., object]
+    priority: "HookPriority"
+    description: str
+    platform: Optional[str]
+
+
+@dataclass(frozen=True)
+class HookSignatureSummary:
+    """Pre-computed information about how to invoke a hook."""
+
+    signature: inspect.Signature
+    context_parameter: Optional[inspect.Parameter]
+
+
+class HookInfo(HookInfoBase, total=False):
+    """Extended metadata captured at registration time."""
+
+    invocation: str
+    parameters: Tuple[str, ...]
+    signature_summary: HookSignatureSummary
+
+
+HookTypeLike = Union[str, "HookType"]
+
+_hooks: Dict[str, List[HookInfo]] = {}
+_platform_hooks: Dict[str, Dict[str, List[HookInfo]]] = {}
 
 
 class HookPriority(Enum):
@@ -35,9 +64,9 @@ class HookType(Enum):
 
 
 def register_hook(
-    hook_type: Union[str, HookType],
+    hook_type: HookTypeLike,
     name: str,
-    func: Callable,
+    func: Callable[..., object],
     priority: HookPriority = HookPriority.NORMAL,
     platform: Optional[str] = None,
     description: str = "",
@@ -75,13 +104,22 @@ def register_hook(
             hook_list.remove(existing_hook)
             break
 
-    hook_info = {
+    invocation, parameters, summary = _summarise_hook_signature(func)
+
+    hook_info: HookInfo = {
         "name": name,
         "func": func,
         "priority": priority,
         "description": description,
         "platform": platform,
     }
+
+    if invocation:
+        hook_info["invocation"] = invocation
+    if parameters:
+        hook_info["parameters"] = parameters
+    if summary:
+        hook_info["signature_summary"] = summary
 
     hook_list.append(hook_info)
     # Sort by priority (lower number = higher priority)
@@ -90,7 +128,7 @@ def register_hook(
     log.debug("Registered hook '%s' for type '%s' with priority %d", name, hook_type_str, priority.value)
 
 
-def get_hooks(hook_type: Union[str, HookType], platform: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_hooks(hook_type: HookTypeLike, platform: Optional[str] = None) -> List[HookInfo]:
     """
     Get all hooks for a specific type and optionally platform.
 
@@ -103,7 +141,7 @@ def get_hooks(hook_type: Union[str, HookType], platform: Optional[str] = None) -
     """
     hook_type_str = hook_type.value if isinstance(hook_type, HookType) else str(hook_type)
 
-    hooks = []
+    hooks: List[HookInfo] = []
 
     # Get global hooks
     if hook_type_str in _hooks:
@@ -120,7 +158,7 @@ def get_hooks(hook_type: Union[str, HookType], platform: Optional[str] = None) -
     return hooks
 
 
-def unregister_hook(hook_type: Union[str, HookType], name: str, platform: Optional[str] = None) -> bool:
+def unregister_hook(hook_type: HookTypeLike, name: str, platform: Optional[str] = None) -> bool:
     """
     Unregister a hook by name.
 
@@ -152,7 +190,7 @@ def unregister_hook(hook_type: Union[str, HookType], name: str, platform: Option
     return False
 
 
-def list_hooks(hook_type: Optional[Union[str, HookType]] = None) -> Dict[str, Any]:
+def list_hooks(hook_type: Optional[HookTypeLike] = None) -> Dict[str, Dict[str, List[HookInfo]]]:
     """
     List all registered hooks.
 
@@ -162,7 +200,7 @@ def list_hooks(hook_type: Optional[Union[str, HookType]] = None) -> Dict[str, An
     Returns:
         Dictionary containing hook information
     """
-    result: Dict[str, Any] = {"global_hooks": {}, "platform_hooks": {}}
+    result: Dict[str, Dict[str, List[HookInfo]]] = {"global_hooks": {}, "platform_hooks": {}}
 
     if hook_type:
         hook_type_str = hook_type.value if isinstance(hook_type, HookType) else str(hook_type)
@@ -175,13 +213,15 @@ def list_hooks(hook_type: Optional[Union[str, HookType]] = None) -> Dict[str, An
                     result["platform_hooks"][platform] = {}
                 result["platform_hooks"][platform][hook_type_str] = platform_hooks[hook_type_str]
     else:
-        result["global_hooks"] = _hooks.copy()
-        result["platform_hooks"] = _platform_hooks.copy()
+        result["global_hooks"] = {k: v.copy() for k, v in _hooks.items()}
+        result["platform_hooks"] = {
+            platform: {k: v.copy() for k, v in hooks.items()} for platform, hooks in _platform_hooks.items()
+        }
 
     return result
 
 
-def clear_hooks(hook_type: Optional[Union[str, HookType]] = None, platform: Optional[str] = None) -> None:
+def clear_hooks(hook_type: Optional[HookTypeLike] = None, platform: Optional[str] = None) -> None:
     """
     Clear all hooks or hooks of a specific type/platform.
 
@@ -208,7 +248,7 @@ def clear_hooks(hook_type: Optional[Union[str, HookType]] = None, platform: Opti
 
 
 def hook(
-    hook_type: Union[str, HookType],
+    hook_type: HookTypeLike,
     name: str,
     priority: HookPriority = HookPriority.NORMAL,
     platform: Optional[str] = None,
@@ -225,7 +265,7 @@ def hook(
         description: Description of the hook
     """
 
-    def decorator(func):
+    def decorator(func: Callable[..., object]):
         register_hook(
             hook_type=hook_type,
             name=name,
@@ -239,11 +279,58 @@ def hook(
     return decorator
 
 
+def _summarise_hook_signature(
+    func: Callable[..., object],
+) -> Tuple[str, Tuple[str, ...], Optional[HookSignatureSummary]]:
+    """Return how a hook function prefers to receive the execution context."""
+
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return ("unknown", (), None)
+
+    parameters = tuple(signature.parameters.values())
+    if not parameters:
+        return ("no_args", (), HookSignatureSummary(signature=signature, context_parameter=None))
+
+    context_parameter: Optional[inspect.Parameter] = None
+
+    for parameter in parameters:
+        if parameter.name == "context":
+            context_parameter = parameter
+            break
+
+    if context_parameter is None:
+        for parameter in parameters:
+            if parameter.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.VAR_POSITIONAL,
+            ):
+                context_parameter = parameter
+                break
+
+    if context_parameter and context_parameter.kind == inspect.Parameter.KEYWORD_ONLY:
+        invocation = "context_keyword"
+    elif context_parameter is None and any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
+    ):
+        invocation = "kwargs"
+    else:
+        invocation = "positional"
+
+    return (
+        invocation,
+        tuple(parameter.name for parameter in parameters),
+        HookSignatureSummary(signature=signature, context_parameter=context_parameter),
+    )
+
+
 # Convenience functions for common operations
 def register_global_hook(
-    hook_type: Union[str, HookType],
+    hook_type: HookTypeLike,
     name: str,
-    func: Callable,
+    func: Callable[..., object],
     priority: HookPriority = HookPriority.NORMAL,
     description: str = "",
 ) -> None:
@@ -261,9 +348,9 @@ def register_global_hook(
 
 
 def register_platform_hook(
-    hook_type: Union[str, HookType],
+    hook_type: HookTypeLike,
     name: str,
-    func: Callable,
+    func: Callable[..., object],
     platform: str,
     priority: HookPriority = HookPriority.NORMAL,
     description: str = "",
@@ -282,12 +369,12 @@ def register_platform_hook(
     register_hook(hook_type, name, func, priority, platform, description)
 
 
-def get_global_hooks(hook_type: Union[str, HookType]) -> List[Dict[str, Any]]:
+def get_global_hooks(hook_type: HookTypeLike) -> List[HookInfo]:
     """Get only global hooks for a type."""
     return get_hooks(hook_type, None)
 
 
-def get_platform_hooks(hook_type: Union[str, HookType], platform: str) -> List[Dict[str, Any]]:
+def get_platform_hooks(hook_type: HookTypeLike, platform: str) -> List[HookInfo]:
     """Get only platform-specific hooks for a type and platform."""
     hook_type_str = hook_type.value if isinstance(hook_type, HookType) else str(hook_type)
 
