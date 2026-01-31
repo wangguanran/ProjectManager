@@ -135,3 +135,6 @@ out
 
 # GitHub Package Registry
 .pypirc
+
+# macOS
+.DS_Store
