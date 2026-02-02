@@ -18,7 +18,7 @@ class TestColoredFormatter:
 
     def setup_method(self):
         """Set up test environment for ColoredFormatter tests."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.log_manager import (
@@ -144,7 +144,7 @@ class TestLogManager:
 
     def setup_method(self):
         """Set up test environment for LogManager tests."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.log_manager import (
@@ -251,7 +251,7 @@ class TestLogManagerIntegration:
 
     def setup_method(self):
         """Set up test environment for LogManager integration tests."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.log_manager import (
@@ -280,7 +280,7 @@ class TestGlobalLog:
 
     def setup_method(self):
         """Set up test environment for global log tests."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.log_manager import log

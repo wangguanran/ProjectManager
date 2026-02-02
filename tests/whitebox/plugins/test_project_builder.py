@@ -17,7 +17,7 @@ class TestProjectDiff:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.plugins.project_builder and assigns it to self.project_diff for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.plugins.project_builder import project_diff
@@ -260,7 +260,7 @@ class TestProjectPreBuild:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.plugins.project_builder and assigns it to self.project_pre_build for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.plugins.project_builder import project_pre_build
@@ -316,7 +316,7 @@ class TestProjectDoBuild:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.plugins.project_builder and assigns it to self.project_do_build for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.plugins.project_builder import project_do_build
@@ -385,7 +385,7 @@ class TestProjectPostBuild:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.plugins.project_builder and assigns it to self.project_post_build for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.plugins.project_builder import project_post_build
@@ -441,7 +441,7 @@ class TestProjectBuild:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.plugins.project_builder and assigns it to self.project_build for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.plugins.project_builder import project_build

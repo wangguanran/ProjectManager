@@ -11,12 +11,12 @@ import sys
 import tempfile
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src")))
 
 
 def load_utils():
     """Dynamically load the utils module from src/utils.py for testing."""
-    utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/utils.py"))
+    utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src", "utils.py"))
     spec = importlib.util.spec_from_file_location("utils", utils_path)
     utils_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(utils_mod)

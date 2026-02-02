@@ -23,7 +23,7 @@ class TestMainFunction:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the main function from src.__main__ and assigns it to self.main for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.__main__ import _load_all_projects, main
@@ -104,7 +104,7 @@ class TestLoadAllProjects:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.__main__ import _load_all_projects, _load_common_config
@@ -665,7 +665,7 @@ class TestPluginOperations:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.__main__ import (
@@ -991,7 +991,7 @@ class TestFuzzyOperationMatching:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the fuzzy matching function from src.__main__ and assigns it to self.fuzzy_match for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.__main__ import _find_best_operation_match
@@ -1113,7 +1113,7 @@ class TestFindRepositories:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from src.__main__ import _find_repositories, _write_repositories_to_file

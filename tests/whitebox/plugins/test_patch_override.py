@@ -24,7 +24,7 @@ class TestPatchOverrideApply:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride
@@ -770,7 +770,7 @@ class TestPatchOverrideRevert:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride
@@ -854,7 +854,7 @@ class TestPatchOverrideNew:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride
@@ -980,7 +980,7 @@ class TestPatchOverrideDelete:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride
@@ -1040,7 +1040,7 @@ class TestPatchOverrideList:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride
@@ -1125,7 +1125,7 @@ class TestPatchOverrideParseConfig:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride
@@ -1155,7 +1155,7 @@ class TestPatchOverrideUpdate:
         - Adds the project root to sys.path if not already present, ensuring modules can be imported correctly.
         - Imports the function/class from src.module and assigns it to self.function_name for use in test cases.
         """
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.patch_override as PatchOverride

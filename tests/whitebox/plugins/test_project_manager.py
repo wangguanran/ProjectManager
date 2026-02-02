@@ -13,7 +13,7 @@ class TestProjectNew:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.project_manager as ProjectManager
@@ -1320,7 +1320,7 @@ class TestProjectDel:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.project_manager as ProjectManager
@@ -1638,7 +1638,7 @@ class TestBoardNew:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.project_manager as ProjectManager
@@ -2307,7 +2307,7 @@ class TestBoardDel:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.project_manager as ProjectManager
@@ -2586,7 +2586,7 @@ class TestProjectManagerClass:
 
     def setup_method(self):
         """Set up test environment for each test case."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         import src.plugins.project_manager as ProjectManager
