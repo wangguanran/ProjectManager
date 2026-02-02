@@ -1,0 +1,6 @@
+{
+  "request_type": "new_requirement",
+  "title": "根据当前docs下的测试用例补充测试代码，调整当前的tests目录，分两个目录，一个白盒一个黑盒。黑盒严格按照测试用例一一对应和实现。黑盒完成后再进行白盒用例的编写，此时仅能修改测试代码禁止修改src逻辑",
+  "details": "根据docs/test_cases_zh.md与docs/test_cases_en.md补充测试代码，调整tests目录为blackbox/whitebox",
+  "confirmed": true
+}
