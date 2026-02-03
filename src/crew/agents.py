@@ -186,7 +186,24 @@ class TestCaseStore:
     def __init__(self, path: str):
         self.path = path
 
-    def load_existing(self, path: str) -> List[TestCase]:
+    def write(self, test_cases: List[TestCase]) -> None:
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path, "a", encoding="utf-8") as f:
+            for case in test_cases:
+                f.write(f"## {case.case_id} {case.title}\n")
+                f.write(f"- Scope: {case.scope}\n")
+                f.write(f"- Type: {case.case_type}\n")
+                f.write("- Steps:\n")
+                for step in case.steps:
+                    f.write(f"  - {step}\n")
+                f.write("- Expected:\n")
+                for expected in case.expected:
+                    f.write(f"  - {expected}\n")
+                f.write("\n")
+
+    @staticmethod
+    def load_existing(path: str) -> List[TestCase]:
+        """Load existing test cases from file with full details."""
         if not os.path.exists(path):
             return []
         cases: List[TestCase] = []
@@ -227,40 +244,6 @@ class TestCaseStore:
         if current:
             cases.append(current)
         return cases
-
-    def write(self, test_cases: List[TestCase]) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path, "a", encoding="utf-8") as f:
-            for case in test_cases:
-                f.write(f"## {case.case_id} {case.title}\n")
-                f.write(f"- Scope: {case.scope}\n")
-                f.write(f"- Type: {case.case_type}\n")
-                f.write("- Steps:\n")
-                for step in case.steps:
-                    f.write(f"  - {step}\n")
-                f.write("- Expected:\n")
-                for expected in case.expected:
-                    f.write(f"  - {expected}\n")
-                f.write("\n")
-
-    @staticmethod
-    def load_existing(path: str) -> List[TestCase]:
-        # Minimal parser: we only use this for conflict checks by title.
-        if not os.path.exists(path):
-            return []
-        test_cases: List[TestCase] = []
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("## "):
-                    _, rest = line.split("## ", 1)
-                    parts = rest.strip().split(" ", 1)
-                    if len(parts) == 2:
-                        case_id, title = parts
-                    else:
-                        case_id = parts[0]
-                        title = parts[0]
-                    test_cases.append(TestCase(case_id=case_id, title=title, steps=[], expected=[]))
-        return test_cases
 
 
 __all__ = [

@@ -1,0 +1,215 @@
+{
+  "agents": {
+    "list": [
+      {
+        "id": "pm",
+        "name": "Product Manager",
+        "default": true,
+        "workspace": "~/.openclaw/workspace-pm",
+        "agentDir": "~/.openclaw/agents/pm/agent",
+        "model": "anthropic/claude-sonnet-4-5",
+        "identity": {
+          "name": "PM Assistant",
+          "emoji": "📋"
+        },
+        "groupChat": {
+          "mentionPatterns": ["@pm", "@PM", "@产品经理"]
+        },
+        "tools": {
+          "allow": [
+            "read",
+            "write",
+            "edit",
+            "glob",
+            "grep",
+            "sessions_spawn",
+            "sessions_list",
+            "sessions_history",
+            "lobster",
+            "message"
+          ],
+          "deny": [
+            "exec",
+            "apply_patch",
+            "process"
+          ]
+        },
+        "subagents": {
+          "maxConcurrent": 3,
+          "allowAgents": ["pm", "builder", "tester"],
+          "model": "anthropic/claude-sonnet-4-5"
+        }
+      },
+      {
+        "id": "builder",
+        "name": "Builder",
+        "workspace": "~/.openclaw/workspace-builder",
+        "agentDir": "~/.openclaw/agents/builder/agent",
+        "model": "anthropic/claude-sonnet-4-5",
+        "identity": {
+          "name": "Builder Bot",
+          "emoji": "🔨"
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent",
+          "docker": {
+            "setupCommand": "apt-get update && apt-get install -y git python3 python3-pip"
+          }
+        },
+        "tools": {
+          "allow": [
+            "read",
+            "write",
+            "edit",
+            "exec",
+            "apply_patch",
+            "glob",
+            "grep"
+          ],
+          "deny": [
+            "sessions_spawn",
+            "message",
+            "cron"
+          ]
+        }
+      },
+      {
+        "id": "tester",
+        "name": "Tester",
+        "workspace": "~/.openclaw/workspace-tester",
+        "agentDir": "~/.openclaw/agents/tester/agent",
+        "model": "anthropic/claude-sonnet-4-5",
+        "identity": {
+          "name": "Tester Bot",
+          "emoji": "🧪"
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent",
+          "docker": {
+            "setupCommand": "apt-get update && apt-get install -y git python3 python3-pip pytest"
+          }
+        },
+        "tools": {
+          "allow": [
+            "read",
+            "exec",
+            "glob",
+            "grep"
+          ],
+          "deny": [
+            "write",
+            "edit",
+            "apply_patch",
+            "sessions_spawn",
+            "message"
+          ]
+        }
+      }
+    ],
+    "defaults": {
+      "workspace": "~/.openclaw/workspace",
+      "bootstrapMaxChars": 20000,
+      "subagents": {
+        "maxConcurrent": 8,
+        "archiveAfterMinutes": 60
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "pm",
+      "match": {
+        "channel": "whatsapp"
+      }
+    },
+    {
+      "agentId": "pm",
+      "match": {
+        "channel": "telegram"
+      }
+    }
+  ],
+  "channels": {
+    "whatsapp": {
+      "dmPolicy": "allowlist",
+      "allowFrom": ["+8613800000000"],
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    },
+    "telegram": {
+      "dmPolicy": "allowlist",
+      "allowFrom": ["@your_telegram_username"]
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "text": true,
+    "bash": false,
+    "config": true,
+    "debug": true,
+    "restart": false,
+    "useAccessGroups": true
+  },
+  "tools": {
+    "alsoAllow": ["lobster"],
+    "subagents": {
+      "tools": {
+        "deny": ["sessions_spawn", "cron", "message"]
+      }
+    },
+    "agentToAgent": {
+      "enabled": false
+    }
+  },
+  "messages": {
+    "groupChat": {
+      "mentionPatterns": ["@openclaw", "@PM"]
+    },
+    "responsePrefix": ""
+  },
+  "plugins": {
+    "entries": {
+      "llm-task": {
+        "enabled": true
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "models": {
+          "claude-sonnet-4-5": {
+            "cost": {
+              "input": 0.003,
+              "output": 0.015
+            }
+          },
+          "claude-opus-4-5": {
+            "cost": {
+              "input": 0.015,
+              "output": 0.075
+            }
+          }
+        }
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "bind": "127.0.0.1",
+    "auth": {
+      "pairing": {
+        "autoApprove": {
+          "local": true,
+          "tailnet": false
+        }
+      }
+    }
+  }
+}

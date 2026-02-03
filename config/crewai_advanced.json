@@ -1,0 +1,35 @@
+{
+  "primary": {
+    "provider": "minimax",
+    "model": "MiniMax-M2.1",
+    "api_key_env": "MINIMAX_API_KEY",
+    "base_url": "https://api.minimaxi.com/v1",
+    "temperature": 0.2,
+    "max_tokens": 4096,
+    "timeout": 300
+  },
+  "fallback": [
+    {
+      "provider": "openai",
+      "model": "gpt-4",
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url": "https://api.openai.com/v1",
+      "temperature": 0.3,
+      "max_tokens": 4096,
+      "timeout": 300
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-3-sonnet-20240229",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "base_url": "https://api.anthropic.com/v1",
+      "temperature": 0.2,
+      "max_tokens": 4096,
+      "timeout": 300
+    }
+  ],
+  "enable_memory": true,
+  "enable_parallel": false,
+  "max_retries": 3,
+  "retry_delay": 2.0
+}
