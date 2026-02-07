@@ -12,7 +12,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -119,4 +118,3 @@ def test_cli_missing_required_args_is_error(tmp_path: Path) -> None:
     _write_min_projects_tree(tmp_path)
     cp = _run_cli(tmp_path, "project_new")
     assert cp.returncode != 0
-

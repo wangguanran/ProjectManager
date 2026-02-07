@@ -4,14 +4,9 @@ Hook system tests derived from docs/test_cases_en.md (HOOK-001..HOOK-008).
 
 from __future__ import annotations
 
-import os
-import sys
 from typing import Any, Dict, List
 
 import pytest
-
-# Ensure repo root is importable (some tests modify sys.path to point at ./src).
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.hooks import (
     HookPriority,
@@ -38,10 +33,12 @@ def test_hooks_sorted_by_priority() -> None:
     calls: List[str] = []
 
     def hi(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
         calls.append("hi")
         return True
 
     def lo(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
         calls.append("lo")
         return True
 

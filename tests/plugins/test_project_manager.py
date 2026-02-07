@@ -1701,18 +1701,9 @@ class TestBoardNew:
         assert content_lines[0] == f"[{board_name}]"
         assert "PROJECT_NAME=default" in content_lines
         assert "CUSTOM=value" in content_lines
-        copied_patch = (
-            tmp_path
-            / board_name
-            / "po"
-            / "sample_po"
-            / "patches"
-            / "placeholder.patch"
-        )
+        copied_patch = tmp_path / board_name / "po" / "sample_po" / "patches" / "placeholder.patch"
         assert copied_patch.is_file()
-        assert (
-            tmp_path / board_name / "po" / "sample_po" / "overrides"
-        ).is_dir()
+        assert (tmp_path / board_name / "po" / "sample_po" / "overrides").is_dir()
 
     def test_board_new_fails_if_board_already_exists(self, tmp_path):
         """Creating a board with an existing name should fail without altering files."""
@@ -1734,13 +1725,8 @@ class TestBoardNew:
         """Invalid parameters such as empty names or missing paths should fail."""
 
         env_with_path = {"projects_path": str(tmp_path)}
-        assert (
-            self.ProjectManager.board_new(env_with_path, {}, "") is False
-        )
-        assert (
-            self.ProjectManager.board_new(env_with_path, {}, "invalid/name")
-            is False
-        )
+        assert self.ProjectManager.board_new(env_with_path, {}, "") is False
+        assert self.ProjectManager.board_new(env_with_path, {}, "invalid/name") is False
         assert self.ProjectManager.board_new({}, {}, "board_delta") is False
 
     def test_project_new_with_empty_projects_info(self):
@@ -2387,10 +2373,7 @@ class TestBoardDel:
 
         env_with_path = {"projects_path": str(tmp_path)}
         assert self.ProjectManager.board_del(env_with_path, {}, "") is False
-        assert (
-            self.ProjectManager.board_del(env_with_path, {}, "invalid/name")
-            is False
-        )
+        assert self.ProjectManager.board_del(env_with_path, {}, "invalid/name") is False
         assert self.ProjectManager.board_del({}, {}, "board_theta") is False
 
     def test_board_del_updates_projects_index(self, tmp_path):
