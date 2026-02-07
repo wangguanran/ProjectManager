@@ -1,4 +1,4 @@
-name: Publish Python Package to GitHub Package Registry
+name: Publish Python Package to PyPI
 
 on:
   push:
