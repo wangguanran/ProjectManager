@@ -1135,6 +1135,7 @@ class TestFindRepositories:
     def test_find_repositories_single_git_repo(self):
         """Test finding repositories in a single git repository."""
         temp_dir = self._create_temp_directory()
+        temp_dir_real = os.path.realpath(temp_dir)
 
         # Create a git repository
         git_dir = os.path.join(temp_dir, ".git")
@@ -1148,7 +1149,7 @@ class TestFindRepositories:
 
             # Should find one repository
             assert len(repositories) == 1
-            assert repositories[0][0] == temp_dir
+            assert os.path.realpath(repositories[0][0]) == temp_dir_real
             assert repositories[0][1] == "root"
 
             # Check if repositories.json was created
@@ -1160,10 +1161,10 @@ class TestFindRepositories:
                 repo_data = json.load(f)
 
             assert repo_data["discovery_type"] == "single"
-            assert repo_data["current_directory"] == temp_dir
+            assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
             assert len(repo_data["repositories"]) == 1
             assert repo_data["repositories"][0]["name"] == "root"
-            assert repo_data["repositories"][0]["path"] == temp_dir
+            assert os.path.realpath(repo_data["repositories"][0]["path"]) == temp_dir_real
             assert repo_data["repositories"][0]["is_git_repo"] is True
 
         finally:
@@ -1172,6 +1173,7 @@ class TestFindRepositories:
     def test_find_repositories_manifest_repo(self):
         """Test finding repositories using .repo manifest."""
         temp_dir = self._create_temp_directory()
+        temp_dir_real = os.path.realpath(temp_dir)
 
         # Create .repo directory structure
         repo_dir = os.path.join(temp_dir, ".repo")
@@ -1227,7 +1229,7 @@ class TestFindRepositories:
                 repo_data = json.load(f)
 
             assert repo_data["discovery_type"] == "manifest"
-            assert repo_data["current_directory"] == temp_dir
+            assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
             assert len(repo_data["repositories"]) == 3
 
             # Check repository information
@@ -1242,6 +1244,7 @@ class TestFindRepositories:
     def test_find_repositories_no_git_repos(self):
         """Test finding repositories when no git repositories exist."""
         temp_dir = self._create_temp_directory()
+        temp_dir_real = os.path.realpath(temp_dir)
 
         # Change to temp directory and test
         original_cwd = os.getcwd()
@@ -1261,7 +1264,7 @@ class TestFindRepositories:
                 repo_data = json.load(f)
 
             assert repo_data["discovery_type"] is None
-            assert repo_data["current_directory"] == temp_dir
+            assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
             assert len(repo_data["repositories"]) == 0
 
         finally:
@@ -1270,6 +1273,7 @@ class TestFindRepositories:
     def test_write_repositories_to_file(self):
         """Test _write_repositories_to_file function directly."""
         temp_dir = self._create_temp_directory()
+        temp_dir_real = os.path.realpath(temp_dir)
 
         # Test data
         repositories = [(os.path.join(temp_dir, "repo1"), "repo1"), (os.path.join(temp_dir, "repo2"), "repo2")]
@@ -1293,17 +1297,17 @@ class TestFindRepositories:
             repo_data = json.load(f)
 
         assert repo_data["discovery_type"] == "test"
-        assert repo_data["current_directory"] == temp_dir
+        assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
         assert len(repo_data["repositories"]) == 2
 
         # Check individual repository information
         repo1_info = next(repo for repo in repo_data["repositories"] if repo["name"] == "repo1")
-        assert repo1_info["path"] == os.path.join(temp_dir, "repo1")
+        assert os.path.realpath(repo1_info["path"]) == os.path.realpath(os.path.join(temp_dir, "repo1"))
         assert repo1_info["relative_path"] == "repo1"
         assert repo1_info["is_git_repo"] is True
 
         repo2_info = next(repo for repo in repo_data["repositories"] if repo["name"] == "repo2")
-        assert repo2_info["path"] == os.path.join(temp_dir, "repo2")
+        assert os.path.realpath(repo2_info["path"]) == os.path.realpath(os.path.join(temp_dir, "repo2"))
         assert repo2_info["relative_path"] == "repo2"
         assert repo2_info["is_git_repo"] is True
 
