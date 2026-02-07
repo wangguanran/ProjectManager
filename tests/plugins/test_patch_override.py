@@ -95,6 +95,89 @@ class TestPatchOverrideApply:
                 assert result is True
                 mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
 
+    def test_po_apply_dry_run_has_no_side_effects(self):
+        """Dry-run should not create po_applied, run cp/rm/git, or modify repository files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+            target_file = os.path.join(repo_root, "target.txt")
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write("original\n")
+
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "target.txt"), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            custom_dir = os.path.join(projects_path, board_name, "po", po_name, "custom")
+            os.makedirs(custom_dir, exist_ok=True)
+            with open(os.path.join(custom_dir, "test_custom.txt"), "w", encoding="utf-8") as f:
+                f.write("custom\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo_root, "root")],
+                "po_configs": {f"po-{po_name}": {"PROJECT_PO_DIR": "custom", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}},
+            }
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, project_name, dry_run=True)
+            finally:
+                os.chdir(old_cwd)
+
+            assert result is True
+            # No po_applied file in dry-run.
+            po_applied = os.path.join(projects_path, board_name, "po", po_name, "po_applied")
+            assert not os.path.exists(po_applied)
+            # Repository content unchanged.
+            assert open(target_file, "r", encoding="utf-8").read() == "original\n"
+            # Custom copy target not created.
+            assert not os.path.exists(os.path.join(tmpdir, "custom_dest.txt"))
+
+    def test_po_revert_dry_run_has_no_side_effects(self):
+        """Dry-run should not revert files (no checkout/rm)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+            subprocess.run(["git", "init"], cwd=repo_root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_root, check=True)
+
+            tracked = os.path.join(repo_root, "tracked.txt")
+            with open(tracked, "w", encoding="utf-8") as f:
+                f.write("base\n")
+            subprocess.run(["git", "add", "tracked.txt"], cwd=repo_root, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=repo_root, check=True)
+
+            # Modify tracked file (should remain modified after dry-run revert).
+            with open(tracked, "w", encoding="utf-8") as f:
+                f.write("modified\n")
+
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "tracked.txt"), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            result = self.PatchOverride.po_revert(env, projects_info, project_name, dry_run=True)
+            assert result is True
+            assert open(tracked, "r", encoding="utf-8").read() == "modified\n"
+
     def test_po_apply_with_excluded_po(self):
         """Test po_apply when PO is excluded in config."""
         # Arrange

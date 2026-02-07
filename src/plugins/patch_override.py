@@ -58,7 +58,7 @@ def parse_po_config(po_config):
 
 
 @register("po_apply", needs_repositories=True, desc="Apply patch and override for a project")
-def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
+def po_apply(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False) -> bool:
     """
     Apply patch and override for the specified project.
     Args:
@@ -124,6 +124,10 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
         # Execute command
         try:
+            if getattr(ctx, "dry_run", False):
+                log.info("DRY-RUN: %s", cmd_str)
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
             result = subprocess.run(
                 command,
                 cwd=cwd,
@@ -163,6 +167,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         po_override_dir: str
         po_custom_dir: str
         po_applied_flag_path: str
+        dry_run: bool
         exclude_files: Dict[str, set]
         po_configs: Dict
 
@@ -366,7 +371,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 else:
                     # Perform copy operation
                     dest_dir = os.path.dirname(dest_rel)
-                    if dest_dir:
+                    if not ctx.dry_run and dest_dir:
                         os.makedirs(os.path.join(repo_root, dest_dir), exist_ok=True)
                     try:
                         # Use __execute_command for copy operation
@@ -444,7 +449,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
                 # Determine if target should be treated as a directory.
                 target_is_dir = target_path.endswith(os.sep) or os.path.isdir(target_path) or len(matches) > 1
-                if target_is_dir and not os.path.exists(target_path):
+                if not ctx.dry_run and target_is_dir and not os.path.exists(target_path):
                     os.makedirs(target_path.rstrip(os.sep), exist_ok=True)
 
                 for src in matches:
@@ -455,7 +460,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         dest = target_path
 
                     dest_dir = os.path.dirname(dest)
-                    if dest_dir:
+                    if not ctx.dry_run and dest_dir:
                         os.makedirs(dest_dir, exist_ok=True)
 
                     result = __execute_command(
@@ -548,25 +553,27 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.info("po '%s' already applied, skipping", po_name)
             continue
 
-        log.info("po '%s' starting to apply patch and override", po_name)
+        log.info("po '%s' starting to apply patch and override%s", po_name, " (dry-run)" if dry_run else "")
 
-        # Create po_applied file header first
-        try:
-            os.makedirs(po_path, exist_ok=True)
-            with open(po_applied_flag_path, "w", encoding="utf-8") as f:
-                f.write(f"# Applied for project {project_name}\n")
-                f.write("# Operation log - commands executed during po_apply:\n")
-                f.write("# Commands can be re-executed manually for debugging\n\n")
-        except OSError as e:
-            log.error("Failed to create applied flag for po '%s': '%s'", po_name, e)
-            return False
+        # Create po_applied file header first (unless dry-run)
+        if not dry_run:
+            try:
+                os.makedirs(po_path, exist_ok=True)
+                with open(po_applied_flag_path, "w", encoding="utf-8") as f:
+                    f.write(f"# Applied for project {project_name}\n")
+                    f.write("# Operation log - commands executed during po_apply:\n")
+                    f.write("# Commands can be re-executed manually for debugging\n\n")
+            except OSError as e:
+                log.error("Failed to create applied flag for po '%s': '%s'", po_name, e)
+                return False
 
         ctx = PoApplyContext(
             po_name=po_name,
             po_patch_dir=os.path.join(po_dir, po_name, "patches"),
             po_override_dir=os.path.join(po_dir, po_name, "overrides"),
             po_custom_dir=os.path.join(po_dir, po_name, "custom"),
-            po_applied_flag_path=po_applied_flag_path,
+            po_applied_flag_path=("" if dry_run else po_applied_flag_path),
+            dry_run=dry_run,
             exclude_files=exclude_files,
             po_configs=env.get("po_configs", {}),
         )
@@ -592,7 +599,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     needs_repositories=True,
     desc="Revert patch and override for a project",
 )
-def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
+def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False) -> bool:
     """
     Revert patch and override for the specified project.
     Args:
@@ -673,6 +680,13 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 patch_file = os.path.join(current_dir, fname)
                 log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
                 try:
+                    if dry_run:
+                        log.info(
+                            "DRY-RUN: cd %s && git apply --reverse %s",
+                            patch_target,
+                            patch_file,
+                        )
+                        continue
                     result = subprocess.run(
                         ["git", "apply", "--reverse", patch_file],
                         cwd=patch_target,
@@ -796,6 +810,9 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         )
 
                         if result.returncode == 0:
+                            if dry_run:
+                                log.info("DRY-RUN: cd %s && git checkout -- %s", repo_root, dest_rel)
+                                continue
                             result = subprocess.run(
                                 ["git", "checkout", "--", dest_rel],
                                 cwd=repo_root,
@@ -821,6 +838,9 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                                 "File '%s' is not tracked by git, deleting directly",
                                 dest_rel,
                             )
+                            if dry_run:
+                                log.info("DRY-RUN: cd %s && rm -rf %s", repo_root, dest_rel)
+                                continue
                             if os.path.isdir(dest_abs):
                                 shutil.rmtree(dest_abs)
                             else:

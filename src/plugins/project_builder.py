@@ -22,7 +22,13 @@ from src.plugins.patch_override import po_apply
     needs_repositories=True,
     desc="Generate after, before, patch, commit directories for all repositories or current repo, under a timestamped diff directory.",
 )
-def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_dir: bool = False) -> bool:
+def project_diff(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    keep_diff_dir: bool = False,
+    dry_run: bool = False,
+) -> bool:
     """
     Generate after, before, patch, commit directories for all repositories or current repo, under a timestamped diff directory.
     Patch files are named changes_worktree.patch and changes_staged.patch.
@@ -34,6 +40,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
         projects_info: Project information dictionary
         project_name: Name of the project
         keep_diff_dir (bool): If True, preserve the diff directory after creating tar.gz archive (default: False)
+        dry_run (bool): If True, only print planned actions without creating files/directories (default: False)
     """
     _ = projects_info  # Mark as intentionally unused
 
@@ -44,10 +51,22 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
     root_dir = os.getcwd()  # Store project root directory
     diff_root = os.path.join(root_dir, ".cache", "build", safe_project_name, ts, "diff")
     log.debug("Diff root directory: %s", diff_root)
-    os.makedirs(diff_root, exist_ok=True)
 
     repositories = env.get("repositories", [])
     single_repo = len(repositories) == 1
+
+    if keep_diff_dir and dry_run:
+        log.info("DRY-RUN: --keep-diff-dir is set, but no diff output will be generated in dry-run mode.")
+
+    if dry_run:
+        log.info("DRY-RUN: would create diff root: %s", diff_root)
+        for repo_path, repo_name in repositories:
+            log.info("DRY-RUN: would diff repo '%s' at '%s'", repo_name, repo_path)
+        return True
+
+    os.makedirs(diff_root, exist_ok=True)
+
+    # repositories/single_repo defined above
 
     def is_tracked(repo_path, file_path):
         try:

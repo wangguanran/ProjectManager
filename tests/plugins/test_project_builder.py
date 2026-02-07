@@ -66,6 +66,15 @@ class TestProjectDiff:
         # Assert
         assert result is True
 
+    def test_project_diff_dry_run_does_not_create_cache(self, tmp_path, monkeypatch):
+        """Dry-run should not create .cache/build diff directories."""
+        monkeypatch.chdir(tmp_path)
+        env = {"repositories": []}
+        projects_info = {}
+        result = self.project_diff(env, projects_info, "test_project", keep_diff_dir=False, dry_run=True)
+        assert result is True
+        assert not (tmp_path / ".cache").exists()
+
     def test_project_diff_empty_project_name(self):
         """Test project_diff with empty project name"""
         # Arrange
