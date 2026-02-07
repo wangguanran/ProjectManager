@@ -102,6 +102,17 @@ def test_cli_fuzzy_match_build_executes(tmp_path: Path) -> None:
     assert cp.returncode == 0
 
 
+def test_cli_fuzzy_match_ambiguity_warning(tmp_path: Path) -> None:
+    """CLI-005: fuzzy match ambiguity warning shows candidates and still executes."""
+    _write_min_projects_tree(tmp_path)
+    cp = _run_cli(tmp_path, "po", "projA")
+    assert cp.returncode == 0
+    combined = cp.stdout + cp.stderr
+    assert "Ambiguous operation" in combined
+    assert "Possible matches" in combined
+    assert "Using best match" in combined
+
+
 def test_cli_unknown_operation_is_error(tmp_path: Path) -> None:
     """CLI-006: unknown operation triggers non-zero exit."""
     _write_min_projects_tree(tmp_path)
