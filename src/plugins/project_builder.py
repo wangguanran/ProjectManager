@@ -3,6 +3,7 @@ Project build utility class for CLI operations.
 """
 
 import os
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -315,9 +316,32 @@ def project_do_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
     Build stage for the specified project.
     """
     log.info("Build stage for project: %s", project_name)
-    # TODO: implement build logic
-    _ = env
-    _ = projects_info
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+
+    cmd = str(project_cfg.get("PROJECT_BUILD_CMD", "")).strip()
+    if not cmd:
+        log.info("No PROJECT_BUILD_CMD configured for project: %s (skipping build stage)", project_name)
+        return True
+
+    root_path = env.get("root_path") or os.getcwd()
+    build_cwd = str(project_cfg.get("PROJECT_BUILD_CWD", "")).strip()
+    cwd = build_cwd if os.path.isabs(build_cwd) else os.path.join(root_path, build_cwd) if build_cwd else root_path
+
+    log.info("Running build command (cwd=%s): %s", cwd, cmd)
+    try:
+        result = subprocess.run(
+            shlex.split(cmd),
+            cwd=cwd,
+            check=False,
+        )
+    except (OSError, ValueError) as exc:
+        log.error("Failed to run build command: %s", exc)
+        return False
+
+    if result.returncode != 0:
+        log.error("Build command failed with return code %s", result.returncode)
+        return False
     return True
 
 
@@ -331,9 +355,32 @@ def project_post_build(env: Dict, projects_info: Dict, project_name: str) -> boo
     Post-build stage for the specified project.
     """
     log.info("Post-build stage for project: %s", project_name)
-    # TODO: implement post-build logic
-    _ = env
-    _ = projects_info
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+
+    cmd = str(project_cfg.get("PROJECT_POST_BUILD_CMD", "")).strip()
+    if not cmd:
+        log.info("No PROJECT_POST_BUILD_CMD configured for project: %s (skipping post-build stage)", project_name)
+        return True
+
+    root_path = env.get("root_path") or os.getcwd()
+    post_cwd = str(project_cfg.get("PROJECT_POST_BUILD_CWD", "")).strip()
+    cwd = post_cwd if os.path.isabs(post_cwd) else os.path.join(root_path, post_cwd) if post_cwd else root_path
+
+    log.info("Running post-build command (cwd=%s): %s", cwd, cmd)
+    try:
+        result = subprocess.run(
+            shlex.split(cmd),
+            cwd=cwd,
+            check=False,
+        )
+    except (OSError, ValueError) as exc:
+        log.error("Failed to run post-build command: %s", exc)
+        return False
+
+    if result.returncode != 0:
+        log.error("Post-build command failed with return code %s", result.returncode)
+        return False
     return True
 
 

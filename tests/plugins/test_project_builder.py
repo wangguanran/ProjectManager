@@ -345,6 +345,29 @@ class TestProjectDoBuild:
         # Assert
         assert result is True
 
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_do_build_runs_configured_command(self, mock_run):
+        """When PROJECT_BUILD_CMD is set, project_do_build should execute it."""
+        mock_run.return_value = MagicMock(returncode=0)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_BUILD_CMD": "echo hello", "PROJECT_BUILD_CWD": "work"}}}
+
+        result = self.project_do_build(env, projects_info, "p")
+        assert result is True
+        mock_run.assert_called_once()
+        called_args, called_kwargs = mock_run.call_args
+        assert called_args[0] == ["echo", "hello"]
+        assert called_kwargs["cwd"] == "/tmp/root/work"
+
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_do_build_command_failure_returns_false(self, mock_run):
+        """Non-zero return code should fail build stage."""
+        mock_run.return_value = MagicMock(returncode=2)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_BUILD_CMD": "false"}}}
+
+        assert self.project_do_build(env, projects_info, "p") is False
+
     def test_project_do_build_empty_project_name(self):
         """Test project_do_build with empty project name"""
         # Arrange
@@ -413,6 +436,29 @@ class TestProjectPostBuild:
 
         # Assert
         assert result is True
+
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_post_build_runs_configured_command(self, mock_run):
+        """When PROJECT_POST_BUILD_CMD is set, project_post_build should execute it."""
+        mock_run.return_value = MagicMock(returncode=0)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_POST_BUILD_CMD": "echo done", "PROJECT_POST_BUILD_CWD": "work"}}}
+
+        result = self.project_post_build(env, projects_info, "p")
+        assert result is True
+        mock_run.assert_called_once()
+        called_args, called_kwargs = mock_run.call_args
+        assert called_args[0] == ["echo", "done"]
+        assert called_kwargs["cwd"] == "/tmp/root/work"
+
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_post_build_command_failure_returns_false(self, mock_run):
+        """Non-zero return code should fail post-build stage."""
+        mock_run.return_value = MagicMock(returncode=1)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_POST_BUILD_CMD": "false"}}}
+
+        assert self.project_post_build(env, projects_info, "p") is False
 
     def test_project_post_build_empty_project_name(self):
         """Test project_post_build with empty project name"""
