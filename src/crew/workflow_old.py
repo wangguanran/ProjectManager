@@ -229,9 +229,11 @@ class CrewWorkflow:
             params["custom_llm_provider"] = config.provider
             if "/" in model and not model.startswith("minimax/"):
                 params["model"] = model.split("/", 1)[1]
-        api_key = config.api_key()
-        if api_key:
-            params["api_key"] = api_key
+        credential = config.credential()
+        if credential:
+            params["api_key"] = credential
+            if config.auth_mode == "oauth":
+                params["access_token"] = credential
         if config.base_url:
             params["base_url"] = config.base_url
             params["api_base"] = config.base_url

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -12,11 +12,24 @@ from .exceptions import ConfigurationError
 
 
 class LLMProviderConfig(BaseModel):
-    """Configuration for a single LLM provider."""
+    """Configuration for a single LLM provider.
+
+    Supports both API-key and OAuth token credentials by pulling the secret
+    from an environment variable. Default remains API key for backward
+    compatibility.
+    """
 
     provider: str = Field(..., description="LLM provider name")
     model: str = Field(..., description="Model identifier")
-    api_key_env: str = Field(..., description="Environment variable for API key")
+    api_key_env: Optional[str] = Field(
+        None, description="Environment variable for API key (legacy/default)"
+    )
+    credential_env: Optional[str] = Field(
+        None, description="Environment variable holding OAuth access token or other credential"
+    )
+    auth_mode: Literal["api_key", "oauth"] = Field(
+        "api_key", description="Credential type; defaults to API key"
+    )
     base_url: Optional[str] = Field(None, description="Base URL for API")
     temperature: float = Field(0.2, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int = Field(4096, gt=0, le=128000, description="Maximum output tokens")
@@ -39,23 +52,68 @@ class LLMProviderConfig(BaseModel):
             raise ValueError("Model name cannot be empty")
         return v.strip()
 
-    def api_key(self) -> str:
-        """Get API key from environment variable.
+    @field_validator("auth_mode")
+    @classmethod
+    def validate_auth_mode(cls, v: str) -> str:
+        """Validate auth mode value."""
+        if v not in {"api_key", "oauth"}:
+            raise ValueError("auth_mode must be 'api_key' or 'oauth'")
+        return v
+
+    @field_validator("credential_env")
+    @classmethod
+    def default_credential_env(cls, v: Optional[str], values: dict) -> Optional[str]:
+        """Use api_key_env as credential if oauth mode but credential not set."""
+        auth_mode = values.get("auth_mode", "api_key")
+        if v is None and auth_mode == "oauth":
+            # fallback to api_key_env for convenience/migration
+            return values.get("api_key_env")
+        return v
+
+    @field_validator("api_key_env")
+    @classmethod
+    def ensure_credential_present(cls, v: Optional[str], values: dict) -> Optional[str]:
+        """Ensure at least one credential source is provided."""
+        credential_env = values.get("credential_env")
+        auth_mode = values.get("auth_mode", "api_key")
+
+        # In api_key mode we need api_key_env
+        if auth_mode == "api_key" and not v:
+            raise ValueError("api_key_env is required when auth_mode is 'api_key'")
+
+        # In oauth mode we need credential_env (or api_key_env if reused)
+        if auth_mode == "oauth" and not (credential_env or v):
+            raise ValueError("credential_env (or api_key_env) is required when auth_mode is 'oauth'")
+
+        return v
+
+    def credential_env_name(self) -> str:
+        """Return the env var name that should hold the credential."""
+        return self.credential_env or self.api_key_env  # api_key_env kept for compatibility
+
+    def credential(self) -> str:
+        """Get credential (API key or OAuth token) from environment variable.
 
         Raises:
-            ConfigurationError: If API key is not set in environment
+            ConfigurationError: If credential is not set in environment
         """
-        key = os.getenv(self.api_key_env)
+        env_name = self.credential_env_name()
+        key = os.getenv(env_name) if env_name else None
         if not key:
             raise ConfigurationError(
-                f"API key not found in environment variable: {self.api_key_env}",
-                {"provider": self.provider, "api_key_env": self.api_key_env},
+                f"Credential not found in environment variable: {env_name}",
+                {
+                    "provider": self.provider,
+                    "auth_mode": self.auth_mode,
+                    "credential_env": env_name,
+                },
             )
         return key
 
-    def has_api_key(self) -> bool:
-        """Check if API key is set in environment."""
-        return os.getenv(self.api_key_env) is not None
+    def has_credential(self) -> bool:
+        """Check if credential is set in environment."""
+        env_name = self.credential_env_name()
+        return env_name is not None and os.getenv(env_name) is not None
 
 
 class LLMConfig(BaseModel):
@@ -143,20 +201,23 @@ def validate_config(config: LLMConfig) -> None:
     Raises:
         ConfigurationError: If configuration is not usable
     """
-    # Check that at least primary provider has API key
-    if not config.primary.has_api_key():
+    # Check that at least primary provider has credential
+    if not config.primary.has_credential():
         raise ConfigurationError(
-            f"Primary provider '{config.primary.provider}' API key not set",
-            {"api_key_env": config.primary.api_key_env},
+            f"Primary provider '{config.primary.provider}' credential not set",
+            {
+                "auth_mode": config.primary.auth_mode,
+                "credential_env": config.primary.credential_env_name(),
+            },
         )
 
-    # Warn about fallback providers without API keys
+    # Warn about fallback providers without credentials
     for i, fallback in enumerate(config.fallback):
-        if not fallback.has_api_key():
+        if not fallback.has_credential():
             from src.log_manager import log
 
             log.warning(
-                f"Fallback provider #{i+1} '{fallback.provider}' API key not set: {fallback.api_key_env}"
+                f"Fallback provider #{i+1} '{fallback.provider}' credential not set: {fallback.credential_env_name()}"
             )
 
 

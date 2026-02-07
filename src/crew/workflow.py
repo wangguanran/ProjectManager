@@ -431,9 +431,14 @@ class CrewWorkflow:
             if "/" in model and not model.startswith("minimax/"):
                 params["model"] = model.split("/", 1)[1]
 
-        api_key = config.api_key()  # Will raise ConfigurationError if not set
-        if api_key:
-            params["api_key"] = api_key
+        credential = config.credential()  # Will raise ConfigurationError if not set
+        if credential:
+            # For API-key based providers the param name remains api_key.
+            params["api_key"] = credential
+            # For OAuth-style providers some SDKs accept access_token; set both for compatibility.
+            if config.auth_mode == "oauth":
+                params["access_token"] = credential
+                params["auth_mode"] = "oauth"
 
         if config.base_url:
             params["base_url"] = config.base_url

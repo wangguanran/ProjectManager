@@ -18,14 +18,57 @@ source .venv/bin/activate
 unset ALL_PROXY all_proxy
 echo "✓ 已禁用国际代理"
 
-# 检查 API 密钥
-if [ -z "$MINIMAX_API_KEY" ]; then
-    echo "错误: 未设置 MINIMAX_API_KEY 环境变量"
-    echo "请执行: export MINIMAX_API_KEY='your-api-key'"
+# 检查凭证（支持 API Key 与 OAuth Token）
+CONFIG_FILE="config/crewai.json"
+
+eval "$(python3 - <<'PY'
+import json
+
+path = 'config/crewai.json'
+try:
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+except FileNotFoundError:
+    data = {
+        "provider": "minimax",
+        "api_key_env": "MINIMAX_API_KEY",
+        "auth_mode": "api_key",
+    }
+
+primary = data.get("primary", data)
+env_name = primary.get("credential_env") or primary.get("api_key_env") or ""
+auth_mode = primary.get("auth_mode", "api_key")
+provider = primary.get("provider", "")
+
+print(f'CREDENTIAL_ENV=\"{env_name}\"')
+print(f'AUTH_MODE=\"{auth_mode}\"')
+print(f'PROVIDER=\"{provider}\"')
+PY
+)"
+
+if [ -z "$CREDENTIAL_ENV" ]; then
+    echo "错误: 配置文件中未找到 credential_env/api_key_env"
     exit 1
 fi
 
-echo "✓ API 密钥已配置"
+if [ -z "${!CREDENTIAL_ENV}" ]; then
+    if [ "$AUTH_MODE" = "oauth" ]; then
+        echo "⚠️ 未检测到 $CREDENTIAL_ENV ，启动浏览器登录流程..."
+        TOKEN=$(python3 -m src.crew.oauth_login --provider "$PROVIDER" --env-name "$CREDENTIAL_ENV")
+        if [ -z "$TOKEN" ]; then
+            echo "登录未完成或失败，请重试。"
+            exit 1
+        fi
+        export "$CREDENTIAL_ENV"="$TOKEN"
+        echo "✓ 已获取并保存 OAuth Token (${CREDENTIAL_ENV})"
+    else
+        echo "错误: 未设置 $CREDENTIAL_ENV 环境变量 (provider=$PROVIDER, auth_mode=$AUTH_MODE)"
+        echo "请导出 API Key，例如: export $CREDENTIAL_ENV='your-api-key'"
+        exit 1
+    fi
+fi
+
+echo "✓ 凭证已配置 (${CREDENTIAL_ENV}, auth_mode=${AUTH_MODE})"
 echo ""
 
 # 显示帮助信息
@@ -88,7 +131,7 @@ echo "详细: $DETAILS"
 echo "======================================"
 echo ""
 
-python -m src crew_run _ \
+python3 -m src crew_run _ \
     --title "$TITLE" \
     --request-type "$TYPE" \
     --details "$DETAILS" \

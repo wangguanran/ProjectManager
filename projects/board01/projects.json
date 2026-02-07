@@ -1,0 +1,88 @@
+{
+  "board_name": "board01",
+  "board_path": "/home/wangguanran/ProjectManager/projects/board01",
+  "last_updated": "2026-02-06T01:05:37.375102",
+  "projects": [
+    {
+      "project_name": "board01",
+      "config": {
+        "PROJECT_PLATFORM": "platform",
+        "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03 -po_test04[testfile.c src/testfile.c]",
+        "PROJECT_PO_IGNORE": "tests/*"
+      },
+      "parent": null,
+      "children": [
+        "board01-project01",
+        "board01-project02",
+        "board01-error"
+      ],
+      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+    },
+    {
+      "project_name": "board01-project01",
+      "config": {
+        "PROJECT_PLATFORM": "platform",
+        "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03 -po_test04[testfile.c src/testfile.c] po_test05",
+        "PROJECT_PO_IGNORE": "tests/*",
+        "PROJECT_NAME": "platform_project01",
+        "PROJECT_CUSTOMER": "customer"
+      },
+      "parent": "board01",
+      "children": [
+        "board01-project01-test",
+        "board01-project01-test01"
+      ],
+      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+    },
+    {
+      "project_name": "board01-project02",
+      "config": {
+        "PROJECT_PLATFORM": "platform",
+        "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03 -po_test04[testfile.c src/testfile.c] -po_test01",
+        "PROJECT_PO_IGNORE": "tests/*",
+        "PROJECT_NAME": "platform_project02"
+      },
+      "parent": "board01",
+      "children": [],
+      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+    },
+    {
+      "project_name": "board01-project01-test",
+      "config": {
+        "PROJECT_PLATFORM": "platform",
+        "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03 -po_test04[testfile.c src/testfile.c] po_test05 -po_test02",
+        "PROJECT_PO_IGNORE": "tests/*",
+        "PROJECT_NAME": "platform_project01_test",
+        "PROJECT_CUSTOMER": "customer"
+      },
+      "parent": "board01-project01",
+      "children": [],
+      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+    },
+    {
+      "project_name": "board01-error",
+      "config": {
+        "PROJECT_PLATFORM": "platform",
+        "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03 -po_test04[testfile.c src/testfile.c]",
+        "PROJECT_PO_IGNORE": "tests/*",
+        "PROJECT_NAME": "platform_board01-error"
+      },
+      "parent": "board01",
+      "children": [],
+      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+    },
+    {
+      "project_name": "board01-project01-test01",
+      "config": {
+        "PROJECT_PLATFORM": "platform",
+        "PROJECT_PO_CONFIG": "po_test01 po_test02 -po_test03 -po_test04[testfile.c src/testfile.c] po_test05 ",
+        "PROJECT_PO_IGNORE": "tests/*",
+        "PROJECT_NAME": "platform_board01-project01-test01_customer",
+        "PROJECT_CUSTOMER": "customer"
+      },
+      "parent": "board01-project01",
+      "children": [],
+      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+    }
+  ]
+}
