@@ -11,7 +11,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from src.log_manager import log
+from src.log_manager import log, log_cmd_event
 from src.operations.registry import register
 
 # from src.profiler import auto_profile  # unused
@@ -135,6 +135,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = 
                 text=True,
                 check=False,
                 shell=shell,
+            )
+
+            log_cmd_event(
+                log,
+                command=command,
+                cwd=cwd,
+                description=description,
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
             )
 
             # Log command to po_applied file
