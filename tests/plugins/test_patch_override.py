@@ -281,7 +281,7 @@ class TestPatchOverrideApply:
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             with patch("subprocess.run", side_effect=_mock_run):
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
             # Only one apply call for allow.patch
@@ -328,7 +328,7 @@ class TestPatchOverrideApply:
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             with patch("subprocess.run", side_effect=_mock_run):
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
             # Should have one apply call for the patch
@@ -374,7 +374,7 @@ class TestPatchOverrideApply:
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
             with patch("subprocess.run", side_effect=_mock_run):
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
             # Should have one apply call for the patch
@@ -419,7 +419,7 @@ class TestPatchOverrideApply:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
             finally:
                 os.chdir(old_cwd)
@@ -467,7 +467,7 @@ class TestPatchOverrideApply:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
             finally:
                 os.chdir(old_cwd)
@@ -526,7 +526,7 @@ class TestPatchOverrideApply:
                 # Verify target file exists before removal
                 assert os.path.exists(target_file)
 
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
                 # Verify target file was removed
@@ -534,6 +534,28 @@ class TestPatchOverrideApply:
 
             finally:
                 os.chdir(old_cwd)
+
+    def test_po_apply_overrides_remove_requires_force(self):
+        """Without --force, .remove operations should be refused for safety."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "target_file.remove"), "w", encoding="utf-8") as f:
+                f.write("remove marker")
+
+            env = {"projects_path": projects_path, "repositories": [(tmpdir, "root")]}
+            projects_info = {"proj": {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            target_file = os.path.join(tmpdir, "target_file")
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write("original content")
+
+            assert self.PatchOverride.po_apply(env, projects_info, "proj") is False
+            assert os.path.exists(target_file)
 
     def test_po_apply_overrides_remove_nonexistent_file(self):
         """Test that removing a non-existent file doesn't cause errors."""
@@ -566,7 +588,7 @@ class TestPatchOverrideApply:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
             finally:

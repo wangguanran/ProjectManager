@@ -58,7 +58,13 @@ def parse_po_config(po_config):
 
 
 @register("po_apply", needs_repositories=True, desc="Apply patch and override for a project")
-def po_apply(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False) -> bool:
+def po_apply(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    dry_run: bool = False,
+    force: bool = False,
+) -> bool:
     """
     Apply patch and override for the specified project.
     Args:
@@ -178,6 +184,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = 
         po_custom_dir: str
         po_applied_flag_path: str
         dry_run: bool
+        force: bool
         exclude_files: Dict[str, set]
         po_configs: Dict
 
@@ -354,6 +361,13 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = 
                 if is_remove:
                     # Perform delete operation
                     try:
+                        if not ctx.force and not ctx.dry_run:
+                            log.error(
+                                "Refusing to remove '%s' without --force (override .remove safeguard)",
+                                dest_rel,
+                            )
+                            return False
+
                         # Check if target file exists
                         if os.path.exists(os.path.join(repo_root, dest_rel)):
                             # Use __execute_command for delete operation
@@ -584,6 +598,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = 
             po_custom_dir=os.path.join(po_dir, po_name, "custom"),
             po_applied_flag_path=("" if dry_run else po_applied_flag_path),
             dry_run=dry_run,
+            force=force,
             exclude_files=exclude_files,
             po_configs=env.get("po_configs", {}),
         )
