@@ -59,7 +59,7 @@ class TestPatchOverrideApply:
                 mock_log.info.assert_any_call("po apply finished for project: '%s'", project_name)
 
     def test_po_apply_missing_board_name(self):
-        """Test po_apply when board_name is missing from project config."""
+        """PO-003: Missing board_name fails."""
         # Arrange
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {"projects_path": os.path.join(tmpdir, "projects")}
@@ -75,7 +75,7 @@ class TestPatchOverrideApply:
                 mock_log.error.assert_called_with("Cannot find board name for project: '%s'", project_name)
 
     def test_po_apply_empty_po_config(self):
-        """Test po_apply when PROJECT_PO_CONFIG is empty."""
+        """PO-002: Empty PROJECT_PO_CONFIG returns True."""
         # Arrange
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {"projects_path": os.path.join(tmpdir, "projects")}
@@ -94,6 +94,46 @@ class TestPatchOverrideApply:
                 # Assert
                 assert result is True
                 mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
+
+    def test_po_apply_skips_already_applied_po(self):
+        """PO-004: Already-applied PO is skipped."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+            target_file = os.path.join(repo_root, "target.txt")
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write("original\n")
+
+            po_path = os.path.join(projects_path, board_name, "po", po_name)
+            os.makedirs(po_path, exist_ok=True)
+            po_applied = os.path.join(po_path, "po_applied")
+            with open(po_applied, "w", encoding="utf-8") as f:
+                f.write("already\n")
+
+            overrides_dir = os.path.join(po_path, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "target.txt"), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            with patch("src.plugins.patch_override.log") as mock_log, patch(
+                "src.plugins.patch_override.subprocess.run"
+            ) as mock_run:
+                mock_run.side_effect = AssertionError("subprocess.run should not be called for skipped PO")
+                assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+                mock_log.info.assert_any_call("po '%s' already applied, skipping", po_name)
+
+            with open(target_file, "r", encoding="utf-8") as f:
+                assert f.read() == "original\n"
+            assert os.path.exists(po_applied)
+            assert not os.path.exists(f"{po_applied}.tmp")
 
     def test_po_apply_dry_run_has_no_side_effects(self):
         """DRY-002: po_apply --dry-run prints plan and does not write."""
@@ -479,7 +519,7 @@ class TestPatchOverrideApply:
                 assert f.read() == "a\n"
 
     def test_po_apply_overrides_copy_with_exclude_and_flag(self):
-        """Apply overrides: copy files and respect exclude list."""
+        """PO-009: exclude_files skips specified items."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -526,7 +566,7 @@ class TestPatchOverrideApply:
             assert not os.path.exists(os.path.join(tmpdir, deep_file_rel))
 
     def test_po_apply_overrides_dest_file_path_construction(self):
-        """Test that dest_file path construction avoids path duplication."""
+        """PO-007: Override copy success."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -585,7 +625,7 @@ class TestPatchOverrideApply:
             assert not os.path.exists(wrong_path), f"Path duplication detected: {wrong_path} exists"
 
     def test_po_apply_overrides_remove_operation(self):
-        """Test that files with .remove suffix are deleted instead of copied."""
+        """PO-008: .remove deletes target file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -738,6 +778,43 @@ class TestPatchOverrideApply:
             assert os.path.exists(os.path.join(dest_dir, "data", "file1.txt"))
             assert os.path.exists(os.path.join(dest_dir, "data", "sub", "inner.txt"))
             assert os.path.exists(os.path.join(dest_dir, "other", "oth.txt"))
+
+    def test_po_apply_custom_copy_by_config(self):
+        """PO-010: Custom dir copies by config."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            custom_dir = os.path.join(po_root, "custom")
+            os.makedirs(os.path.join(custom_dir, "cfg"), exist_ok=True)
+            os.makedirs(os.path.join(custom_dir, "data"), exist_ok=True)
+
+            with open(os.path.join(custom_dir, "cfg", "sample.ini"), "w", encoding="utf-8") as f:
+                f.write("k=v\n")
+            with open(os.path.join(custom_dir, "data", "sample.dat"), "w", encoding="utf-8") as f:
+                f.write("DATA\n")
+
+            out_cfg = os.path.join(tmpdir, "out", "cfg") + os.sep
+            out_data = os.path.join(tmpdir, "out", "data") + os.sep
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {
+                    f"po-{po_name}": {
+                        "PROJECT_PO_DIR": "custom",
+                        "PROJECT_PO_FILE_COPY": f"cfg/sample.ini:{out_cfg}\\data/sample.dat:{out_data}",
+                    }
+                },
+            }
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+            assert os.path.exists(os.path.join(tmpdir, "out", "cfg", "sample.ini"))
+            assert os.path.exists(os.path.join(tmpdir, "out", "data", "sample.dat"))
 
     def test_custom_copy_data_star_includes_subdirs(self):
         """'data/*' should recursively copy all files from PROJECT_PO_DIR/data including subdirectories."""
@@ -1122,6 +1199,164 @@ class TestPatchOverrideRevert:
                 assert result is True
                 mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
 
+    def test_po_revert_patch_reverse_success_real_git(self):
+        """PO-011: Patch reverse success."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            target_rel = "hello.txt"
+            target_abs = os.path.join(repo_root, target_rel)
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("a\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "base")
+
+            # Create patch content by modifying the file and capturing diff.
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("a\nb\n")
+            patch_content = subprocess.check_output(["git", "diff"], cwd=repo_root).decode("utf-8")
+            _git("checkout", "--", target_rel)
+
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches")
+            os.makedirs(patches_dir, exist_ok=True)
+            with open(os.path.join(patches_dir, "root.patch"), "w", encoding="utf-8") as f:
+                f.write(patch_content)
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+            with open(target_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "a\nb\n"
+
+            assert self.PatchOverride.po_revert(env, projects_info, project_name) is True
+            with open(target_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "a\n"
+
+    def test_po_revert_override_tracked_restores_via_git_checkout(self):
+        """PO-012: Override revert for tracked file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            tracked_rel = "tracked.txt"
+            tracked_abs = os.path.join(repo_root, tracked_rel)
+            with open(tracked_abs, "w", encoding="utf-8") as f:
+                f.write("base\n")
+            _git("add", tracked_rel)
+            _git("commit", "-m", "base")
+
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, tracked_rel), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+            with open(tracked_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "override\n"
+
+            assert self.PatchOverride.po_revert(env, projects_info, project_name) is True
+            with open(tracked_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "base\n"
+
+    def test_po_revert_override_untracked_is_deleted(self):
+        """PO-013: Override revert for untracked file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            # Create a base commit so checkout operations are valid.
+            with open(os.path.join(repo_root, "README.md"), "w", encoding="utf-8") as f:
+                f.write("base\n")
+            _git("add", "README.md")
+            _git("commit", "-m", "base")
+
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+
+            untracked_rel = "untracked.txt"
+            with open(os.path.join(overrides_dir, untracked_rel), "w", encoding="utf-8") as f:
+                f.write("new\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+            assert os.path.exists(os.path.join(repo_root, untracked_rel))
+
+            assert self.PatchOverride.po_revert(env, projects_info, project_name) is True
+            assert not os.path.exists(os.path.join(repo_root, untracked_rel))
+
+    def test_po_revert_custom_warns_manual_cleanup(self):
+        """PO-014: Custom revert warns manual cleanup."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            custom_dir = os.path.join(po_root, "custom")
+            os.makedirs(custom_dir, exist_ok=True)
+            with open(os.path.join(custom_dir, "sample.txt"), "w", encoding="utf-8") as f:
+                f.write("x\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {f"po-{po_name}": {"PROJECT_PO_DIR": "custom", "PROJECT_PO_FILE_COPY": "a:b"}},
+            }
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            with patch("src.plugins.patch_override.log") as mock_log:
+                assert self.PatchOverride.po_revert(env, projects_info, project_name) is True
+                assert any(
+                    "Manual cleanup may be required" in str(call.args[0]) for call in mock_log.warning.call_args_list
+                )
+
 
 class TestPatchOverrideNew:
     """Test cases for po_new method."""
@@ -1140,7 +1375,7 @@ class TestPatchOverrideNew:
         self.PatchOverride = PatchOverride
 
     def test_po_new_invalid_name_format(self):
-        """Test po_new with invalid PO name format."""
+        """PO-015: po_new rejects invalid name."""
         # Arrange
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {"projects_path": os.path.join(tmpdir, "projects")}
@@ -1213,6 +1448,54 @@ class TestPatchOverrideNew:
                     project_name,
                     po_name,
                 )
+
+    def test_po_new_force_creates_empty_structure(self):
+        """PO-016: po_new force creates empty structure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+            po_name = "po_force"
+
+            env = {"projects_path": projects_path, "repositories": []}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "board_path": os.path.join(tmpdir, "unused"),
+                }
+            }
+
+            assert self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=True) is True
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            assert os.path.isdir(po_root)
+            assert os.path.isdir(os.path.join(po_root, "patches"))
+            assert os.path.isdir(os.path.join(po_root, "overrides"))
+
+    def test_po_new_no_repositories_does_not_crash(self, capsys):
+        """PO-018: po_new with no repositories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+            po_name = "po_empty"
+
+            env = {"projects_path": projects_path, "repositories": []}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "board_path": os.path.join(tmpdir, "unused"),
+                    "config": {},
+                }
+            }
+
+            with patch("builtins.input", side_effect=["yes"]):
+                assert self.PatchOverride.po_new(env, projects_info, project_name, po_name, force=False) is True
+
+            out = capsys.readouterr().out
+            assert "No git repositories found." in out
+            # Non-force mode should not create directories unless files are selected.
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            assert not os.path.exists(po_root)
 
     def test_po_new_fails_when_po_exists(self):
         """po_new should fail if PO directory already exists."""
@@ -1308,6 +1591,90 @@ class TestPatchOverrideDelete:
                 assert result is False
                 mock_log.error.assert_called_with("Board info missing for project '%s'", project_name)
 
+    def test_po_del_force_removes_directory_and_config(self):
+        """PO-021: po_del removes directory and config."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po_base"
+
+            env = {"projects_path": projects_path}
+
+            ini_file = os.path.join(tmpdir, "board.ini")
+            ini_content = (
+                "[projA]\n"
+                "PROJECT_PO_CONFIG=po_base po_other\n"
+                "\n"
+                "[projB]\n"
+                "PROJECT_PO_CONFIG=po_other po_base[file.remove]\n"
+            )
+            with open(ini_file, "w", encoding="utf-8") as f:
+                f.write(ini_content)
+
+            # Create PO directory to delete.
+            po_path = os.path.join(projects_path, board_name, "po", po_name)
+            os.makedirs(po_path, exist_ok=True)
+            with open(os.path.join(po_path, "dummy.txt"), "w", encoding="utf-8") as f:
+                f.write("x\n")
+
+            projects_info = {
+                "projA": {
+                    "board_name": board_name,
+                    "board_path": os.path.join(tmpdir, "unused"),
+                    "ini_file": ini_file,
+                },
+                "projB": {
+                    "board_name": board_name,
+                    "board_path": os.path.join(tmpdir, "unused"),
+                    "ini_file": ini_file,
+                },
+            }
+
+            assert self.PatchOverride.po_del(env, projects_info, "projA", po_name, force=True) is True
+            assert not os.path.exists(po_path)
+
+            with open(ini_file, "r", encoding="utf-8") as f:
+                updated = f.read()
+            assert "po_base" not in updated
+            assert "po_other" in updated
+
+    def test_po_del_cancelled_by_user_leaves_state_unchanged(self, capsys):
+        """PO-022: po_del cancelled by user."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po_base"
+            env = {"projects_path": projects_path}
+
+            ini_file = os.path.join(tmpdir, "board.ini")
+            ini_content = "[projA]\nPROJECT_PO_CONFIG=po_base po_other\n"
+            with open(ini_file, "w", encoding="utf-8") as f:
+                f.write(ini_content)
+
+            po_path = os.path.join(projects_path, board_name, "po", po_name)
+            os.makedirs(po_path, exist_ok=True)
+            with open(os.path.join(po_path, "dummy.txt"), "w", encoding="utf-8") as f:
+                f.write("x\n")
+
+            projects_info = {
+                "projA": {
+                    "board_name": board_name,
+                    "board_path": os.path.join(tmpdir, "unused"),
+                    "ini_file": ini_file,
+                }
+            }
+
+            with open(ini_file, "r", encoding="utf-8") as f:
+                before = f.read()
+            with patch("builtins.input", return_value="no"):
+                assert self.PatchOverride.po_del(env, projects_info, "projA", po_name, force=False) is False
+            _ = capsys.readouterr()  # consume prints
+
+            assert os.path.exists(po_path)
+            with open(ini_file, "r", encoding="utf-8") as f:
+                after = f.read()
+            assert after == before
+
 
 class TestPatchOverrideList:
     """Test cases for po_list method."""
@@ -1349,7 +1716,7 @@ class TestPatchOverrideList:
             projects_info = {
                 "test_project": {
                     "board_name": "test_board",
-                    "PROJECT_PO_CONFIG": "po1",
+                    "config": {"PROJECT_PO_CONFIG": "po1"},
                 }
             }
             project_name = "test_project"
@@ -1375,7 +1742,7 @@ class TestPatchOverrideList:
             projects_info = {
                 "test_project": {
                     "board_name": "test_board",
-                    "PROJECT_PO_CONFIG": "",  # Empty config
+                    "config": {"PROJECT_PO_CONFIG": ""},  # Empty config
                 }
             }
             project_name = "test_project"
@@ -1392,6 +1759,78 @@ class TestPatchOverrideList:
                 # Assert
                 assert not result
                 mock_log.info.assert_called_with("start po_list for project: '%s'", project_name)
+
+    def test_po_list_short_prints_names_only(self, capsys):
+        """PO-023: po_list short names only."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+
+            po_dir = os.path.join(projects_path, board_name, "po")
+            os.makedirs(os.path.join(po_dir, "po1"), exist_ok=True)
+            os.makedirs(os.path.join(po_dir, "po2"), exist_ok=True)
+
+            env = {"projects_path": projects_path, "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": "po1 po2"},
+                }
+            }
+
+            infos = self.PatchOverride.po_list(env, projects_info, project_name, short=True)
+            out = capsys.readouterr().out
+            assert "po1" in out
+            assert "po2" in out
+            assert infos and {p["name"] for p in infos} == {"po1", "po2"}
+
+    def test_po_list_detailed_prints_patches_overrides_and_custom(self, capsys):
+        """PO-024: po_list detailed output."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+            po_name = "po1"
+
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            patches_dir = os.path.join(po_root, "patches")
+            overrides_dir = os.path.join(po_root, "overrides")
+            custom_dir = os.path.join(po_root, "custom")
+            os.makedirs(patches_dir, exist_ok=True)
+            os.makedirs(overrides_dir, exist_ok=True)
+            os.makedirs(custom_dir, exist_ok=True)
+
+            with open(os.path.join(patches_dir, "root.patch"), "w", encoding="utf-8") as f:
+                f.write("diff --git a/a b/a\n")
+            with open(os.path.join(overrides_dir, "override.txt"), "w", encoding="utf-8") as f:
+                f.write("x\n")
+            with open(os.path.join(custom_dir, "custom.txt"), "w", encoding="utf-8") as f:
+                f.write("y\n")
+
+            env = {
+                "projects_path": projects_path,
+                "po_configs": {f"po-{po_name}": {"PROJECT_PO_DIR": "custom", "PROJECT_PO_FILE_COPY": "a:b"}},
+            }
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po_name},
+                }
+            }
+
+            infos = self.PatchOverride.po_list(env, projects_info, project_name, short=False)
+            out = capsys.readouterr().out
+            assert f"PO: {po_name}" in out
+            assert "root.patch" in out
+            assert "override.txt" in out
+            assert f"po-{po_name} (custom)" in out
+            assert "custom.txt" in out
+
+            assert infos and infos[0]["name"] == po_name
+            assert "root.patch" in infos[0]["patch_files"]
+            assert "override.txt" in infos[0]["override_files"]
+            assert infos[0]["custom_dirs"]
 
 
 class TestPatchOverrideParseConfig:
@@ -1411,7 +1850,7 @@ class TestPatchOverrideParseConfig:
         self.PatchOverride = PatchOverride
 
     def test_parse_po_config_simple(self):
-        """Test parse_po_config with simple config."""
+        """PO-001: parse_po_config basic parsing."""
         # Arrange
         po_config = "po1 po2"
 
@@ -1441,7 +1880,7 @@ class TestPatchOverrideUpdate:
         self.PatchOverride = PatchOverride
 
     def test_po_update_fails_when_po_not_exists(self):
-        """po_update should fail if PO directory does not exist."""
+        """PO-020: po_update fails if PO missing."""
         # Arrange
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {"projects_path": os.path.join(tmpdir, "projects")}
@@ -1482,7 +1921,7 @@ class TestPatchOverrideUpdate:
                 )
 
     def test_po_update_succeeds_when_po_exists(self):
-        """po_update should succeed in force mode when PO directory exists."""
+        """PO-019: po_update requires existing PO."""
         # Arrange
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {"projects_path": os.path.join(tmpdir, "projects")}
@@ -1938,7 +2377,7 @@ class TestPatchOverrideUpdate:
             assert result, "po_new should succeed"
 
     def test_po_new_creates_remove_files_for_deleted_files(self):
-        """Test that po_new creates .remove files for deleted files."""
+        """PO-017: po_new interactive selection."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
