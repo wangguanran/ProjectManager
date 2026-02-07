@@ -3,6 +3,7 @@ Tests for project_builder functions.
 """
 
 import os
+import subprocess
 import sys
 import tarfile
 from unittest.mock import MagicMock, patch
@@ -258,6 +259,126 @@ class TestProjectDiff:
             for call in mock_rmtree.call_args_list
         )
         assert not main_diff_dir_removed
+
+    def test_project_diff_single_repo_archive_structure_real_git(self, tmp_path):
+        """BUILD-001: Single repo diff archive contains after/before/patch/commit without repo subdir."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        def _git(*args: str) -> None:
+            subprocess.run(
+                ["git", *args], cwd=str(repo_root), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+        _git("init")
+        _git("config", "user.email", "test@example.com")
+        _git("config", "user.name", "Test User")
+
+        (repo_root / "a.txt").write_text("base\n", encoding="utf-8")
+        _git("add", "a.txt")
+        _git("commit", "-m", "base")
+
+        # Create a worktree change.
+        (repo_root / "a.txt").write_text("base\nchange\n", encoding="utf-8")
+
+        # Run from tmp_path to exercise the real .cache/build layout.
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(str(tmp_path))
+            env = {"repositories": [(str(repo_root), "root")]}
+            assert self.project_diff(env, {}, "projA", keep_diff_dir=False) is True
+        finally:
+            os.chdir(old_cwd)
+
+        build_root = tmp_path / ".cache" / "build" / "projA"
+        ts_dirs = [p for p in build_root.iterdir() if p.is_dir()]
+        assert len(ts_dirs) == 1
+        ts_dir = ts_dirs[0]
+
+        archive = next(ts_dir.glob("diff_projA_*.tar.gz"))
+        assert archive.is_file()
+        assert not (ts_dir / "diff").exists()
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = set(tar.getnames())
+        assert "diff/after/a.txt" in names
+        assert "diff/before/a.txt" in names
+        assert "diff/patch/changes_worktree.patch" in names
+        # Single repo should not create a repo-name subdir.
+        assert "diff/after/root/a.txt" not in names
+
+    def test_project_diff_multi_repo_archive_structure_real_git(self, tmp_path):
+        """BUILD-002: Multi-repo diff archive groups files under repo subdirs."""
+        repo1 = tmp_path / "repo1"
+        repo2 = tmp_path / "repo2"
+        repo1.mkdir(parents=True, exist_ok=True)
+        repo2.mkdir(parents=True, exist_ok=True)
+
+        def _init_repo(repo_root, fname: str, content: str) -> None:
+            subprocess.run(
+                ["git", "init"], cwd=str(repo_root), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test User"],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            (repo_root / fname).write_text(content, encoding="utf-8")
+            subprocess.run(
+                ["git", "add", fname],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "base"],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        _init_repo(repo1, "a.txt", "r1\n")
+        _init_repo(repo2, "b.txt", "r2\n")
+
+        # Create worktree changes.
+        (repo1 / "a.txt").write_text("r1\nchange\n", encoding="utf-8")
+        (repo2 / "b.txt").write_text("r2\nchange\n", encoding="utf-8")
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(str(tmp_path))
+            env = {"repositories": [(str(repo1), "repo1"), (str(repo2), "repo2")]}
+            assert self.project_diff(env, {}, "projA", keep_diff_dir=False) is True
+        finally:
+            os.chdir(old_cwd)
+
+        build_root = tmp_path / ".cache" / "build" / "projA"
+        ts_dirs = [p for p in build_root.iterdir() if p.is_dir()]
+        assert len(ts_dirs) == 1
+        ts_dir = ts_dirs[0]
+
+        archive = next(ts_dir.glob("diff_projA_*.tar.gz"))
+        assert archive.is_file()
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = set(tar.getnames())
+        assert "diff/after/repo1/a.txt" in names
+        assert "diff/before/repo1/a.txt" in names
+        assert "diff/patch/repo1/changes_worktree.patch" in names
+        assert "diff/after/repo2/b.txt" in names
+        assert "diff/before/repo2/b.txt" in names
+        assert "diff/patch/repo2/changes_worktree.patch" in names
 
 
 class TestProjectPreBuild:
