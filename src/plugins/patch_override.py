@@ -573,17 +573,25 @@ def po_apply(
         # Check applied flag per PO and skip if already applied
         po_path = os.path.join(po_dir, po_name)
         po_applied_flag_path = os.path.join(po_path, "po_applied")
+        po_applied_tmp_path = f"{po_applied_flag_path}.tmp"
+
+        # Clean up stale tmp file from previous failed runs (best-effort).
+        if not dry_run and os.path.exists(po_applied_tmp_path):
+            try:
+                os.remove(po_applied_tmp_path)
+            except OSError:
+                pass
         if os.path.isfile(po_applied_flag_path):
             log.info("po '%s' already applied, skipping", po_name)
             continue
 
         log.info("po '%s' starting to apply patch and override%s", po_name, " (dry-run)" if dry_run else "")
 
-        # Create po_applied file header first (unless dry-run)
+        # Create po_applied temp file header first (unless dry-run). Only mark "applied" by renaming after success.
         if not dry_run:
             try:
                 os.makedirs(po_path, exist_ok=True)
-                with open(po_applied_flag_path, "w", encoding="utf-8") as f:
+                with open(po_applied_tmp_path, "w", encoding="utf-8") as f:
                     f.write(f"# Applied for project {project_name}\n")
                     f.write("# Operation log - commands executed during po_apply:\n")
                     f.write("# Commands can be re-executed manually for debugging\n\n")
@@ -596,23 +604,34 @@ def po_apply(
             po_patch_dir=os.path.join(po_dir, po_name, "patches"),
             po_override_dir=os.path.join(po_dir, po_name, "overrides"),
             po_custom_dir=os.path.join(po_dir, po_name, "custom"),
-            po_applied_flag_path=("" if dry_run else po_applied_flag_path),
+            po_applied_flag_path=("" if dry_run else po_applied_tmp_path),
             dry_run=dry_run,
             force=force,
             exclude_files=exclude_files,
             po_configs=env.get("po_configs", {}),
         )
 
-        if not __apply_patch(ctx):
-            log.error("po apply aborted due to patch error in po: '%s'", po_name)
+        ok = __apply_patch(ctx) and __apply_override(ctx) and __apply_custom(ctx)
+        if not ok:
+            log.error("po apply aborted due to error in po: '%s'", po_name)
+            if not dry_run and os.path.exists(po_applied_tmp_path):
+                try:
+                    os.remove(po_applied_tmp_path)
+                except OSError:
+                    pass
             return False
-        if not __apply_override(ctx):
-            log.error("po apply aborted due to override error in po: '%s'", po_name)
-            return False
-        # Apply custom from unified custom directory via ctx
-        if not __apply_custom(ctx):
-            log.error("po apply aborted due to custom po error in po: '%s'", po_name)
-            return False
+
+        if not dry_run:
+            try:
+                os.replace(po_applied_tmp_path, po_applied_flag_path)
+            except OSError as e:
+                # Best-effort: try copy+remove if atomic rename fails.
+                try:
+                    shutil.copy2(po_applied_tmp_path, po_applied_flag_path)
+                    os.remove(po_applied_tmp_path)
+                except OSError:
+                    log.error("Failed to finalize applied flag for po '%s': '%s'", po_name, e)
+                    return False
 
         log.info("po '%s' has been processed", po_name)
     log.info("po apply finished for project: '%s'", project_name)

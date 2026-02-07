@@ -382,6 +382,102 @@ class TestPatchOverrideApply:
             assert len(applied_cmds) == 1
             assert applied_cmds[0][1] == repo1_path  # cwd is the repository path
 
+    def test_po_apply_patch_apply_success_real_git(self):
+        """PO-005: Patch apply success with real `git apply`."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            target_rel = "hello.txt"
+            target_abs = os.path.join(repo_root, target_rel)
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("a\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "base")
+
+            # Prepare a patch by modifying the file, then capture `git diff`, and revert to clean state.
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("a\nb\n")
+            patch_content = subprocess.check_output(["git", "diff"], cwd=repo_root).decode("utf-8")
+            _git("checkout", "--", target_rel)
+
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches")
+            os.makedirs(patches_dir, exist_ok=True)
+            patch_path = os.path.join(patches_dir, "root.patch")
+            with open(patch_path, "w", encoding="utf-8") as f:
+                f.write(patch_content)
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")]}
+            projects_info = {"proj": {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
+            assert result is True
+            with open(target_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "a\nb\n"
+
+            po_applied = os.path.join(projects_path, board_name, "po", po_name, "po_applied")
+            assert os.path.exists(po_applied)
+            assert not os.path.exists(f"{po_applied}.tmp")
+
+    def test_po_apply_patch_failure_does_not_leave_po_applied(self):
+        """PO-006: Patch failure aborts and does not leave stale po_applied state."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            target_rel = "hello.txt"
+            target_abs = os.path.join(repo_root, target_rel)
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("a\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "base")
+
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            patches_dir = os.path.join(projects_path, board_name, "po", po_name, "patches")
+            os.makedirs(patches_dir, exist_ok=True)
+
+            # Invalid patch content should make `git apply` fail.
+            with open(os.path.join(patches_dir, "root.patch"), "w", encoding="utf-8") as f:
+                f.write("not a patch\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")]}
+            projects_info = {"proj": {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
+            assert result is False
+
+            # No stale applied flag should remain (otherwise retries would be skipped).
+            po_applied = os.path.join(projects_path, board_name, "po", po_name, "po_applied")
+            assert not os.path.exists(po_applied)
+            assert not os.path.exists(f"{po_applied}.tmp")
+
+            # File content unchanged.
+            with open(target_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "a\n"
+
     def test_po_apply_overrides_copy_with_exclude_and_flag(self):
         """Apply overrides: copy files and respect exclude list."""
         with tempfile.TemporaryDirectory() as tmpdir:
