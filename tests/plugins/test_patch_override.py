@@ -122,7 +122,12 @@ class TestPatchOverrideApply:
             env = {
                 "projects_path": projects_path,
                 "repositories": [(repo_root, "root")],
-                "po_configs": {f"po-{po_name}": {"PROJECT_PO_DIR": "custom", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}},
+                "po_configs": {
+                    f"po-{po_name}": {
+                        "PROJECT_PO_DIR": "custom",
+                        "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt",
+                    }
+                },
             }
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
@@ -138,7 +143,8 @@ class TestPatchOverrideApply:
             po_applied = os.path.join(projects_path, board_name, "po", po_name, "po_applied")
             assert not os.path.exists(po_applied)
             # Repository content unchanged.
-            assert open(target_file, "r", encoding="utf-8").read() == "original\n"
+            with open(target_file, "r", encoding="utf-8") as f:
+                assert f.read() == "original\n"
             # Custom copy target not created.
             assert not os.path.exists(os.path.join(tmpdir, "custom_dest.txt"))
 
@@ -176,7 +182,8 @@ class TestPatchOverrideApply:
 
             result = self.PatchOverride.po_revert(env, projects_info, project_name, dry_run=True)
             assert result is True
-            assert open(tracked, "r", encoding="utf-8").read() == "modified\n"
+            with open(tracked, "r", encoding="utf-8") as f:
+                assert f.read() == "modified\n"
 
     def test_po_apply_with_excluded_po(self):
         """Test po_apply when PO is excluded in config."""

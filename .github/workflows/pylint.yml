@@ -36,7 +36,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pylint
-    - name: Analysing the code with pylint
+    - name: Lint (pylint + black + isort)
       run: |
-        pylint $(git ls-files '*.py')
+        make lint

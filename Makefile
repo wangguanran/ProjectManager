@@ -19,14 +19,14 @@ test-cov: ## Run tests with coverage
 	pytest --cov=src --cov-report=html --cov-report=term-missing
 
 lint: ## Run linting tools
-	pylint src/ tests/
-	black --check src/ tests/
-	isort --check-only src/ tests/
+	pylint src/ tests/ crewai_agents/
+	black --check src/ tests/ crewai_agents/
+	isort --check-only src/ tests/ crewai_agents/
 	# mypy src/
 
 format: ## Format code
-	black src/ tests/
-	isort src/ tests/
+	black src/ tests/ crewai_agents/
+	isort src/ tests/ crewai_agents/
 
 clean: ## Clean build artifacts
 	rm -rf build/
