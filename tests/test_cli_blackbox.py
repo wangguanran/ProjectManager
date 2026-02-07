@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import toml
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -81,8 +83,9 @@ def test_cli_version_matches_pyproject(tmp_path: Path) -> None:
     _write_min_projects_tree(tmp_path)
     cp = _run_cli(tmp_path, "--version")
     assert cp.returncode == 0
-    # Version number is printed alone by argparse version action.
-    assert cp.stdout.strip() != ""
+    base_version = toml.load(str(REPO_ROOT / "pyproject.toml"))["project"]["version"]
+    # May include a build suffix like +g<shortsha>.
+    assert cp.stdout.strip().startswith(base_version)
 
 
 def test_cli_exact_operation_executes(tmp_path: Path) -> None:

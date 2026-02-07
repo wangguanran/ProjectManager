@@ -4,6 +4,7 @@ Utility functions collection.
 
 from __future__ import annotations
 
+import importlib
 import os
 import subprocess
 import sys
@@ -53,6 +54,7 @@ def get_version():
     Returns:
         str: The project version, or "0.0.0-dev" if not found.
     """
+
     def _read_base_version(base_dir: str) -> str:
         pyproject_path = os.path.join(base_dir, "pyproject.toml")
         if not os.path.exists(pyproject_path):
@@ -62,19 +64,16 @@ def get_version():
 
     def _try_get_build_git_sha() -> str:
         # Prefer build-time embedded info (for PyInstaller binaries where .git is absent).
-        build_info = None
-        try:
-            # When imported as a package module: src.utils
-            from . import _build_info as build_info  # type: ignore
-        except Exception:
+        for mod_name in ("src._build_info", "_build_info"):
             try:
-                # When utils.py is loaded as a top-level module from src/ on sys.path (tests)
-                import _build_info as build_info  # type: ignore
-            except Exception:
-                build_info = None
-
-        sha = getattr(build_info, "GIT_SHA", "") if build_info else ""
-        return str(sha).strip()
+                build_info = importlib.import_module(mod_name)
+            except ImportError:
+                continue
+            sha = getattr(build_info, "GIT_SHA", "")
+            sha = str(sha).strip()
+            if sha:
+                return sha
+        return ""
 
     def _try_get_git_sha_from_repo(repo_dir: str) -> str:
         # Best-effort: only for dev/source runs where `.git` exists.

@@ -49,7 +49,7 @@
    2) Commit it: `git add src/tmp_file.txt && git commit -m "add tmp file"`
    3) Modify it: `printf "line1\nline2" > src/tmp_file.txt`
    4) Generate a patch: `git diff -- src/tmp_file.txt > projects/boardA/po/po_base/patches/tmp_file.patch`
-   5) Prepare an override file: `cp src/tmp_file.txt projects/boardA/po/po_base/overrides/`
+   5) Prepare an override file (keep relative path): `mkdir -p projects/boardA/po/po_base/overrides/src && cp src/tmp_file.txt projects/boardA/po/po_base/overrides/src/tmp_file.txt`
 
 ### Dataset B: Manifest Multi-Repo (for _find_repositories / project_diff)
 1. Create and enter a workspace, for example: `mkdir -p /tmp/pm_case_b && cd /tmp/pm_case_b`.
@@ -76,7 +76,7 @@
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|
 | CLI-001 | CLI/Arg Parsing | `--help` shows operations and plugin flags | Dataset A completed | 1. Run `python -m src --help`.<br>2. Check the `supported operations` list.<br>3. Check plugin flag descriptions (e.g., `--keep-diff-dir`, `--short`). | Help output includes registered operations and available flags, properly formatted. | P1 | Functional |
-| CLI-002 | CLI/Arg Parsing | `--version` reads pyproject.toml | Dataset A completed | 1. Run `python -m src --version`.<br>2. Compare with `project.version` in `pyproject.toml`. | Version matches `pyproject.toml`. | P1 | Functional |
+| CLI-002 | CLI/Arg Parsing | `--version` reads pyproject.toml | Dataset A completed | 1. Run `python -m src --version`.<br>2. Compare with `project.version` in `pyproject.toml`. | Output starts with the pyproject version. It may include a build suffix like `+g<shortsha>` when git/build metadata is available. | P1 | Functional |
 | CLI-003 | CLI/Arg Parsing | Exact operation match executes | Dataset A completed | 1. Run `python -m src po_list projA --short`.<br>2. Observe output. | Command executes successfully; only PO names are printed; no “Unknown operation” error. | P0 | Functional |
 | CLI-004 | CLI/Arg Parsing | Fuzzy match (prefix) auto-corrects | Dataset A completed | 1. Run `python -m src buil projA`.<br>2. Observe console/log output. | Fuzzy match message appears and `project_build` is executed; no unknown-op exit. | P1 | Compatibility |
 | CLI-005 | CLI/Arg Parsing | Fuzzy match ambiguity warning | Dataset A completed | 1. Run `python -m src po projA`.<br>2. Observe console output. | Ambiguous operation warning shows candidate matches; best match is executed. | P2 | Compatibility |
@@ -191,9 +191,17 @@
 
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|
-| UTIL-001 | Utils | get_version reads pyproject | Dataset A completed | 1. Run `python -c "from src.utils import get_version; print(get_version())"`.<br>2. Compare with `pyproject.toml`. | Version matches pyproject. | P2 | Functional |
+| UTIL-001 | Utils | get_version reads pyproject | Dataset A completed | 1. Run `python -c "from src.utils import get_version; print(get_version())"`.<br>2. Compare with `pyproject.toml`. | Output starts with the pyproject version. It may include a build suffix like `+g<shortsha>` when git/build metadata is available. | P2 | Functional |
 | UTIL-002 | Utils | get_version fallback when missing | Temporarily rename `pyproject.toml` | 1. Run the command above.<br>2. Restore file name. | Output is `0.0.0-dev`. | P2 | Edge |
 | UTIL-003 | Utils | get_filename creates directory | Remove `.cache/logs` | 1. Run `python -c "from src.utils import get_filename; print(get_filename('T_', '.log', '.cache/logs'))"`. | `.cache/logs` created; returned path contains timestamp. | P3 | Functional |
 | UTIL-004 | Utils | list_file_path depth & filters | Create test tree | 1. Create `tmp/a/b/file.txt`.<br>2. Run `python -c "from src.utils import list_file_path; print(list(list_file_path('tmp', max_depth=1)))"`. | Output excludes paths deeper than depth 1. | P3 | Functional |
 | LOG-001 | Logging | latest.log symlink created | Dataset A completed | 1. Run any command (e.g., `python -m src --help`).<br>2. Check `.cache/latest.log`. | Symlink exists and points to the latest log file. | P2 | Functional |
 | PROF-001 | Profiler | ENABLE_CPROFILE toggles profiling | Use a script setting `builtins.ENABLE_CPROFILE=True` | 1. Call a function decorated with `@func_cprofile`. | cProfile stats appear in logs; process finishes normally. | P3 | Functional |
+
+## 10. Safety Dry-Run (project_diff / po_apply / po_revert)
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| DRY-001 | Safety | `project_diff --dry-run` prints plan and does not write | Dataset A or B completed | 1. Run `python -m src project_diff projA --dry-run`.<br>2. Check filesystem for `.cache/build/.../diff`. | Logs show planned diff root/repositories; no `.cache/build/.../diff` directories are created. | P1 | Safety |
+| DRY-002 | Safety | `po_apply --dry-run` prints plan and does not write | Dataset A completed with patches/overrides/custom configured | 1. Run `python -m src po_apply projA --dry-run`.<br>2. Check that repo files are unchanged. | Logs show planned `git apply`/copy/remove actions; no repo writes occur; no `po_applied` flag is created. | P0 | Safety |
+| DRY-003 | Safety | `po_revert --dry-run` prints plan and does not write | Dataset A completed with applyable PO | 1. Run `python -m src po_revert projA --dry-run`.<br>2. Check that repo files are unchanged. | Logs show planned `git apply --reverse`/checkout/remove actions; no repo writes occur. | P0 | Safety |
