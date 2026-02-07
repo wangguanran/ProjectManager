@@ -110,7 +110,7 @@ class TestAutoProfile:
         assert result == "magic_result"
 
     def test_auto_profile_with_cprofile_enabled(self):
-        """Test auto_profile with cProfile enabled."""
+        """PROF-001: ENABLE_CPROFILE toggles profiling."""
         import builtins
 
         builtins.ENABLE_CPROFILE = True
