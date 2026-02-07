@@ -10,7 +10,7 @@ requirement_analyst_agent:
     你精通各种测试方法论，包括黑盒测试、白盒测试、边界值分析等。
     你总是确保测试用例覆盖正常异常场景。
 
-architect流程、边界条件和_agent:
+architect_agent:
   role: "系统架构师"
   goal: "分析需求，分解任务，设计实现方案，协调各Agent工作"
   backstory: |
