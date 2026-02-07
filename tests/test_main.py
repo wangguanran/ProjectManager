@@ -155,13 +155,13 @@ class TestLoadAllProjects:
         assert not result
 
     def test_load_all_projects_nonexistent_directory(self):
-        """Test loading projects from a non-existent directory."""
+        """CFG-004: projects directory missing."""
         nonexistent_path = "/nonexistent/path"
         result = self._load_projects_with_config(nonexistent_path)
         assert not result
 
     def test_load_all_projects_single_board_single_project(self):
-        """Test loading a single board with a single project."""
+        """CFG-001: Missing common.ini degrades gracefully (project still loads)."""
         projects_path = self._create_temp_projects_structure()
 
         # Create board with single project
@@ -184,7 +184,7 @@ PROJECT_CUSTOMER=test_customer
         assert project_info["config"]["PROJECT_NAME"] == "test_project"
 
     def test_load_all_projects_with_common_config(self):
-        """Test loading projects with common configuration inheritance."""
+        """CFG-002: common.ini loads [common] section and values are inherited."""
         projects_path = self._create_temp_projects_structure()
 
         # Create common config
@@ -211,7 +211,7 @@ PROJECT_PLATFORM=test_platform
         assert project_info["config"]["PROJECT_PLATFORM"] == "test_platform"
 
     def test_load_all_projects_parent_child_relationship(self):
-        """Test loading projects with parent-child relationships."""
+        """CFG-009: parent/children relationships built correctly."""
         projects_path = self._create_temp_projects_structure()
 
         ini_content = """[parentproject]
@@ -264,7 +264,7 @@ PROJECT_NAME=test_project
         assert "test-project" in result
 
     def test_load_all_projects_multiple_ini_files_error(self):
-        """Test error handling when multiple ini files exist in a board directory."""
+        """CFG-006: multiple ini files in board dir triggers AssertionError."""
         projects_path = self._create_temp_projects_structure()
         board_path = os.path.join(projects_path, "board01")
         os.makedirs(board_path)
@@ -280,7 +280,7 @@ PROJECT_NAME=test_project
             self._load_projects_with_config(projects_path)
 
     def test_load_all_projects_no_ini_file(self):
-        """Test handling of board directory without ini file."""
+        """CFG-005: board without ini file is skipped."""
         projects_path = self._create_temp_projects_structure()
 
         # Create board directory without ini file
@@ -293,7 +293,7 @@ PROJECT_NAME=test_project
         assert not result
 
     def test_load_all_projects_duplicate_keys(self):
-        """Test handling of duplicate keys in project configuration."""
+        """CFG-007: duplicate keys in one section cause skip."""
         projects_path = self._create_temp_projects_structure()
 
         ini_content = """[test-project]
@@ -308,7 +308,7 @@ PROJECT_NAME=duplicate_key
         assert not result
 
     def test_load_all_projects_comments_stripping(self):
-        """Test that comments are properly stripped from configuration values."""
+        """CFG-003: inline comment stripping (# / ;) for config values."""
         projects_path = self._create_temp_projects_structure()
 
         ini_content = """[test-project]
@@ -327,7 +327,7 @@ PROJECT_CUSTOMER=test_customer
         assert project_info["config"]["PROJECT_CUSTOMER"] == "test_customer"
 
     def test_load_all_projects_po_config_concatenation(self):
-        """Test that PROJECT_PO_CONFIG values are concatenated properly."""
+        """CFG-008: PROJECT_PO_CONFIG merge concatenates common + project."""
         projects_path = self._create_temp_projects_structure()
 
         # Create common config with PO config
@@ -493,6 +493,27 @@ PROJECT_NAME=test_project
         project_info = result["testproject"]
         # Should not inherit any common settings since [common] section is missing
         assert "SOME_SETTING" not in project_info["config"]
+
+    def test_load_all_projects_writes_projects_json_per_board(self):
+        """CFG-010: projects.json written per board directory."""
+        projects_path = self._create_temp_projects_structure()
+
+        ini_content = """[testproject]
+PROJECT_NAME=test_project
+PROJECT_PLATFORM=test_platform
+"""
+        board_path, _ini_file = self._create_board_structure(projects_path, "board01", ini_content)
+
+        result = self._load_projects_with_config(projects_path)
+        assert "testproject" in result
+
+        projects_json = os.path.join(board_path, "projects.json")
+        assert os.path.exists(projects_json)
+        with open(projects_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["board_name"] == "board01"
+        assert isinstance(data["projects"], list)
+        assert any(p.get("project_name") == "testproject" for p in data["projects"])
 
     def test_load_all_projects_empty_sections(self):
         """Test handling of empty project sections."""
@@ -1133,7 +1154,7 @@ class TestFindRepositories:
         return self.temp_dir
 
     def test_find_repositories_single_git_repo(self):
-        """Test finding repositories in a single git repository."""
+        """REPO-001: Single repo detects root and writes repositories.json."""
         temp_dir = self._create_temp_directory()
         temp_dir_real = os.path.realpath(temp_dir)
 
@@ -1171,7 +1192,7 @@ class TestFindRepositories:
             os.chdir(original_cwd)
 
     def test_find_repositories_manifest_repo(self):
-        """Test finding repositories using .repo manifest."""
+        """REPO-002: Manifest multi-repo detection writes repositories.json."""
         temp_dir = self._create_temp_directory()
         temp_dir_real = os.path.realpath(temp_dir)
 
@@ -1241,8 +1262,53 @@ class TestFindRepositories:
         finally:
             os.chdir(original_cwd)
 
+    def test_find_repositories_manifest_missing_include_logs_warning(self):
+        """REPO-003: Missing include logs warning; other repos still detected."""
+        temp_dir = self._create_temp_directory()
+        temp_dir_real = os.path.realpath(temp_dir)
+
+        # Create .repo directory structure
+        repo_dir = os.path.join(temp_dir, ".repo")
+        os.makedirs(repo_dir)
+
+        # Create manifest.xml referencing a missing include
+        manifest_content = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <project path="project1" name="project1" />
+    <include name="missing.xml" />
+</manifest>"""
+        manifest_file = os.path.join(repo_dir, "manifest.xml")
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            f.write(manifest_content)
+
+        # Create project directory with .git so it is detected
+        project_dir = os.path.join(temp_dir, "project1")
+        os.makedirs(os.path.join(project_dir, ".git"))
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            with patch("src.__main__.log") as mock_log:
+                repositories = self._find_repositories()
+
+                # Should still detect existing projects
+                assert len(repositories) == 1
+                assert repositories[0][1] == "project1"
+
+                repos_file = os.path.join(temp_dir, "projects", "repositories.json")
+                assert os.path.exists(repos_file)
+                with open(repos_file, "r", encoding="utf-8") as f:
+                    repo_data = json.load(f)
+
+                assert repo_data["discovery_type"] == "manifest"
+                assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
+                assert len(repo_data["repositories"]) == 1
+                mock_log.warning.assert_called()
+        finally:
+            os.chdir(original_cwd)
+
     def test_find_repositories_no_git_repos(self):
-        """Test finding repositories when no git repositories exist."""
+        """REPO-004: No .repo and no .git => repositories empty; no crash."""
         temp_dir = self._create_temp_directory()
         temp_dir_real = os.path.realpath(temp_dir)
 
