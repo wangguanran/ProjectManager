@@ -383,7 +383,7 @@ This project is licensed under **GNU GPLv3**. See `LICENSE`.
 
 ## Notes
 
-- Currently, project/board management features are reserved (TODO), while PO management and patch application features are fully implemented.
+- Project/board management features are implemented (board/project create/delete, plus build/diff workflows).
 - Platform management features have been merged into existing plugins, with no separate `platform_manager.py` or `po_manager.py` files.
 - To extend platform-related operations, custom plugins can be added in the `projects/scripts/` directory.
 - All PO operations support interactive confirmation and detailed logging.
