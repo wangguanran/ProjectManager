@@ -21,9 +21,7 @@ class TestColoredFormatter:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import (
-            ColoredFormatter,
-        )
+        from src.log_manager import ColoredFormatter
 
         self.colored_formatter = ColoredFormatter
 
@@ -147,9 +145,7 @@ class TestLogManager:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import (
-            LogManager,
-        )
+        from src.log_manager import LogManager
 
         self.log_manager = LogManager
 
@@ -273,9 +269,7 @@ class TestLogManagerIntegration:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import (
-            LogManager,
-        )
+        from src.log_manager import LogManager
 
         self.log_manager = LogManager
 
