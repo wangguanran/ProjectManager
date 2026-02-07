@@ -51,6 +51,6 @@ docker-run: ## Run Docker container
 	docker run -it --rm project-manager
 
 setup-hooks: ## Install git hooks
-	./hooks/install_hooks.sh
+	./git-hooks/install_hooks.sh
 
 check-all: format lint test ## Run all checks (format, lint, test) 
