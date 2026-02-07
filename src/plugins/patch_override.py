@@ -3,6 +3,7 @@ Patch and override operations for project management.
 """
 
 import fnmatch
+import glob
 import os
 import re
 import shutil
@@ -414,28 +415,58 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         def __execute_file_copy(ctx, section_custom_dir, source_pattern, target_path):
             """Execute a single file copy operation with wildcard and directory support.
 
-            - Supports *, ?, [], and ** patterns via cp command
-            - cp -rf handles both files and directories automatically
+            - Expands *, ?, [], and ** patterns via glob (no shell).
+            - Uses `cp -rf` with shell=False to handle file/dir copies safely.
             """
             log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
 
             abs_pattern = os.path.join(section_custom_dir, source_pattern)
 
             try:
-                # Create target directory if it doesn't exist
-                target_dir = os.path.dirname(target_path)
-                if target_dir:
-                    os.makedirs(target_dir, exist_ok=True)
-
-                # Use cp -rf for copy operation (handles wildcards, files and directories)
-                # Use shell=True to allow wildcard expansion
-                result = __execute_command(
-                    ctx, f"cp -rf {abs_pattern} {target_path}", description="Copy custom file", shell=True
-                )
-
-                if result.returncode != 0:
-                    log.error("Failed to copy '%s' to '%s': %s", abs_pattern, target_path, result.stderr)
+                matches = glob.glob(abs_pattern, recursive=True)
+                if not matches:
+                    log.error("No files matched pattern '%s' (abs: '%s')", source_pattern, abs_pattern)
                     return False
+
+                # Determine a stable base directory so we can preserve relative paths when using patterns
+                # like "data/**/file" (without relying on shell expansion).
+                glob_markers = ["*", "?", "["]
+                first_marker = min(
+                    (abs_pattern.find(m) for m in glob_markers if m in abs_pattern),
+                    default=-1,
+                )
+                if first_marker == -1:
+                    base_dir = os.path.dirname(abs_pattern)
+                else:
+                    base_dir = os.path.dirname(abs_pattern[:first_marker])
+                if not base_dir:
+                    base_dir = section_custom_dir
+
+                # Determine if target should be treated as a directory.
+                target_is_dir = target_path.endswith(os.sep) or os.path.isdir(target_path) or len(matches) > 1
+                if target_is_dir and not os.path.exists(target_path):
+                    os.makedirs(target_path.rstrip(os.sep), exist_ok=True)
+
+                for src in matches:
+                    if target_is_dir:
+                        rel = os.path.relpath(src, base_dir)
+                        dest = os.path.join(target_path, rel)
+                    else:
+                        dest = target_path
+
+                    dest_dir = os.path.dirname(dest)
+                    if dest_dir:
+                        os.makedirs(dest_dir, exist_ok=True)
+
+                    result = __execute_command(
+                        ctx,
+                        ["cp", "-rf", src, dest],
+                        description="Copy custom file",
+                        shell=False,
+                    )
+                    if result.returncode != 0:
+                        log.error("Failed to copy '%s' to '%s': %s", src, dest, result.stderr)
+                        return False
 
                 return True
             except OSError as e:
@@ -443,11 +474,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 return False
 
         for section_name, section_config in ctx.po_configs.items():
+            # Only apply the configuration that matches the current PO name.
+            if section_name != f"po-{ctx.po_name}":
+                continue
+
             po_config_dict = section_config
             po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
 
-            # Without normalization: use custom root when empty; otherwise join relative to custom root
-            section_custom_dir = os.path.join(ctx.po_custom_dir, po_subdir) if po_subdir else ctx.po_custom_dir
+            # `PROJECT_PO_DIR` is relative to the PO root (not to `custom/`).
+            po_root = os.path.dirname(ctx.po_custom_dir)
+            section_custom_dir = os.path.join(po_root, po_subdir) if po_subdir else ctx.po_custom_dir
             if not os.path.isdir(section_custom_dir):
                 log.debug(
                     "Custom directory '%s' not found for po '%s' (section '%s')",

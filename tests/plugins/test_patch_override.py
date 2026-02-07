@@ -509,7 +509,7 @@ class TestPatchOverrideApply:
                 "projects_path": projects_path,
                 "repositories": [],
                 "po_configs": {
-                    "po-custom": {
+                    f"po-{po_name}": {
                         "PROJECT_PO_DIR": "",
                         "PROJECT_PO_FILE_COPY": f"*:{dest_dir}{os.sep}",
                     }
@@ -557,7 +557,7 @@ class TestPatchOverrideApply:
                 "projects_path": projects_path,
                 "repositories": [],
                 "po_configs": {
-                    "po-custom": {
+                    f"po-{po_name}": {
                         "PROJECT_PO_DIR": "",
                         "PROJECT_PO_FILE_COPY": f"data/*:{dest_data}",
                     }
@@ -578,6 +578,71 @@ class TestPatchOverrideApply:
             assert os.path.exists(os.path.join(dest_root, "data", "sub", "inner.txt"))
             # Should not copy files outside data/
             assert not os.path.exists(os.path.join(dest_root, "root.txt"))
+
+    def test_custom_copy_glob_with_spaces(self):
+        """Custom copy should work with spaces in source/target paths without shell expansion."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            # Prepare source structure under po_root/custom/cfg/
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            cfg_dir = os.path.join(po_root, "custom", "cfg")
+            os.makedirs(cfg_dir, exist_ok=True)
+            src_file = os.path.join(cfg_dir, "space name.ini")
+            with open(src_file, "w", encoding="utf-8") as f:
+                f.write("k=v\n")
+
+            dest_dir = os.path.join(tmpdir, "dest with space", "cfg") + os.sep
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {
+                    f"po-{po_name}": {
+                        "PROJECT_PO_DIR": "custom",
+                        "PROJECT_PO_FILE_COPY": f"cfg/*.ini:{dest_dir}",
+                    }
+                },
+            }
+            projects_info = {"proj": {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            assert result is True
+            assert os.path.exists(os.path.join(dest_dir, "space name.ini"))
+
+    def test_custom_copy_double_star_preserves_relpath(self):
+        """'**' patterns should preserve relative paths under the non-glob prefix."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+
+            po_root = os.path.join(projects_path, board_name, "po", po_name)
+            data_dir = os.path.join(po_root, "custom", "data")
+            os.makedirs(os.path.join(data_dir, "a", "b"), exist_ok=True)
+            with open(os.path.join(data_dir, "a", "b", "deep.txt"), "w", encoding="utf-8") as f:
+                f.write("deep\n")
+
+            dest_root = os.path.join(tmpdir, "dest3")
+            dest_dir = dest_root + os.sep
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {
+                    f"po-{po_name}": {
+                        "PROJECT_PO_DIR": "custom",
+                        "PROJECT_PO_FILE_COPY": f"data/**/*.txt:{dest_dir}",
+                    }
+                },
+            }
+            projects_info = {"proj": {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            assert result is True
+            assert os.path.exists(os.path.join(dest_root, "a", "b", "deep.txt"))
 
     def test_po_apply_patches_with_multiple_patches_same_repo(self):
         """Apply patches: test that multiple patch files can be applied to the same repository."""
@@ -1507,7 +1572,7 @@ class TestPatchOverrideUpdate:
                 "projects_path": projects_path,
                 "repositories": [(repo_dir, "root")],
                 "po_configs": {
-                    "test_section": {"PROJECT_PO_DIR": "", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}
+                    f"po-{po_name}": {"PROJECT_PO_DIR": "", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}
                 },
             }
 
