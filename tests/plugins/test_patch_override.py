@@ -96,7 +96,7 @@ class TestPatchOverrideApply:
                 mock_log.warning.assert_called_with("No PROJECT_PO_CONFIG found for '%s'", project_name)
 
     def test_po_apply_dry_run_has_no_side_effects(self):
-        """Dry-run should not create po_applied, run cp/rm/git, or modify repository files."""
+        """DRY-002: po_apply --dry-run prints plan and does not write."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -149,7 +149,7 @@ class TestPatchOverrideApply:
             assert not os.path.exists(os.path.join(tmpdir, "custom_dest.txt"))
 
     def test_po_revert_dry_run_has_no_side_effects(self):
-        """Dry-run should not revert files (no checkout/rm)."""
+        """DRY-003: po_revert --dry-run prints plan and does not write."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
