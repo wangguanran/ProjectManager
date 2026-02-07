@@ -2,7 +2,10 @@
 Utility functions collection.
 """
 
+from __future__ import annotations
+
 import os
+import subprocess
 import sys
 import time
 
@@ -50,6 +53,45 @@ def get_version():
     Returns:
         str: The project version, or "0.0.0-dev" if not found.
     """
+    def _read_base_version(base_dir: str) -> str:
+        pyproject_path = os.path.join(base_dir, "pyproject.toml")
+        if not os.path.exists(pyproject_path):
+            pyproject_path = os.path.join(base_dir, "../pyproject.toml")
+        data = toml.load(pyproject_path)
+        return data["project"]["version"]
+
+    def _try_get_build_git_sha() -> str:
+        # Prefer build-time embedded info (for PyInstaller binaries where .git is absent).
+        build_info = None
+        try:
+            # When imported as a package module: src.utils
+            from . import _build_info as build_info  # type: ignore
+        except Exception:
+            try:
+                # When utils.py is loaded as a top-level module from src/ on sys.path (tests)
+                import _build_info as build_info  # type: ignore
+            except Exception:
+                build_info = None
+
+        sha = getattr(build_info, "GIT_SHA", "") if build_info else ""
+        return str(sha).strip()
+
+    def _try_get_git_sha_from_repo(repo_dir: str) -> str:
+        # Best-effort: only for dev/source runs where `.git` exists.
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                return ""
+            return result.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
     try:
         # Compatible with PyInstaller and source code execution
         if hasattr(sys, "_MEIPASS"):
@@ -61,11 +103,21 @@ def get_version():
         if base_dir is None:
             return "0.0.0-dev"
 
-        pyproject_path = os.path.join(base_dir, "pyproject.toml")
-        if not os.path.exists(pyproject_path):
-            pyproject_path = os.path.join(base_dir, "../pyproject.toml")
-        data = toml.load(pyproject_path)
-        return data["project"]["version"]
+        base_version = _read_base_version(base_dir)
+
+        # Build-time embedded hash, if available
+        git_sha = _try_get_build_git_sha()
+
+        # Fallback to git (dev/source execution)
+        if not git_sha:
+            # If pyproject was read from ../pyproject.toml, the repo root is likely there.
+            repo_dir = os.path.realpath(os.path.join(base_dir, ".."))
+            git_sha = _try_get_git_sha_from_repo(repo_dir)
+
+        if git_sha:
+            # PEP 440 local version segment (display-only; does not change package metadata).
+            return f"{base_version}+g{git_sha}"
+        return base_version
     except (OSError, KeyError, toml.TomlDecodeError):
         return "0.0.0-dev"
 

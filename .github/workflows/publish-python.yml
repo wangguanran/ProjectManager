@@ -28,7 +28,9 @@ jobs:
           pip install build twine
 
       - name: Build package
-        run: python -m build
+        run: |
+          python scripts/write_build_info.py
+          python -m build
 
       - name: Publish to PyPI
         env:

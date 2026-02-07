@@ -142,3 +142,6 @@ out
 # ProjectManager generated indexes
 projects/**/projects.json
 projects/repositories.json
+
+# Build-time metadata (generated)
+src/_build_info.py
