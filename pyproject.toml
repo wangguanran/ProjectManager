@@ -50,6 +50,11 @@ dev = [
     "pre-commit>=3.3.0",
 ]
 
+# Optional CrewAI workflow support (requires newer Python)
+crewai = [
+    "crewai>=0.80.0; python_version >= '3.10'",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/wangguanran/ProjectManager"
 "Bug Tracker" = "https://github.com/wangguanran/ProjectManager/issues"
