@@ -26,18 +26,28 @@ def parse_po_config(po_config):
     exclude_files = {}
     tokens = re.findall(r"-?\w+(?:\[[^\]]+\])?", po_config)
     for token in tokens:
-        if token.startswith("-"):
-            if "[" in token:
-                match = re.match(r"-(\w+)\[([^\]]+)\]", token)
-                if match:
-                    po_name, files = match.groups()
-                    file_list = set(f.strip() for f in files.split())
-                    exclude_files.setdefault(po_name, set()).update(file_list)
-            else:
-                po_name = token[1:]
-                exclude_pos.add(po_name)
+        is_exclude_po = token.startswith("-")
+        token_body = token[1:] if is_exclude_po else token
+
+        # Support both:
+        # - "po1" => apply po1
+        # - "-po1" => exclude po1
+        # - "po1[fileA fileB]" => apply po1 but exclude listed files for this PO
+        # - "-po1[fileA fileB]" => exclude po1 and also exclude listed files (kept for consistency)
+        if "[" in token_body:
+            match = re.match(r"^(\w+)\[([^\]]+)\]$", token_body)
+            if not match:
+                continue
+            po_name, files = match.groups()
+            file_list = set(f.strip() for f in files.split() if f.strip())
+            if file_list:
+                exclude_files.setdefault(po_name, set()).update(file_list)
         else:
-            po_name = token
+            po_name = token_body
+
+        if is_exclude_po:
+            exclude_pos.add(po_name)
+        else:
             apply_pos.append(po_name)
 
     # Filter apply_pos to exclude items in exclude_pos
@@ -235,30 +245,49 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             return True
         log.debug("applying overrides for po: '%s'", ctx.po_name)
 
-        def find_repo_path_by_name(repo_name):
-            """Find repository path by name."""
-            for repo_path, rname in repositories:
-                if rname == repo_name:
-                    return repo_path
-            return None
+        repo_map = {rname: repo_path for repo_path, rname in repositories}
+        repo_names = sorted(
+            [name for name in repo_map.keys() if name != "root"],
+            key=lambda x: len(x),
+            reverse=True,
+        )
 
-        def find_actual_repo_root(rel_path):
-            """Find the actual repository root for the given relative path."""
-            path_parts = rel_path.split(os.sep)
-            if len(path_parts) == 1:
-                return "."
-            if len(path_parts) >= 2:
-                for i in range(len(path_parts), 0, -1):
-                    potential_repo_name = os.path.join(*path_parts[:i])
-                    repo_path = find_repo_path_by_name(potential_repo_name)
-                    if repo_path:
-                        return repo_path
-                return path_parts[0]
-            log.error("Invalid override file path: '%s'", rel_path)
-            return None
+        def _split_repo_prefix(rel_path: str) -> Tuple[str, str]:
+            """Return (repo_name, dest_rel_in_repo) for an overrides rel_path."""
+            root_prefix = f"root{os.sep}"
+            if rel_path.startswith(root_prefix):
+                return "root", rel_path[len(root_prefix) :]
+
+            for repo_name in repo_names:
+                prefix = f"{repo_name}{os.sep}"
+                if rel_path.startswith(prefix):
+                    return repo_name, rel_path[len(prefix) :]
+                if rel_path == repo_name:
+                    return repo_name, ""
+
+            return "root", rel_path
+
+        def _safe_dest_rel(dest_rel: str) -> str:
+            # Normalize and prevent escaping repo_root. Keep it relative.
+            dest_rel = dest_rel.strip()
+            dest_rel = dest_rel.lstrip("/\\")
+            dest_rel = os.path.normpath(dest_rel)
+            if dest_rel in ("", "."):
+                return ""
+            if os.path.isabs(dest_rel):
+                return ""
+            if dest_rel.startswith("..") or f"{os.sep}.." in dest_rel:
+                return ""
+            return dest_rel
+
+        def _validate_in_repo(repo_root: str, dest_rel: str) -> None:
+            repo_root_real = os.path.realpath(repo_root)
+            dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
+            if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
+                raise ValueError(f"override target escapes repo_root: {dest_rel}")
 
         # 1) Group files by repo_root before copying/deleting
-        repo_to_files: Dict[str, List[Tuple[str, str, bool]]] = {}  # (src_file, dest_file, is_remove)
+        repo_to_files: Dict[str, List[Tuple[str, str, bool]]] = {}  # (src_file, dest_rel, is_remove)
         for current_dir, _, files in os.walk(ctx.po_override_dir):
             for fname in files:
                 if fname == ".gitkeep":
@@ -272,21 +301,25 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         ctx.po_name,
                     )
                     continue
-                repo_root = find_actual_repo_root(rel_path)
-                if repo_root is None:
-                    continue
                 src_file = os.path.join(current_dir, fname)
 
                 # Check if this is a remove operation
                 is_remove = fname.endswith(".remove")
+                repo_name, dest_rel = _split_repo_prefix(rel_path)
                 if is_remove:
-                    # For remove operations, the target file is the same path without .remove suffix
-                    dest_file = rel_path[:-7]  # Remove '.remove' suffix
-                    log.debug("remove operation detected for file: '%s'", dest_file)
-                else:
-                    dest_file = rel_path
+                    dest_rel = dest_rel[:-7]  # Remove '.remove' suffix
+                    log.debug("remove operation detected for file: '%s'", dest_rel)
+                dest_rel = _safe_dest_rel(dest_rel)
+                if not dest_rel:
+                    log.error("Invalid override target path derived from '%s'", rel_path)
+                    return False
 
-                repo_to_files.setdefault(repo_root, []).append((src_file, dest_file, is_remove))
+                repo_root = repo_map.get(repo_name)
+                if not repo_root:
+                    log.error("Cannot find repo path for override target repo '%s' (from '%s')", repo_name, rel_path)
+                    return False
+
+                repo_to_files.setdefault(repo_root, []).append((src_file, dest_rel, is_remove))
 
         # 2) Perform copies/deletes per repo_root (no applied flags)
         for repo_root, file_list in repo_to_files.items():
@@ -294,56 +327,67 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 "override repo_root: '%s'",
                 repo_root,
             )
-            for src_file, dest_file, is_remove in file_list:
-                log.debug("override src_file: '%s', dest_file: '%s', is_remove: %s", src_file, dest_file, is_remove)
+            for src_file, dest_rel, is_remove in file_list:
+                log.debug("override src_file: '%s', dest_rel: '%s', is_remove: %s", src_file, dest_rel, is_remove)
+                try:
+                    _validate_in_repo(repo_root, dest_rel)
+                except ValueError as e:
+                    log.error("%s", e)
+                    return False
 
                 if is_remove:
                     # Perform delete operation
                     try:
                         # Check if target file exists
-                        if os.path.exists(dest_file):
+                        if os.path.exists(os.path.join(repo_root, dest_rel)):
                             # Use __execute_command for delete operation
                             result = __execute_command(
-                                ctx, ["rm", "-rf", dest_file], description=f"Remove file {dest_file}"
+                                ctx,
+                                ["rm", "-rf", dest_rel],
+                                cwd=repo_root,
+                                description=f"Remove file {dest_rel}",
                             )
 
                             if result.returncode != 0:
-                                log.error("Failed to remove file '%s': %s", dest_file, result.stderr)
+                                log.error("Failed to remove file '%s': %s", dest_rel, result.stderr)
                                 return False
 
-                            log.info("Removed file '%s'", dest_file)
+                            log.info("Removed file '%s' (repo_root=%s)", dest_rel, repo_root)
                         else:
-                            log.debug("File '%s' does not exist, skipping removal", dest_file)
+                            log.debug("File '%s' does not exist, skipping removal", dest_rel)
                     except OSError as e:
                         log.error(
                             "Failed to remove file '%s': '%s'",
-                            dest_file,
+                            dest_rel,
                             e,
                         )
                         return False
                 else:
                     # Perform copy operation
-                    dest_dir = os.path.dirname(dest_file)
+                    dest_dir = os.path.dirname(dest_rel)
                     if dest_dir:
-                        os.makedirs(dest_dir, exist_ok=True)
+                        os.makedirs(os.path.join(repo_root, dest_dir), exist_ok=True)
                     try:
                         # Use __execute_command for copy operation
                         result = __execute_command(
-                            ctx, ["cp", "-rf", src_file, dest_file], description="Copy override file"
+                            ctx,
+                            ["cp", "-rf", src_file, dest_rel],
+                            cwd=repo_root,
+                            description="Copy override file",
                         )
 
                         if result.returncode != 0:
                             log.error(
-                                "Failed to copy override file '%s' to '%s': %s", src_file, dest_file, result.stderr
+                                "Failed to copy override file '%s' to '%s': %s", src_file, dest_rel, result.stderr
                             )
                             return False
 
-                        log.info("Copied override file '%s' to '%s'", src_file, dest_file)
+                        log.info("Copied override file '%s' to '%s' (repo_root=%s)", src_file, dest_rel, repo_root)
                     except OSError as e:
                         log.error(
                             "Failed to copy override file '%s' to '%s': '%s'",
                             src_file,
-                            dest_file,
+                            dest_rel,
                             e,
                         )
                         return False
@@ -632,6 +676,43 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.debug("No overrides dir for po: '%s'", po_name)
             return True
         log.debug("reverting overrides for po: '%s'", po_name)
+        repo_map = {rname: repo_path for repo_path, rname in repositories}
+        repo_names = sorted(
+            [name for name in repo_map.keys() if name != "root"],
+            key=lambda x: len(x),
+            reverse=True,
+        )
+
+        def _split_repo_prefix(rel_path: str) -> Tuple[str, str]:
+            root_prefix = f"root{os.sep}"
+            if rel_path.startswith(root_prefix):
+                return "root", rel_path[len(root_prefix) :]
+            for repo_name in repo_names:
+                prefix = f"{repo_name}{os.sep}"
+                if rel_path.startswith(prefix):
+                    return repo_name, rel_path[len(prefix) :]
+                if rel_path == repo_name:
+                    return repo_name, ""
+            return "root", rel_path
+
+        def _safe_dest_rel(dest_rel: str) -> str:
+            dest_rel = dest_rel.strip()
+            dest_rel = dest_rel.lstrip("/\\")
+            dest_rel = os.path.normpath(dest_rel)
+            if dest_rel in ("", "."):
+                return ""
+            if os.path.isabs(dest_rel):
+                return ""
+            if dest_rel.startswith("..") or f"{os.sep}.." in dest_rel:
+                return ""
+            return dest_rel
+
+        def _validate_in_repo(repo_root: str, dest_rel: str) -> None:
+            repo_root_real = os.path.realpath(repo_root)
+            dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
+            if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
+                raise ValueError(f"override target escapes repo_root: {dest_rel}")
+
         for current_dir, _, files in os.walk(po_override_dir):
             for fname in files:
                 if fname == ".gitkeep":
@@ -645,27 +726,34 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                         po_name,
                     )
                     continue
-                path_parts = rel_path.split(os.sep)
-                if len(path_parts) == 1:
-                    override_target = "."
-                elif len(path_parts) >= 2:
-                    override_target = os.path.join(*path_parts[:-1])
-                else:
-                    log.error("Invalid override file path: '%s'", rel_path)
+
+                repo_name, dest_rel = _split_repo_prefix(rel_path)
+                if fname.endswith(".remove"):
+                    dest_rel = dest_rel[:-7]
+                dest_rel = _safe_dest_rel(dest_rel)
+                if not dest_rel:
+                    log.error("Invalid override target path derived from '%s'", rel_path)
                     return False
 
-                dest_file = (
-                    os.path.join(override_target, *rel_path.split(os.sep)[1:])
-                    if len(rel_path.split(os.sep)) > 1
-                    else os.path.join(override_target, fname)
-                )
-                log.debug("override dest_file: '%s'", dest_file)
-                if os.path.exists(dest_file):
-                    log.info("reverting override file: '%s'", dest_file)
+                repo_root = repo_map.get(repo_name)
+                if not repo_root:
+                    log.error("Cannot find repo path for override target repo '%s' (from '%s')", repo_name, rel_path)
+                    return False
+
+                try:
+                    _validate_in_repo(repo_root, dest_rel)
+                except ValueError as e:
+                    log.error("%s", e)
+                    return False
+
+                dest_abs = os.path.join(repo_root, dest_rel)
+                log.debug("override dest_abs: '%s'", dest_abs)
+                if os.path.exists(dest_abs):
+                    log.info("reverting override file: '%s' (repo_root=%s)", dest_rel, repo_root)
                     try:
                         result = subprocess.run(
-                            ["git", "ls-files", "--error-unmatch", dest_file],
-                            cwd=override_target,
+                            ["git", "ls-files", "--error-unmatch", dest_rel],
+                            cwd=repo_root,
                             capture_output=True,
                             text=True,
                             check=False,
@@ -673,8 +761,8 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
                         if result.returncode == 0:
                             result = subprocess.run(
-                                ["git", "checkout", "--", dest_file],
-                                cwd=override_target,
+                                ["git", "checkout", "--", dest_rel],
+                                cwd=repo_root,
                                 capture_output=True,
                                 text=True,
                                 check=False,
@@ -688,38 +776,41 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                             if result.returncode != 0:
                                 log.error(
                                     "Failed to revert override file '%s': '%s'",
-                                    dest_file,
+                                    dest_rel,
                                     result.stderr,
                                 )
                                 return False
                         else:
                             log.debug(
                                 "File '%s' is not tracked by git, deleting directly",
-                                dest_file,
+                                dest_rel,
                             )
-                            os.remove(dest_file)
+                            if os.path.isdir(dest_abs):
+                                shutil.rmtree(dest_abs)
+                            else:
+                                os.remove(dest_abs)
 
                         log.info(
                             "override reverted for dir: '%s', file: '%s'",
-                            override_target,
-                            dest_file,
+                            repo_root,
+                            dest_rel,
                         )
                     except subprocess.SubprocessError as e:
                         log.error(
                             "Subprocess error reverting override file '%s': '%s'",
-                            dest_file,
+                            dest_rel,
                             e,
                         )
                         return False
                     except OSError as e:
                         log.error(
                             "OS error reverting override file '%s': '%s'",
-                            dest_file,
+                            dest_rel,
                             e,
                         )
                         return False
                 else:
-                    log.debug("Override file '%s' does not exist, skipping", dest_file)
+                    log.debug("Override file '%s' does not exist, skipping", dest_abs)
         return True
 
     def __revert_custom_po(po_name, po_custom_dir, po_config_dict):

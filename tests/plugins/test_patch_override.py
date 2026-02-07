@@ -178,7 +178,8 @@ class TestPatchOverrideApply:
             projects_info = {
                 "proj": {
                     "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": f"{po_name} -{po_name}[repo1/skip.patch]"},
+                    # Exclude a specific patch file while still applying this PO.
+                    "config": {"PROJECT_PO_CONFIG": f"{po_name}[repo1/skip.patch]"},
                 }
             }
 
@@ -308,15 +309,19 @@ class TestPatchOverrideApply:
             with open(deep_file_abs, "w", encoding="utf-8") as f:
                 f.write("deep")
 
+            # Provide repository mapping so overrides are applied into repo roots, not cwd.
+            repo1_root = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo1_root, exist_ok=True)
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root"), (repo1_root, "repo1")],
             }
             # Exclude the deep file so only root file is copied
             projects_info = {
                 "proj": {
                     "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": f"{po_name} -{po_name}[{deep_file_rel}]"},
+                    # Exclude a specific override file while still applying this PO.
+                    "config": {"PROJECT_PO_CONFIG": f"{po_name}[{deep_file_rel}]"},
                 }
             }
 
@@ -359,7 +364,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -411,7 +416,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -458,7 +463,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -742,7 +747,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -1268,11 +1273,9 @@ class TestPatchOverrideUpdate:
         apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(po_config)
 
         # Assert
-        # The current implementation doesn't properly parse file exclusions
-        # It treats the entire token as the PO name
-        assert apply_pos == ["po1[file1.txt file2.txt]"]
+        assert apply_pos == ["po1"]
         assert exclude_pos == set()
-        assert not exclude_files
+        assert exclude_files == {"po1": {"file1.txt", "file2.txt"}}
 
     def test_parse_po_config_complex(self):
         """Test parse_po_config with complex config."""
@@ -1283,12 +1286,9 @@ class TestPatchOverrideUpdate:
         apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(po_config)
 
         # Assert
-        # The current implementation doesn't properly parse file exclusions for apply_pos
-        # It treats the entire token as the PO name
-        assert apply_pos == ["po1[file1.txt]", "po2"]
-        # But it correctly parses excluded POs with file exclusions
-        assert exclude_pos == set()
-        assert exclude_files == {"po3": {"file2.txt", "file3.txt"}}
+        assert apply_pos == ["po1", "po2"]
+        assert exclude_pos == {"po3"}
+        assert exclude_files == {"po1": {"file1.txt"}, "po3": {"file2.txt", "file3.txt"}}
 
     def test_parse_po_config_empty(self):
         """Test parse_po_config with empty config."""
@@ -1459,7 +1459,7 @@ class TestPatchOverrideUpdate:
 
             # Verify the command format
             lines = content.split("\n")
-            cp_lines = [line for line in lines if line.startswith("cp ")]
+            cp_lines = [line for line in lines if " cp " in f" {line} "]
             assert len(cp_lines) >= 1, "Should have at least one cp command"
 
             # Verify the cp command has correct format
