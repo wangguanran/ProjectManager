@@ -57,10 +57,26 @@ def get_version():
 
     def _read_base_version(base_dir: str) -> str:
         pyproject_path = os.path.join(base_dir, "pyproject.toml")
-        if not os.path.exists(pyproject_path):
-            pyproject_path = os.path.join(base_dir, "../pyproject.toml")
-        data = toml.load(pyproject_path)
-        return data["project"]["version"]
+        if os.path.exists(pyproject_path):
+            data = toml.load(pyproject_path)
+            return data["project"]["version"]
+
+        # Source tree layout: utils.py lives in repo/src/, so pyproject is one level up.
+        pyproject_path = os.path.join(base_dir, "../pyproject.toml")
+        if os.path.exists(pyproject_path):
+            data = toml.load(pyproject_path)
+            return data["project"]["version"]
+
+        # Installed package: no pyproject.toml available. Fall back to package metadata.
+        try:
+            try:
+                from importlib import metadata as importlib_metadata  # py3.8+
+            except ImportError:  # pragma: no cover
+                import importlib_metadata  # type: ignore
+
+            return importlib_metadata.version("multi-project-manager")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            raise OSError("Cannot resolve base version") from e
 
     def _try_get_build_git_sha() -> str:
         # Prefer build-time embedded info (for PyInstaller binaries where .git is absent).
