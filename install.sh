@@ -10,6 +10,7 @@ if [ ! -f out/binary/projman ]; then
 fi
 TARGET_BIN="$HOME/.local/bin"
 mkdir -p "$TARGET_BIN"
+rm -f "$TARGET_BIN/projman" 2>/dev/null || true
 cp out/binary/projman "$TARGET_BIN/projman"
 chmod +x "$TARGET_BIN/projman"
 echo "Copied projman to $TARGET_BIN/projman"
