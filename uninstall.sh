@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
+set -euo pipefail
 
 echo "--- Checking if multi-project-manager is installed ---"
 
@@ -12,10 +11,15 @@ pip3 uninstall -y multi-project-manager || true
 fi
 
 # Remove standalone binary from ~/.local/bin
-TARGET_BIN="$HOME/.local/bin/projman"
-if [ -f "$TARGET_BIN" ]; then
-    echo "Removing standalone binary: $TARGET_BIN"
-    rm -f "$TARGET_BIN"
+USER_BIN="$HOME/.local/bin/projman"
+SYSTEM_BIN="/usr/local/bin/projman"
+if [ -f "$USER_BIN" ]; then
+    echo "Removing standalone binary: $USER_BIN"
+    rm -f "$USER_BIN"
+fi
+if [ -f "$SYSTEM_BIN" ]; then
+    echo "Removing standalone binary: $SYSTEM_BIN"
+    rm -f "$SYSTEM_BIN"
 fi
 
 # Remove venv directory and run_projman.sh script

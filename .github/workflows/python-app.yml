@@ -37,22 +37,20 @@ jobs:
       image: python:3.10-slim
     steps:
     - uses: actions/checkout@v4
-    - name: Install system dependencies
-      run: |
-        apt-get update
-        apt-get install -y patchelf binutils
-    - name: Install dependencies
-      run: pip install -r requirements.txt
-    - name: Build project
-      run: bash build.sh
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts
-        path: |
-          out/binary/projman
-          install.sh
-          uninstall.sh
+	    - name: Install system dependencies
+	      run: |
+	        apt-get update
+	        apt-get install -y patchelf binutils
+	    - name: Build project
+	      run: bash build.sh
+	    - name: Upload build artifacts
+	      uses: actions/upload-artifact@v4
+	      with:
+	        name: build-artifacts
+	        path: |
+	          out/binary/projman*
+	          install.sh
+	          uninstall.sh
 
   install_test:
     name: install_test

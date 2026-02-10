@@ -11,7 +11,9 @@ on:
       - 'build.sh'
       - 'setup_venv.sh'
       - 'install.sh'
+      - 'install.ps1'
       - 'uninstall.sh'
+      - 'get_latest_release.sh'
   workflow_dispatch:
 
 permissions:
@@ -19,45 +21,84 @@ permissions:
   actions: read
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
-    container:
-      image: python:3.10-slim
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install system dependencies
-      run: |
-        apt-get update
-        apt-get install -y patchelf binutils git
-    
-    - name: Install dependencies
-      run: pip install -r requirements.txt
-    
-    - name: Build project
-      run: bash build.sh
-    
-    - name: Run tests
-      run: pytest
-    
-    - name: Run pylint
-      run: |
-        pip install pylint
-        # Find all Python files and run pylint
-        find . -name "*.py" -not -path "./venv/*" -not -path "./.venv/*" -not -path "./__pycache__/*" | xargs pylint || true
-    
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts
-        path: |
-          out/binary/projman
-          install.sh
-          uninstall.sh
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf binutils git
+
+      - name: Build project
+        shell: bash
+        run: bash build.sh
+
+      - name: Run tests
+        shell: bash
+        run: bash -lc "source venv/bin/activate && pytest"
+
+      - name: Run lint
+        shell: bash
+        run: bash -lc "source venv/bin/activate && make lint"
+
+  build-binaries:
+    name: build-binaries (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf binutils
+
+      - name: Build project
+        shell: bash
+        run: bash build.sh
+
+      - name: Compute artifact metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname_s="$(uname -s 2>/dev/null || echo unknown)"
+          case "$uname_s" in
+            Linux) platform="linux" ;;
+            Darwin) platform="macos" ;;
+            MINGW*|MSYS*|CYGWIN*|Windows_NT) platform="windows" ;;
+            *) platform="unknown" ;;
+          esac
+          arch="$(uname -m 2>/dev/null || echo unknown)"
+          case "$arch" in
+            x86_64|amd64) arch="x86_64" ;;
+            aarch64|arm64) arch="arm64" ;;
+          esac
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "arch=$arch" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}
+          path: |
+            out/binary/projman*
 
   release:
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [test, build-binaries]
     
     steps:
     - uses: actions/checkout@v4
@@ -65,73 +106,65 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: build-artifacts
-        path: .
+        path: artifacts
     
     - name: Create release assets
+      shell: bash
       run: |
+        set -euo pipefail
         mkdir -p release
-        cp out/binary/projman release/multi-project-manager-linux-x64
-        cd release
-        sha256sum multi-project-manager-linux-x64 > multi-project-manager-linux-x64.sha256
-        cd ..
-        
+
+        for dir in artifacts/projman-*; do
+          [ -d "$dir" ] || continue
+          name="$(basename "$dir")"
+          bin="$(ls "$dir"/out/binary/projman* 2>/dev/null | head -n1 || true)"
+          if [ -z "$bin" ]; then
+            echo "No binary found under $dir" >&2
+            exit 1
+          fi
+
+          ext=""
+          case "$bin" in
+            *.exe) ext=".exe" ;;
+          esac
+
+          cp "$bin" "release/${name}${ext}"
+          sha256sum "release/${name}${ext}" > "release/${name}${ext}.sha256"
+        done
+
         # Create release notes
         cat > release/RELEASE_NOTES.md << EOF
-        # Multi-Project Manager Release
-        
-        ## Installation
-        
-        ### Python Package
+        # ProjectManager (projman) Release
+
+        ## Install (Linux/macOS)
+
         \`\`\`bash
-        pip install multi-project-manager
+        curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/get_latest_release.sh | bash
+        projman --version
         \`\`\`
-        
-        ### Docker Image
-        \`\`\`bash
-        docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+
+        ## Install (Windows)
+
+        \`\`\`powershell
+        iwr -useb https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/install.ps1 | iex
+        projman --version
         \`\`\`
-        
-        ### Linux Binary
-        \`\`\`bash
-        # Download the binary
-        wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/multi-project-manager-linux-x64
-        
-        # Make it executable
-        chmod +x multi-project-manager-linux-x64
-        
-        # Move to system path (optional)
-        sudo mv multi-project-manager-linux-x64 /usr/local/bin/multi-project-manager
-        
-        # Run
-        multi-project-manager --help
-        \`\`\`
-        
-        ## Usage
-        
-        \`\`\`bash
-        # Python package
-        python -m src --help
-        
-        # Docker
-        docker run -v \$(pwd)/projects:/app/projects ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-        \`\`\`
-        
+
+        ## Assets
+
+        - projman-linux-<arch>
+        - projman-macos-<arch>
+        - projman-windows-<arch>.exe
+
         ## Checksum
         Verify the download with the provided SHA256 checksum.
-        
-        ## Changes
-        - Automated release from tag ${{ github.ref_name }}
-        - Built with enhanced compatibility and static linking
-        - All tests and linting passed
         EOF
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          release/multi-project-manager-linux-x64
-          release/multi-project-manager-linux-x64.sha256
+          release/projman-*
         body_path: release/RELEASE_NOTES.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

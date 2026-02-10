@@ -6,18 +6,17 @@
 
 ### `install.sh`
 
-ProjectManager 工具的自动化安装脚本。
+安装由 `build.sh` 生成的独立 `projman` 可执行文件。
 
 **用法**:
 ```bash
-./install.sh
+./install.sh [--system|--user] [--prefix DIR]
 ```
 
 **功能**:
-- 以开发模式安装 Python 包
-- 根据需要设置虚拟环境
-- 安装必需的依赖项
-- 配置系统路径
+- 将 `out/binary/projman` 复制到安装目录
+- 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
+- 对用户态安装输出 PATH 配置提示
 
 ### `uninstall.sh`
 
@@ -32,6 +31,7 @@ ProjectManager 工具的自动化安装脚本。
 - 移除已安装的 Python 包
 - 清理配置文件
 - 移除虚拟环境（如果由安装脚本创建）
+- 从 `~/.local/bin` 和 `/usr/local/bin` 移除独立 `projman`
 
 ### `setup_venv.sh`
 
@@ -44,7 +44,7 @@ ProjectManager 工具的自动化安装脚本。
 
 **功能**:
 - 创建新的虚拟环境
-- 安装开发依赖项
+- 从 `requirements.txt` 安装依赖（设置 `INSTALL_DEPS=0` 可跳过）
 - 激活环境
 - 提供开发设置说明
 
@@ -52,23 +52,18 @@ ProjectManager 工具的自动化安装脚本。
 
 ### `build.sh`
 
-构建 Python 包和 Docker 镜像。
+构建 Python 包以及独立的 `projman` 二进制（PyInstaller）。
 
 **用法**:
 ```bash
-./build.sh [选项]
+./build.sh
 ```
 
-**选项**:
-- `--python`: 仅构建 Python 包
-- `--docker`: 仅构建 Docker 镜像
-- `--all`: 构建两者（默认）
-
 **功能**:
-- 使用 `build` 构建 Python 包
-- 使用 Dockerfile 创建 Docker 镜像
-- 构建前运行测试
-- 生成分发文件
+- 默认在 `venv/` 中执行（不存在则自动创建）
+- Python 包输出到 `out/package/`
+- 独立二进制输出到 `out/binary/`
+- 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）
 
 ### `release.sh`
 
@@ -88,18 +83,33 @@ ProjectManager 工具的自动化安装脚本。
 
 ### `get_latest_release.sh`
 
-检索并显示最新发布的信息。
+根据当前系统/架构下载最新 Release 的资源并安装 `projman`。
 
 **用法**:
 ```bash
-./get_latest_release.sh
+./get_latest_release.sh [--system|--user] [--prefix DIR] [-t TOKEN]
 ```
 
 **功能**:
 - 从 GitHub API 获取最新发布
 - 显示发布信息
-- 显示下载链接
-- 与当前版本比较
+- 自动选择最匹配的资源（例如 `projman-linux-x86_64`）
+- 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
+- Windows 请使用 `install.ps1`
+
+### `install.ps1`
+
+Windows 平台安装脚本（PowerShell）。
+
+**用法**:
+```powershell
+iwr -useb https://raw.githubusercontent.com/wangguanran/ProjectManager/<tag>/install.ps1 | iex
+```
+
+**功能**:
+- 下载最新的 Windows Release 资源（例如 `projman-windows-x86_64.exe`）
+- 安装 `projman.exe` 到用户或系统目录
+- 自动更新 PATH（用户或系统）
 
 ## 开发脚本
 
@@ -316,8 +326,8 @@ python coverage_report.py
 ### 构建和发布
 
 ```bash
-# 构建所有内容
-./build.sh --all
+# 构建 Python 包 + 独立二进制
+./build.sh
 
 # 创建新发布
 ./release.sh v1.2.3
@@ -362,7 +372,7 @@ python coverage_report.py
 
 ```bash
 # 详细构建
-./build.sh --verbose
+bash -x ./build.sh
 
 # 调试安装
 bash -x ./install.sh

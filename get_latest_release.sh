@@ -1,17 +1,23 @@
 #!/bin/bash
 # Script to fetch the latest version from GitHub releases
 
-set -e
+set -euo pipefail
 
 # Default values
 REPO_OWNER="wangguanran"
 REPO_NAME="ProjectManager"
 GITHUB_API_BASE="https://api.github.com"
+GITHUB_TOKEN=""
+VERSION_ONLY=false
 
 # 准备用户本地 bin 目录并加入 PATH（本次会话内生效）
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 export PATH="$BIN_DIR:$PATH"
+
+# Install target (projman)
+INSTALL_MODE="auto"  # auto|system|user
+INSTALL_PREFIX=""
 
 # Function to display usage
 usage() {
@@ -20,6 +26,9 @@ usage() {
     echo "  -o, --owner OWNER    GitHub repository owner (default: wangguanran)"
     echo "  -r, --repo REPO      GitHub repository name (default: ProjectManager)"
     echo "  -t, --token TOKEN    GitHub personal access token (optional)"
+    echo "      --system         Install to /usr/local/bin (requires root)"
+    echo "      --user           Install to ~/.local/bin"
+    echo "      --prefix DIR     Install to DIR (overrides --system/--user)"
     echo "  -v, --version-only   Output only the version number"
     echo "  -h, --help           Display this help message"
     echo ""
@@ -44,6 +53,18 @@ while [[ $# -gt 0 ]]; do
             GITHUB_TOKEN="$2"
             shift 2
             ;;
+        --system)
+            INSTALL_MODE="system"
+            shift
+            ;;
+        --user)
+            INSTALL_MODE="user"
+            shift
+            ;;
+        --prefix)
+            INSTALL_PREFIX="$2"
+            shift 2
+            ;;
         -v|--version-only)
             VERSION_ONLY=true
             shift
@@ -59,6 +80,69 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+detect_platform() {
+    local uname_s
+    uname_s="$(uname -s 2>/dev/null || echo unknown)"
+    case "$uname_s" in
+        Linux)
+            echo "linux"
+            ;;
+        Darwin)
+            echo "macos"
+            ;;
+        MINGW*|MSYS*|CYGWIN*|Windows_NT)
+            echo "windows"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
+}
+
+detect_arch() {
+    local arch
+    arch="$(uname -m 2>/dev/null || echo unknown)"
+    case "$arch" in
+        x86_64|amd64)
+            echo "x86_64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "$arch"
+            ;;
+    esac
+}
+
+resolve_install_dir() {
+    local mode="$1"
+    local prefix="$2"
+    if [ -n "$prefix" ]; then
+        echo "$prefix"
+        return 0
+    fi
+
+    case "$mode" in
+        system)
+            echo "/usr/local/bin"
+            ;;
+        user)
+            echo "$HOME/.local/bin"
+            ;;
+        auto)
+            if [ "$(id -u)" = "0" ]; then
+                echo "/usr/local/bin"
+            else
+                echo "$HOME/.local/bin"
+            fi
+            ;;
+        *)
+            echo "$HOME/.local/bin"
+            ;;
+    esac
+}
 
 # Function to check if curl is available
 check_curl() {
@@ -170,11 +254,38 @@ display_release_info() {
 # Function to download the first asset from the release and update local bin
 download_and_update_bin() {
     local release_data="$1"
-    local bin_dir="$HOME/.local/bin"
-    
-    # 获取第一个 asset 的下载链接和文件名
-    local asset_url=$(echo "$release_data" | jq -r '.assets[0].browser_download_url // empty')
-    local asset_name=$(echo "$release_data" | jq -r '.assets[0].name // empty')
+    local platform
+    platform="$(detect_platform)"
+    if [ "$platform" = "windows" ]; then
+        echo "Windows detected. Please use install.ps1 for Windows installs." >&2
+        return 1
+    fi
+
+    local arch
+    arch="$(detect_arch)"
+
+    local install_dir
+    install_dir="$(resolve_install_dir "$INSTALL_MODE" "$INSTALL_PREFIX")"
+
+    local preferred_asset="projman-${platform}-${arch}"
+    local legacy_asset=""
+    if [ "$platform" = "linux" ] && [ "$arch" = "x86_64" ]; then
+        legacy_asset="multi-project-manager-linux-x64"
+    fi
+
+    local asset_url=""
+    local asset_name="$preferred_asset"
+    asset_url="$(echo "$release_data" | jq -r --arg name "$preferred_asset" '.assets[]? | select(.name==$name) | .browser_download_url' | head -n1)"
+    if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
+        if [ -n "$legacy_asset" ]; then
+            asset_url="$(echo "$release_data" | jq -r --arg name "$legacy_asset" '.assets[]? | select(.name==$name) | .browser_download_url' | head -n1)"
+            asset_name="$legacy_asset"
+        fi
+    fi
+    if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
+        asset_url="$(echo "$release_data" | jq -r '.assets[0].browser_download_url // empty')"
+        asset_name="$(echo "$release_data" | jq -r '.assets[0].name // empty')"
+    fi
     
     if [ -z "$asset_url" ] || [ -z "$asset_name" ]; then
         echo "No assets found in the latest release. Skipping binary update." >&2
@@ -184,8 +295,7 @@ download_and_update_bin() {
     echo "Found asset: $asset_name"
     echo "Downloading from: $asset_url"
     
-    # 创建 .local/bin 目录（如果不存在）
-    mkdir -p "$bin_dir"
+    mkdir -p "$install_dir"
     
     # 下载 asset 到临时文件
     local temp_file=$(mktemp)
@@ -195,9 +305,9 @@ download_and_update_bin() {
     chmod +x "$temp_file"
     
     # 重命名为 projman 并移动到 .local/bin 目录
-    mv "$temp_file" "$bin_dir/projman"
+    mv "$temp_file" "$install_dir/projman"
     
-    echo "Downloaded and installed as $bin_dir/projman"
+    echo "Downloaded and installed as $install_dir/projman"
 }
 
 # Main execution

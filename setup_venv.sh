@@ -1,36 +1,53 @@
 #!/bin/bash
-# Script to automatically create venv virtual environment and install dependencies after cloning the repo
+# Script to create a local venv and install dependencies.
+#
+# Notes:
+# - This script is intended to be cross-platform (Linux/macOS/Windows Git Bash).
+# - It does not attempt to install system packages (no sudo).
 
-set -e
+set -euo pipefail
 
-# 1. Check if python3 is installed
-if ! command -v python3 &> /dev/null; then
-    echo "Python3 is not installed. Please install Python3 first."
+VENV_DIR="${VENV_DIR:-venv}"
+INSTALL_DEPS="${INSTALL_DEPS:-1}"
+
+PYTHON=""
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON="python"
+else
+    echo "python not found. Please install Python 3 first." >&2
     exit 1
 fi
 
-# 2. Check if python3-venv is installed
-if ! python3 -m venv --help &> /dev/null; then
-    echo "python3-venv is not installed. Trying to install..."
-    sudo apt update
-    sudo apt install -y python3-venv
-fi
-
 # 3. Create virtual environment
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-    echo "Virtual environment 'venv' created."
+if [ ! -d "$VENV_DIR" ]; then
+    "$PYTHON" -m venv "$VENV_DIR"
+    echo "Virtual environment '$VENV_DIR' created."
 else
-    echo "Virtual environment 'venv' already exists. Skipping creation."
+    echo "Virtual environment '$VENV_DIR' already exists. Skipping creation."
 fi
 
 # 4. Activate virtual environment and install dependencies
-source venv/bin/activate
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
-    echo "Dependencies installed."
+if [ -f "$VENV_DIR/bin/activate" ]; then
+    # Linux/macOS
+    # shellcheck disable=SC1090
+    source "$VENV_DIR/bin/activate"
+elif [ -f "$VENV_DIR/Scripts/activate" ]; then
+    # Windows (Git Bash)
+    # shellcheck disable=SC1090
+    source "$VENV_DIR/Scripts/activate"
 else
-    echo "requirements.txt not found. Only created the virtual environment."
+    echo "Activation script not found under '$VENV_DIR'. venv creation may have failed." >&2
+    exit 1
 fi
 
-echo "Done! Use 'source venv/bin/activate' to activate the virtual environment." 
+python -m pip install -U pip setuptools wheel
+if [ "$INSTALL_DEPS" = "1" ] && [ -f "requirements.txt" ]; then
+    python -m pip install -r requirements.txt
+    echo "Dependencies installed."
+else
+    echo "Skipping dependency installation."
+fi
+
+echo "Done!"

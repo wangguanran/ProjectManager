@@ -6,18 +6,17 @@ This document describes the various scripts and automation tools available in th
 
 ### `install.sh`
 
-Automated installation script for the ProjectManager tool.
+Installs the standalone `projman` binary produced by `build.sh`.
 
 **Usage**:
 ```bash
-./install.sh
+./install.sh [--system|--user] [--prefix DIR]
 ```
 
 **Features**:
-- Installs the Python package in development mode
-- Sets up virtual environment if needed
-- Installs required dependencies
-- Configures system paths
+- Copies `out/binary/projman` into an install prefix
+- Auto-selects `/usr/local/bin` when run as root, otherwise `~/.local/bin`
+- Prints PATH guidance for user installs
 
 ### `uninstall.sh`
 
@@ -32,6 +31,7 @@ Removes ProjectManager from the system.
 - Removes installed Python package
 - Cleans up configuration files
 - Removes virtual environment (if created by install script)
+- Removes standalone `projman` from `~/.local/bin` and `/usr/local/bin`
 
 ### `setup_venv.sh`
 
@@ -44,7 +44,7 @@ Sets up a Python virtual environment for development.
 
 **Features**:
 - Creates a new virtual environment
-- Installs development dependencies
+- Installs dependencies from `requirements.txt` (set `INSTALL_DEPS=0` to skip)
 - Activates the environment
 - Provides development setup instructions
 
@@ -52,23 +52,18 @@ Sets up a Python virtual environment for development.
 
 ### `build.sh`
 
-Builds the Python package and Docker image.
+Builds the Python package and the standalone `projman` binary (PyInstaller).
 
 **Usage**:
 ```bash
-./build.sh [options]
+./build.sh
 ```
 
-**Options**:
-- `--python`: Build Python package only
-- `--docker`: Build Docker image only
-- `--all`: Build both (default)
-
 **Features**:
-- Builds Python package using `build`
-- Creates Docker image using Dockerfile
-- Runs tests before building
-- Generates distribution files
+- Automatically runs inside `venv/` (creates it if missing)
+- Builds Python packages into `out/package/`
+- Builds the standalone binary into `out/binary/`
+- Linux-only: best-effort static linking via `staticx`
 
 ### `release.sh`
 
@@ -88,18 +83,33 @@ Creates a new release with version management.
 
 ### `get_latest_release.sh`
 
-Retrieves and displays information about the latest release.
+Downloads the latest GitHub Release asset for the current OS/arch and installs `projman`.
 
 **Usage**:
 ```bash
-./get_latest_release.sh
+./get_latest_release.sh [--system|--user] [--prefix DIR] [-t TOKEN]
 ```
 
 **Features**:
 - Fetches latest release from GitHub API
 - Displays release information
-- Shows download links
-- Compares with current version
+- Selects the best-matching asset (for example `projman-linux-x86_64`)
+- Installs `projman` to `/usr/local/bin` when run as root, otherwise `~/.local/bin`
+- For Windows, use `install.ps1`
+
+### `install.ps1`
+
+Windows installer for `projman` (PowerShell).
+
+**Usage**:
+```powershell
+iwr -useb https://raw.githubusercontent.com/wangguanran/ProjectManager/<tag>/install.ps1 | iex
+```
+
+**Features**:
+- Downloads the latest Windows release asset (for example `projman-windows-x86_64.exe`)
+- Installs `projman.exe` to a per-user or system directory
+- Updates PATH (User or Machine)
 
 ## Development Scripts
 
@@ -316,8 +326,8 @@ python coverage_report.py
 ### Building and Releasing
 
 ```bash
-# Build everything
-./build.sh --all
+# Build packages + standalone binary
+./build.sh
 
 # Create a new release
 ./release.sh v1.2.3
@@ -362,7 +372,7 @@ Enable verbose output for debugging:
 
 ```bash
 # Verbose build
-./build.sh --verbose
+bash -x ./build.sh
 
 # Debug installation
 bash -x ./install.sh
