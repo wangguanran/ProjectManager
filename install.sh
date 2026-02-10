@@ -133,5 +133,10 @@ if [ "$TARGET_BIN" != "/usr/local/bin" ] && ! echo ":$PATH:" | grep -q ":$TARGET
 fi
 
 # Test projman command
-"$TARGET_BIN/projman${EXE_SUFFIX}" --version
+TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t projman)"
+(
+    cd "$TMP_DIR"
+    "$TARGET_BIN/projman${EXE_SUFFIX}" --version
+)
+rm -rf "$TMP_DIR" 2>/dev/null || true
 echo "projman command executed successfully."
