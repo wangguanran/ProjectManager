@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
-from src.hooks.executor import execute_hooks, execute_hooks_with_fallback, execute_single_hook, validate_hooks
-from src.hooks.registry import HookPriority, HookType, clear_hooks, get_hooks, register_hook
+from src.hooks.executor import (
+    execute_hooks,
+    execute_hooks_with_fallback,
+    execute_single_hook,
+    validate_hooks,
+)
+from src.hooks.registry import (
+    HookPriority,
+    HookType,
+    clear_hooks,
+    get_hooks,
+    register_hook,
+)
 
 
 def setup_function() -> None:

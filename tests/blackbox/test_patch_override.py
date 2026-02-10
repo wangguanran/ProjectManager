@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
-from src.plugins.patch_override import parse_po_config, po_apply, po_revert
 from src.__main__ import _load_all_projects, _load_common_config
+from src.plugins.patch_override import parse_po_config, po_apply, po_revert
 
 from .conftest import init_git_repo, run_cli, setup_dataset_a
 
@@ -66,7 +66,11 @@ def test_po_002_po_config_empty_returns(workspace_a: Path) -> None:
 def test_po_003_missing_board_name(workspace_a: Path) -> None:
     projects_info = _load_projects(workspace_a)
     projects_info["projA"]["board_name"] = None
-    env = {"root_path": str(workspace_a), "projects_path": str(workspace_a / "projects"), "repositories": [{"name": "root", "path": str(workspace_a)}]}
+    env = {
+        "root_path": str(workspace_a),
+        "projects_path": str(workspace_a / "projects"),
+        "repositories": [{"name": "root", "path": str(workspace_a)}],
+    }
     assert po_apply(env, projects_info, "projA") is False
 
 

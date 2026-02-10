@@ -67,7 +67,11 @@ def test_build_005_validation_hook_fail(workspace_a: Path) -> None:
     register_hook(HookType.VALIDATION, "fail", lambda ctx: False, priority=HookPriority.HIGH, platform="platA")
     common, _ = _load_common_config(str(workspace_a / "projects"))
     projects_info = _load_all_projects(str(workspace_a / "projects"), common)
-    env = {"root_path": str(workspace_a), "projects_path": str(workspace_a / "projects"), "repositories": [{"name": "root", "path": str(workspace_a)}]}
+    env = {
+        "root_path": str(workspace_a),
+        "projects_path": str(workspace_a / "projects"),
+        "repositories": [{"name": "root", "path": str(workspace_a)}],
+    }
     assert project_build(env, projects_info, "projA") is False
 
 
@@ -78,7 +82,11 @@ def test_build_006_build_hook_fail(workspace_a: Path) -> None:
     register_hook(HookType.PRE_BUILD, "fail", lambda ctx: False, priority=HookPriority.HIGH, platform="platA")
     common, _ = _load_common_config(str(workspace_a / "projects"))
     projects_info = _load_all_projects(str(workspace_a / "projects"), common)
-    env = {"root_path": str(workspace_a), "projects_path": str(workspace_a / "projects"), "repositories": [{"name": "root", "path": str(workspace_a)}]}
+    env = {
+        "root_path": str(workspace_a),
+        "projects_path": str(workspace_a / "projects"),
+        "repositories": [{"name": "root", "path": str(workspace_a)}],
+    }
     assert project_build(env, projects_info, "projA") is False
 
 
@@ -91,5 +99,9 @@ def test_build_007_no_platform_skip_hooks(workspace_a: Path) -> None:
     # Remove platform for projA
     projects_info["projA"]["config"].pop("PROJECT_PLATFORM", None)
     projects_info["projA"]["config"].pop("PROJECT_PO_CONFIG", None)
-    env = {"root_path": str(workspace_a), "projects_path": str(workspace_a / "projects"), "repositories": [(str(workspace_a), "root")]}
+    env = {
+        "root_path": str(workspace_a),
+        "projects_path": str(workspace_a / "projects"),
+        "repositories": [(str(workspace_a), "root")],
+    }
     assert project_build(env, projects_info, "projA") is True

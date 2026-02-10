@@ -12,11 +12,12 @@ from typing import Dict, List, Tuple
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _run(cmd: List[str], cwd: Path, env: Dict[str, str] | None = None, check: bool = True) -> subprocess.CompletedProcess:
+def _run(
+    cmd: List[str], cwd: Path, env: Dict[str, str] | None = None, check: bool = True
+) -> subprocess.CompletedProcess:
     merged_env = os.environ.copy()
     merged_env["PYTHONPATH"] = str(REPO_ROOT)
     if env:
@@ -24,7 +25,9 @@ def _run(cmd: List[str], cwd: Path, env: Dict[str, str] | None = None, check: bo
     return subprocess.run(cmd, cwd=str(cwd), env=merged_env, text=True, capture_output=True, check=check)
 
 
-def run_cli(args: List[str], cwd: Path, env: Dict[str, str] | None = None, check: bool = True) -> subprocess.CompletedProcess:
+def run_cli(
+    args: List[str], cwd: Path, env: Dict[str, str] | None = None, check: bool = True
+) -> subprocess.CompletedProcess:
     return _run([os.environ.get("PYTHON", os.sys.executable), "-m", "src", *args], cwd=cwd, env=env, check=check)
 
 
@@ -120,8 +123,8 @@ def setup_dataset_b(root: Path) -> None:
     (repo_dir / "manifests").mkdir(parents=True, exist_ok=True)
     (repo_dir / "manifest.xml").write_text(
         "<manifest>\n"
-        "  <project name=\"repo1\" path=\"repo1\" />\n"
-        "  <project name=\"repo2\" path=\"repo2\" />\n"
+        '  <project name="repo1" path="repo1" />\n'
+        '  <project name="repo2" path="repo2" />\n'
         "</manifest>\n",
         encoding="utf-8",
     )

@@ -32,7 +32,9 @@ def test_repo_002_manifest_repos_detected(workspace_b: Path) -> None:
 def test_repo_003_manifest_include_missing(workspace_b: Path) -> None:
     manifest = workspace_b / ".repo" / "manifest.xml"
     text = manifest.read_text(encoding="utf-8")
-    manifest.write_text(text.replace("</manifest>", "  <include name=\"missing.xml\" />\n</manifest>\n"), encoding="utf-8")
+    manifest.write_text(
+        text.replace("</manifest>", '  <include name="missing.xml" />\n</manifest>\n'), encoding="utf-8"
+    )
     _ = run_cli(["project_diff", "projA"], cwd=workspace_b, check=False)
     log_text = (workspace_b / ".cache" / "latest.log").read_text(encoding="utf-8")
     assert "include file not found" in log_text.lower()

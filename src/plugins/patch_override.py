@@ -9,8 +9,8 @@ import os
 import re
 import shutil
 import subprocess
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.log_manager import log, log_cmd_event
@@ -346,7 +346,9 @@ def po_apply(
                 patch_file = os.path.join(current_dir, fname)
                 log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
                 if __applied_record_exists(patch_target, ctx.po_name):
-                    log.info("po '%s' already applied for repo '%s', skipping patch '%s'", ctx.po_name, repo_name, rel_path)
+                    log.info(
+                        "po '%s' already applied for repo '%s', skipping patch '%s'", ctx.po_name, repo_name, rel_path
+                    )
                     continue
 
                 try:
