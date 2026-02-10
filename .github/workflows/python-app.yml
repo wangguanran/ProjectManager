@@ -40,7 +40,7 @@ jobs:
 	    - name: Install system dependencies
 	      run: |
 	        apt-get update
-	        apt-get install -y patchelf binutils
+	        apt-get install -y patchelf binutils git
 	    - name: Build project
 	      run: bash build.sh
 	    - name: Upload build artifacts
