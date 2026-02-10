@@ -91,4 +91,36 @@ jobs:
     - name: Install dependencies
       run: python -m pip install -r requirements.txt
     - name: Run pytest
-      run: python -m pytest
+      shell: bash
+      run: |
+        set -o pipefail
+        python -m pytest --junitxml=pytest-report.xml
+    - name: Summarize pytest failures
+      if: failure()
+      run: |
+        python - <<'PY'
+        import sys
+        import xml.etree.ElementTree as ET
+        
+        path = "pytest-report.xml"
+        try:
+            tree = ET.parse(path)
+        except Exception as exc:  # pragma: no cover
+            print(f"::error::pytest failed, but {path} could not be parsed: {exc}")
+            sys.exit(0)
+        
+        failures = []
+        for testcase in tree.findall(".//testcase"):
+            classname = testcase.get("classname") or ""
+            name = testcase.get("name") or ""
+            if testcase.find("failure") is not None or testcase.find("error") is not None:
+                failures.append(f"{classname}::{name}".strip(":"))
+        
+        if not failures:
+            print("::error::pytest failed, but no failing testcases were found in junit xml.")
+            sys.exit(0)
+        
+        shown = failures[:20]
+        suffix = "" if len(failures) <= len(shown) else f" (and {len(failures) - len(shown)} more)"
+        print("::error::pytest failures: " + ", ".join(shown) + suffix)
+        PY

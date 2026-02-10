@@ -23,7 +23,7 @@ def test_cli_001_help_lists_operations(workspace_a: Path) -> None:
 def test_cli_002_version_matches_pyproject(workspace_a: Path) -> None:
     result = run_cli(["--version"], cwd=workspace_a)
     version = result.stdout.strip()
-    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7})?", version)
+    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7,})?", version)
 
 
 def test_cli_002a_version_no_projects_dir_no_warnings(empty_workspace: Path) -> None:

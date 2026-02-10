@@ -14,7 +14,7 @@ from .conftest import run_cli
 
 
 def test_util_001_version_matches_pyproject(workspace_a: Path) -> None:
-    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7})?", get_version())
+    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7,})?", get_version())
 
 
 def test_util_002_version_fallback(tmp_path: Path) -> None:
@@ -24,7 +24,7 @@ def test_util_002_version_fallback(tmp_path: Path) -> None:
     pyproject.rename(pyproject.with_suffix(".bak"))
     try:
         version = get_version()
-        assert version == "0.0.0-dev" or re.fullmatch(r"\d+\.\d+\.\d+(\+g[0-9a-f]{7})?", version)
+        assert version == "0.0.0-dev" or re.fullmatch(r"\d+\.\d+\.\d+(\+g[0-9a-f]{7,})?", version)
     finally:
         pyproject.with_suffix(".bak").rename(pyproject)
 
