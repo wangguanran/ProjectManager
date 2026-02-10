@@ -94,7 +94,7 @@ jobs:
       shell: bash
       run: |
         set -o pipefail
-        python -m pytest --junitxml=pytest-report.xml
+        python -m pytest --junitxml=pytest-report.xml 2>&1 | tee pytest-output.log
     - name: Summarize pytest failures
       if: failure()
       run: |
@@ -124,19 +124,18 @@ jobs:
         suffix = "" if len(failures) <= len(shown) else f" (and {len(failures) - len(shown)} more)"
         print("::error::pytest failures: " + ", ".join(shown) + suffix)
 
-        # Emit a short excerpt from the first failure to help debugging without full logs access.
-        first_failure = None
-        for testcase in tree.findall(".//testcase"):
-            failure_node = testcase.find("failure") or testcase.find("error")
-            if failure_node is not None:
-                first_failure = failure_node
-                break
+        # Best-effort: include tail of pytest output (useful when logs aren't accessible).
+        try:
+            with open("pytest-output.log", "r", encoding="utf-8", errors="ignore") as handle:
+                lines = handle.read().splitlines()
+        except OSError:
+            lines = []
 
-        if first_failure is not None:
-            text = (first_failure.text or "").strip().splitlines()
-            tail = " | ".join(line.strip() for line in text[-12:] if line.strip())
+        if lines:
+            tail_lines = lines[-40:]
+            tail = " | ".join(line.strip() for line in tail_lines if line.strip())
+            if len(tail) > 1500:
+                tail = tail[-1500:]
             if tail:
-                if len(tail) > 1500:
-                    tail = tail[-1500:]
-                print("::error::pytest first failure excerpt: " + tail)
+                print("::error::pytest output tail: " + tail)
         PY
