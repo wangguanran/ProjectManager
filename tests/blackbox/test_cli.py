@@ -26,6 +26,18 @@ def test_cli_002_version_matches_pyproject(workspace_a: Path) -> None:
     assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7})?", version)
 
 
+def test_cli_002a_version_no_projects_dir_no_warnings(empty_workspace: Path) -> None:
+    result = run_cli(["--version"], cwd=empty_workspace)
+    assert "common config not found" not in result.stderr.lower()
+    assert "projects directory does not exist" not in result.stderr.lower()
+
+
+def test_cli_002b_help_no_projects_dir_no_warnings(empty_workspace: Path) -> None:
+    result = run_cli(["--help"], cwd=empty_workspace)
+    assert "common config not found" not in result.stderr.lower()
+    assert "projects directory does not exist" not in result.stderr.lower()
+
+
 def test_cli_003_exact_operation_runs(workspace_a: Path) -> None:
     result = run_cli(["po_list", "projA", "--short"], cwd=workspace_a)
     assert "po_base" in result.stdout

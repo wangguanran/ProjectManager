@@ -839,20 +839,6 @@ def main():
         # "repositories": _find_repositories(),  # lazy loading
     }
 
-    # Load common configurations
-    common_configs, po_configs = _load_common_config(env["projects_path"])
-    env["po_configs"] = po_configs
-    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
-    log.debug("Loaded %d po configurations.", len(po_configs))
-    log.debug("Po configurations: %s", list(po_configs.keys()))
-
-    projects_info = _load_all_projects(env["projects_path"], common_configs)
-    log.debug("Loaded %d projects.", len(projects_info))
-    log.debug(
-        "Loaded projects info:\n%s",
-        json.dumps(projects_info, indent=4, ensure_ascii=False),
-    )
-
     # Import platform scripts
     _import_platform_scripts(env["projects_path"])
 
@@ -865,6 +851,21 @@ def main():
 
     operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(all_operations)
     builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
+
+    # Load common configurations after CLI args are parsed.
+    # This avoids printing workspace warnings for early-exit flags like --version / --help.
+    common_configs, po_configs = _load_common_config(env["projects_path"])
+    env["po_configs"] = po_configs
+    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
+    log.debug("Loaded %d po configurations.", len(po_configs))
+    log.debug("Po configurations: %s", list(po_configs.keys()))
+
+    projects_info = _load_all_projects(env["projects_path"], common_configs)
+    log.debug("Loaded %d projects.", len(projects_info))
+    log.debug(
+        "Loaded projects info:\n%s",
+        json.dumps(projects_info, indent=4, ensure_ascii=False),
+    )
 
     # Only execute operations registered through plugins
     if operate in all_operations:
@@ -901,6 +902,7 @@ def main():
             sys.exit(1)
     else:
         log.error("Operation '%s' is not supported.", operate)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
