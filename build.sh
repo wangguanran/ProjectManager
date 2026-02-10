@@ -63,17 +63,26 @@ if command -v pyinstaller &> /dev/null; then
 echo "Binary generated at $BINARY_DIR/projman"
 
     # Apply static linking for better compatibility (Linux-only; staticx does not support macOS).
+    # NOTE: staticx is best-effort. If it fails, keep the non-static binary.
     if [ "$(uname -s)" = "Linux" ]; then
         echo -e "\033[32m--- Applying static linking for better compatibility ---\033[0m"
-        # Check if staticx is installed, install if not
         if ! command -v staticx &> /dev/null; then
             echo "staticx not found. Installing for better compatibility..."
-            pip install staticx
+            if ! pip install staticx; then
+                echo "staticx install failed; continuing without static linking."
+            fi
         fi
 
-        staticx $BINARY_DIR/projman $BINARY_DIR/projman-static
-        mv $BINARY_DIR/projman-static $BINARY_DIR/projman
-        echo "Static linking applied successfully"
+        if command -v staticx &> /dev/null; then
+            if staticx $BINARY_DIR/projman $BINARY_DIR/projman-static; then
+                mv $BINARY_DIR/projman-static $BINARY_DIR/projman
+                echo "Static linking applied successfully"
+            else
+                echo "staticx failed; continuing without static linking."
+            fi
+        else
+            echo "staticx unavailable; continuing without static linking."
+        fi
     else
         echo "Skipping staticx (unsupported on $(uname -s))."
     fi
