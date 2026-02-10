@@ -33,20 +33,22 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    container:
-      image: python:3.10-slim
     steps:
     - uses: actions/checkout@v4
-	    - name: Install system dependencies
-	      run: |
-	        apt-get update
-	        apt-get install -y patchelf binutils git
-	    - name: Build project
-	      run: bash build.sh
-	    - name: Upload build artifacts
-	      uses: actions/upload-artifact@v4
-	      with:
-	        name: build-artifacts
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y patchelf binutils
+    - name: Build project
+      shell: bash
+      run: bash build.sh
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
 	        path: |
 	          out/binary/projman*
 	          install.sh
@@ -76,6 +78,9 @@ jobs:
     needs: build
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
