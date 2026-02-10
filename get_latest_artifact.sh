@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # 必须先设置以下变量
-GITHUB_TOKEN="${GITHUB_TOKEN:?请先设置环境变量 GITHUB_TOKEN}"                # 从环境变量读取 GitHub Personal Access Token
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"                # 从环境变量读取 GitHub Personal Access Token
+if [ -z "$GITHUB_TOKEN" ]; then
+  echo "Error: GITHUB_TOKEN is required to download GitHub Actions artifacts." >&2
+  echo "Tip: for tokenless installs (GitHub Releases), use ./get_latest_release.sh" >&2
+  exit 2
+fi
 REPO="wangguanran/ProjectManager"
 ARTIFACT_NAME="build-artifacts"     # 你的 artifact 名称
 WORKFLOW_NAME="Python application"  # 只获取该 workflow 的产物
