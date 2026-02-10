@@ -21,6 +21,13 @@ def _latest_diff_dir(root: Path, project: str) -> Path:
     return candidates[-1]
 
 
+def _read_latest_log(root: Path) -> str:
+    log_path = root / ".cache" / "latest.log"
+    if not log_path.exists():
+        return ""
+    return log_path.read_text(encoding="utf-8")
+
+
 def test_build_001_single_repo_diff_structure(workspace_a: Path) -> None:
     _ = run_cli(["project_diff", "projA", "--keep-diff-dir"], cwd=workspace_a, check=False)
     diff_dir = _latest_diff_dir(workspace_a, "projA")
@@ -194,7 +201,8 @@ def test_build_010_profile_dispatch(workspace_a: Path) -> None:
         ["project_build", "projA", "--profile", "full", "--no-po", "--no-diff"], cwd=workspace_a, check=False
     )
     assert result_full.returncode == 0
-    assert full_marker.exists()
+    log_text = _read_latest_log(workspace_a)
+    assert full_marker.exists(), log_text
     if single_marker.exists():
         single_marker.unlink()
 
@@ -204,4 +212,5 @@ def test_build_010_profile_dispatch(workspace_a: Path) -> None:
         check=False,
     )
     assert result_single.returncode == 0
-    assert single_marker.exists()
+    log_text = _read_latest_log(workspace_a)
+    assert single_marker.exists(), log_text
