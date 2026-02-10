@@ -24,9 +24,6 @@ maybe_run() {
     fi
 }
 
-# Configuration
-RELEASE_TYPE=${1:-"patch"}  # patch, minor, major
-
 # Get current version from pyproject.toml
 current_version=$(grep -E '^version = "' pyproject.toml | head -n1 | awk -F'"' '{print $2}')
 echo "Current version: $current_version"
@@ -44,7 +41,21 @@ echo "New version will be: $new_version"
 
 # Update version in pyproject.toml
 echo "--> Updating version in pyproject.toml"
-maybe_run "sed -i 's#^version = \".*\"#version = \"$new_version\"#' pyproject.toml"
+update_pyproject_version() {
+    if [ "$TEST_MODE" = "1" ]; then
+        echo "[TEST MODE] update pyproject.toml: version = \"$new_version\""
+        return 0
+    fi
+
+    # GNU sed: sed -i
+    # BSD sed (macOS): sed -i ''
+    if sed --version >/dev/null 2>&1; then
+        sed -i "s#^version = \".*\"#version = \"$new_version\"#" pyproject.toml
+    else
+        sed -i '' "s#^version = \".*\"#version = \"$new_version\"#" pyproject.toml
+    fi
+}
+update_pyproject_version
 
 echo "--- Version updated. Committing changes and creating tag. ---"
 

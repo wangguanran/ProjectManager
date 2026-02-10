@@ -2,7 +2,7 @@
 
 ![GitHub stars](https://img.shields.io/github/stars/wangguanran/ProjectManager.svg) ![GitHub forks](https://img.shields.io/github/forks/wangguanran/ProjectManager.svg) ![GitHub issues](https://github.com/wangguanran/ProjectManager/issues.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/wangguanran/ProjectManager.svg)
 ![Build Status](https://github.com/wangguanran/ProjectManager/actions/workflows/python-app.yml/badge.svg) ![Pylint](https://github.com/wangguanran/ProjectManager/actions/workflows/pylint.yml/badge.svg)
-![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg) ![Python](https://img.shields.io/badge/python-3.7+-blue.svg) ![Platform](https://img.shields.io/badge/platform-linux-blue.svg)
+![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg) ![Python](https://img.shields.io/badge/python-3.8+-blue.svg) ![Platform](https://img.shields.io/badge/platform-linux-blue.svg)
 
 通用项目和补丁（PO）管理工具
 
@@ -79,7 +79,7 @@ projects/
 ## 🔧 系统要求
 
 - **操作系统**: Linux (推荐 Ubuntu 18.04+ 或 CentOS 7+)
-- **Python**: 3.7 或更高版本
+- **Python**: 3.8 或更高版本
 - **Git**: 2.20 或更高版本
 - **内存**: 最少 2GB RAM
 - **磁盘空间**: 最少 1GB 可用空间
@@ -118,7 +118,8 @@ projects/
 
 ## 📄 许可证
 
-本项目采用 [GPL-3.0 许可证](LICENSE) 开源。
+本项目采用 [GNU GPLv3](LICENSE) 许可证开源。
+
 
 ## 🌐 其他语言版本
 

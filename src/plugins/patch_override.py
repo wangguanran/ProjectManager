@@ -3,6 +3,7 @@ Patch and override operations for project management.
 """
 
 import fnmatch
+import glob
 import json
 import os
 import re
@@ -12,7 +13,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.log_manager import log
+from src.log_manager import log, log_cmd_event
 from src.operations.registry import register
 
 # from src.profiler import auto_profile  # unused
@@ -29,9 +30,9 @@ def _po_applied_record_path(repo_path: str, board_name: str, project_name: str, 
     """
     Where to store the applied marker/record for a PO.
 
-    The record lives under each target repository root to avoid
-    cross-workspace false positives when multiple workspaces share the same
-    `projects/` directory.
+    The record lives under each target repository root to avoid cross-workspace
+    false positives when multiple workspaces share the same `projects/`
+    directory.
     """
     repo_root = os.path.abspath(repo_path)
     return os.path.join(
@@ -74,35 +75,6 @@ def _extract_patch_targets(patch_text: str) -> List[str]:
     return sorted(set(targets))
 
 
-def _resolve_repo_for_relpath(
-    rel_path: str, repositories: List[Tuple[str, str]], workspace_root: Optional[str] = None
-) -> Tuple[str, str, str]:
-    """
-    Resolve a workspace-relative path to (repo_path, repo_name, path_in_repo).
-
-    - For non-root repos, repo_name matches the prefix of rel_path.
-    - For root repo (repo_name == "root"), path_in_repo is rel_path itself.
-    - If no repo matches, fall back to root repo if present; otherwise fall back
-      to workspace_root (or CWD) with a pseudo name 'workspace'.
-    """
-    normalised = rel_path.strip().lstrip(os.sep)
-    candidates: List[Tuple[str, str]] = [(p, n) for p, n in repositories if n and n != "root"]
-    candidates.sort(key=lambda item: len(item[1]), reverse=True)
-    for repo_path, repo_name in candidates:
-        if normalised == repo_name:
-            return os.path.abspath(repo_path), repo_name, "."
-        prefix = f"{repo_name}{os.sep}"
-        if normalised.startswith(prefix):
-            return os.path.abspath(repo_path), repo_name, normalised[len(prefix) :]
-
-    root_repo = next(((p, n) for p, n in repositories if n == "root"), None)
-    if root_repo:
-        return os.path.abspath(root_repo[0]), "root", normalised
-
-    fallback_root = os.path.abspath(workspace_root or os.getcwd())
-    return fallback_root, "workspace", normalised
-
-
 def parse_po_config(po_config):
     """Parse PROJECT_PO_CONFIG string into components.
 
@@ -113,18 +85,28 @@ def parse_po_config(po_config):
     exclude_files = {}
     tokens = re.findall(r"-?\w+(?:\[[^\]]+\])?", po_config)
     for token in tokens:
-        if token.startswith("-"):
-            if "[" in token:
-                match = re.match(r"-(\w+)\[([^\]]+)\]", token)
-                if match:
-                    po_name, files = match.groups()
-                    file_list = set(f.strip() for f in files.split())
-                    exclude_files.setdefault(po_name, set()).update(file_list)
-            else:
-                po_name = token[1:]
-                exclude_pos.add(po_name)
+        is_exclude_po = token.startswith("-")
+        token_body = token[1:] if is_exclude_po else token
+
+        # Support both:
+        # - "po1" => apply po1
+        # - "-po1" => exclude po1
+        # - "po1[fileA fileB]" => apply po1 but exclude listed files for this PO
+        # - "-po1[fileA fileB]" => exclude po1 and also exclude listed files (kept for consistency)
+        if "[" in token_body:
+            match = re.match(r"^(\w+)\[([^\]]+)\]$", token_body)
+            if not match:
+                continue
+            po_name, files = match.groups()
+            file_list = set(f.strip() for f in files.split() if f.strip())
+            if file_list:
+                exclude_files.setdefault(po_name, set()).update(file_list)
         else:
-            po_name = token
+            po_name = token_body
+
+        if is_exclude_po:
+            exclude_pos.add(po_name)
+        else:
             apply_pos.append(po_name)
 
     # Filter apply_pos to exclude items in exclude_pos
@@ -134,7 +116,13 @@ def parse_po_config(po_config):
 
 
 @register("po_apply", needs_repositories=True, desc="Apply patch and override for a project")
-def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
+def po_apply(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    dry_run: bool = False,
+    force: bool = False,
+) -> bool:
     """
     Apply patch and override for the specified project.
     Args:
@@ -168,41 +156,14 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
         log.debug("exclude_files: %s", str(exclude_files))
 
     # Use repositories from env
-    repositories: List[Tuple[str, str]] = env.get("repositories", [])
+    repositories = env.get("repositories", [])
     workspace_root = os.getcwd()
 
-    @dataclass
-    class PoApplyContext:
-        """Context container for po_apply execution.
-
-        Holds frequently used paths and configuration for a single PO during apply:
-        - po_name: current PO name
-        - po_patch_dir: directory containing patch files (po/<po_name>/patches)
-        - po_override_dir: directory containing override files (po/<po_name>/overrides)
-        - po_custom_dir: unified custom root directory (po/<po_name>/custom)
-        - exclude_files: mapping of PO name to a set of excluded relative file paths
-        - po_configs: custom configuration sections from env used to drive custom apply
-        - applied_records: per-repository applied record content to be persisted on success
-        """
-
-        project_name: str
-        board_name: str
-        po_name: str
-        po_path: str
-        po_patch_dir: str
-        po_override_dir: str
-        po_custom_dir: str
-        exclude_files: Dict[str, set]
-        po_configs: Dict
-        applied_records: Dict[str, Dict[str, Any]]
-        repositories: List[Tuple[str, str]]
-        workspace_root: str
-
-    def __applied_record_exists(repo_path: str, po_name: str) -> bool:
-        record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+    def __applied_record_exists(repo_root: str, po_name: str) -> bool:
+        record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
         return os.path.isfile(record_path)
 
-    def __format_command(command, cwd=None, description=""):
+    def __format_command(command, cwd=None, description="", shell=False):
         if isinstance(command, list):
             cmd_str = " ".join(f'"{arg}"' if " " in arg else arg for arg in command)
         else:
@@ -211,12 +172,12 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             "description": description or "",
             "cmd": cmd_str,
             "cwd": cwd or "",
-            "shell": False,
+            "shell": bool(shell),
         }
 
-    def __get_repo_record(ctx: PoApplyContext, repo_path: str, repo_name: str) -> Dict[str, Any]:
-        abs_repo_path = os.path.abspath(repo_path)
-        record = ctx.applied_records.get(abs_repo_path)
+    def __get_repo_record(ctx, repo_root: str, repo_name: str) -> Dict[str, Any]:
+        abs_repo_root = os.path.abspath(repo_root)
+        record = ctx.applied_records.get(abs_repo_root)
         if record is None:
             record = {
                 "schema_version": 1,
@@ -226,20 +187,24 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 "board_name": ctx.board_name,
                 "po_name": ctx.po_name,
                 "repo_name": repo_name,
-                "repo_path": abs_repo_path,
+                "repo_path": abs_repo_root,
                 "patches": [],
                 "overrides": [],
                 "custom": [],
                 "commands": [],
             }
-            ctx.applied_records[abs_repo_path] = record
+            ctx.applied_records[abs_repo_root] = record
         return record
 
-    def __execute_command(ctx: PoApplyContext, repo_path: str, repo_name: str, command, cwd=None, description="", shell=False):
-        """Execute a command and record it under the repo-applied record."""
-        formatted = __format_command(command, cwd=cwd, description=description)
-        formatted["shell"] = bool(shell)
+    def __execute_command(ctx, repo_root: str, repo_name: str, command, cwd=None, description="", shell=False):
+        """Execute command and record it to repo-root applied record."""
+        formatted = __format_command(command, cwd=cwd, description=description, shell=shell)
+
         try:
+            if getattr(ctx, "dry_run", False):
+                log.info("DRY-RUN: %s", formatted["cmd"])
+                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
+
             result = subprocess.run(
                 command,
                 cwd=cwd,
@@ -248,14 +213,96 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 check=False,
                 shell=shell,
             )
-        except Exception as exc:  # pylint: disable=broad-except
-            log.error("Command execution failed: %s", exc)
+
+            log_cmd_event(
+                log,
+                command=command,
+                cwd=cwd,
+                description=description,
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
+
+            formatted["returncode"] = result.returncode
+            record = __get_repo_record(ctx, repo_root, repo_name)
+            record["commands"].append(formatted)
+            return result
+
+        except Exception as e:  # pylint: disable=broad-except
+            log.error("Command execution failed: %s", e)
             raise
 
-        formatted["returncode"] = result.returncode
-        record = __get_repo_record(ctx, repo_path, repo_name)
-        record["commands"].append(formatted)
-        return result
+    @dataclass
+    class PoApplyContext:
+        """Context container for po_apply execution.
+
+        Holds frequently used paths and configuration for a single PO during apply:
+        - project_name: current project name
+        - board_name: current board name
+        - po_name: current PO name
+        - po_path: path to po/<po_name>
+        - po_patch_dir: directory containing patch files (po/<po_name>/patches)
+        - po_override_dir: directory containing override files (po/<po_name>/overrides)
+        - po_custom_dir: unified custom root directory (po/<po_name>/custom)
+        - exclude_files: mapping of PO name to a set of excluded relative file paths
+        - po_configs: custom configuration sections from env used to drive custom apply
+        - applied_records: per-repository applied records to be persisted on success
+        """
+
+        project_name: str
+        board_name: str
+        po_name: str
+        po_path: str
+        po_patch_dir: str
+        po_override_dir: str
+        po_custom_dir: str
+        dry_run: bool
+        force: bool
+        exclude_files: Dict[str, set]
+        po_configs: Dict
+        repositories: List[Tuple[str, str]]
+        workspace_root: str
+        applied_records: Dict[str, Dict[str, Any]]
+
+    def __resolve_repo_for_target_path(target_path: str) -> Optional[Tuple[str, str, Optional[str]]]:
+        """Best-effort map a custom target path to a repository root for record placement."""
+        candidate = target_path
+        if candidate.endswith(os.sep) and len(candidate) > 1:
+            candidate = candidate.rstrip(os.sep)
+        abs_target = candidate
+        if not os.path.isabs(abs_target):
+            abs_target = os.path.abspath(os.path.join(workspace_root, abs_target))
+        abs_target_real = os.path.realpath(abs_target)
+
+        best: Optional[Tuple[str, str, Optional[str]]] = None
+        best_len = -1
+        for repo_path, repo_name in repositories:
+            repo_real = os.path.realpath(repo_path)
+            try:
+                common = os.path.commonpath([repo_real, abs_target_real])
+            except ValueError:
+                continue
+            if common == repo_real and len(repo_real) > best_len:
+                rel = os.path.relpath(abs_target_real, repo_real)
+                best = (os.path.abspath(repo_path), repo_name, (rel if rel != "." else "."))
+                best_len = len(repo_real)
+
+        if best:
+            return best
+
+        root_repo_path = next((path for path, name in repositories if name == "root"), None)
+        if root_repo_path:
+            root_real = os.path.realpath(root_repo_path)
+            try:
+                if os.path.commonpath([root_real, abs_target_real]) == root_real:
+                    rel = os.path.relpath(abs_target_real, root_real)
+                    return os.path.abspath(root_repo_path), "root", (rel if rel != "." else ".")
+            except ValueError:
+                pass
+            return os.path.abspath(root_repo_path), "root", None
+
+        return None
 
     def __apply_patch(ctx: PoApplyContext):
         """Apply patches for the specified po."""
@@ -305,8 +352,8 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 try:
                     with open(patch_file, "r", encoding="utf-8") as f:
                         patch_targets = _extract_patch_targets(f.read())
-                except OSError as exc:
-                    log.error("Failed to read patch '%s': %s", patch_file, exc)
+                except OSError as e:
+                    log.error("Failed to read patch '%s': %s", patch_file, e)
                     return False
 
                 record = __get_repo_record(ctx, patch_target, repo_name)
@@ -357,8 +404,50 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             return True
         log.debug("applying overrides for po: '%s'", ctx.po_name)
 
-        # 1) Collect override operations (copy/remove)
-        operations: List[Tuple[str, str, bool]] = []  # (src_file, dest_relpath, is_remove)
+        repo_map = {rname: repo_path for repo_path, rname in repositories}
+        repo_path_to_name = {os.path.abspath(repo_path): rname for repo_path, rname in repositories}
+        repo_names = sorted(
+            [name for name in repo_map.keys() if name != "root"],
+            key=lambda x: len(x),
+            reverse=True,
+        )
+
+        def _split_repo_prefix(rel_path: str) -> Tuple[str, str]:
+            """Return (repo_name, dest_rel_in_repo) for an overrides rel_path."""
+            root_prefix = f"root{os.sep}"
+            if rel_path.startswith(root_prefix):
+                return "root", rel_path[len(root_prefix) :]
+
+            for repo_name in repo_names:
+                prefix = f"{repo_name}{os.sep}"
+                if rel_path.startswith(prefix):
+                    return repo_name, rel_path[len(prefix) :]
+                if rel_path == repo_name:
+                    return repo_name, ""
+
+            return "root", rel_path
+
+        def _safe_dest_rel(dest_rel: str) -> str:
+            # Normalize and prevent escaping repo_root. Keep it relative.
+            dest_rel = dest_rel.strip()
+            dest_rel = dest_rel.lstrip("/\\")
+            dest_rel = os.path.normpath(dest_rel)
+            if dest_rel in ("", "."):
+                return ""
+            if os.path.isabs(dest_rel):
+                return ""
+            if dest_rel.startswith("..") or f"{os.sep}.." in dest_rel:
+                return ""
+            return dest_rel
+
+        def _validate_in_repo(repo_root: str, dest_rel: str) -> None:
+            repo_root_real = os.path.realpath(repo_root)
+            dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
+            if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
+                raise ValueError(f"override target escapes repo_root: {dest_rel}")
+
+        # 1) Group files by repo_root before copying/deleting
+        repo_to_files: Dict[str, List[Tuple[str, str, bool]]] = {}  # (src_file, dest_rel, is_remove)
         for current_dir, _, files in os.walk(ctx.po_override_dir):
             for fname in files:
                 if fname == ".gitkeep":
@@ -376,68 +465,118 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
                 # Check if this is a remove operation
                 is_remove = fname.endswith(".remove")
+                repo_name, dest_rel = _split_repo_prefix(rel_path)
                 if is_remove:
-                    # For remove operations, the target file is the same path without .remove suffix
-                    dest_file = rel_path[:-7]  # Remove '.remove' suffix
-                    log.debug("remove operation detected for file: '%s'", dest_file)
-                else:
-                    dest_file = rel_path
+                    dest_rel = dest_rel[:-7]  # Remove '.remove' suffix
+                    log.debug("remove operation detected for file: '%s'", dest_rel)
+                dest_rel = _safe_dest_rel(dest_rel)
+                if not dest_rel:
+                    log.error("Invalid override target path derived from '%s'", rel_path)
+                    return False
 
-                operations.append((src_file, dest_file, is_remove))
+                repo_root = repo_map.get(repo_name)
+                if not repo_root:
+                    log.error("Cannot find repo path for override target repo '%s' (from '%s')", repo_name, rel_path)
+                    return False
 
-        # 2) Execute operations (repo-aware for applied markers and record)
-        for src_file, dest_file, is_remove in operations:
-            log.debug("override src_file: '%s', dest_file: '%s', is_remove: %s", src_file, dest_file, is_remove)
-            repo_path, repo_name, path_in_repo = _resolve_repo_for_relpath(dest_file, ctx.repositories, ctx.workspace_root)
-            if __applied_record_exists(repo_path, ctx.po_name):
-                log.info("po '%s' already applied for repo '%s', skipping override '%s'", ctx.po_name, repo_name, dest_file)
+                repo_to_files.setdefault(repo_root, []).append((src_file, dest_rel, is_remove))
+
+        # 2) Perform copies/deletes per repo_root (with applied record gating)
+        for repo_root, file_list in repo_to_files.items():
+            repo_root_abs = os.path.abspath(repo_root)
+            record_repo_name = repo_path_to_name.get(repo_root_abs, "unknown")
+            if __applied_record_exists(repo_root_abs, ctx.po_name):
+                log.info("po '%s' already applied for repo '%s', skipping overrides", ctx.po_name, record_repo_name)
                 continue
 
-            record = __get_repo_record(ctx, repo_path, repo_name)
-            record["overrides"].append(
-                {
-                    "operation": "remove" if is_remove else "copy",
-                    "po_source": os.path.relpath(src_file, start=ctx.po_path),
-                    "dest_workspace": dest_file,
-                    "path_in_repo": path_in_repo,
-                }
+            log.debug(
+                "override repo_root: '%s'",
+                repo_root,
             )
-
-            if is_remove:
+            for src_file, dest_rel, is_remove in file_list:
+                log.debug("override src_file: '%s', dest_rel: '%s', is_remove: %s", src_file, dest_rel, is_remove)
                 try:
-                    if os.path.exists(dest_file):
+                    _validate_in_repo(repo_root, dest_rel)
+                except ValueError as e:
+                    log.error("%s", e)
+                    return False
+
+                record = __get_repo_record(ctx, repo_root_abs, record_repo_name)
+                record["overrides"].append(
+                    {
+                        "operation": "remove" if is_remove else "copy",
+                        "po_source": os.path.relpath(src_file, start=ctx.po_path),
+                        "path_in_repo": dest_rel,
+                    }
+                )
+
+                if is_remove:
+                    # Perform delete operation
+                    try:
+                        if not ctx.force and not ctx.dry_run:
+                            log.error(
+                                "Refusing to remove '%s' without --force (override .remove safeguard)",
+                                dest_rel,
+                            )
+                            return False
+
+                        # Check if target file exists
+                        if os.path.exists(os.path.join(repo_root, dest_rel)):
+                            # Use __execute_command for delete operation
+                            result = __execute_command(
+                                ctx,
+                                repo_root_abs,
+                                record_repo_name,
+                                ["rm", "-rf", dest_rel],
+                                cwd=repo_root,
+                                description=f"Remove file {dest_rel}",
+                            )
+
+                            if result.returncode != 0:
+                                log.error("Failed to remove file '%s': %s", dest_rel, result.stderr)
+                                return False
+
+                            log.info("Removed file '%s' (repo_root=%s)", dest_rel, repo_root)
+                        else:
+                            log.debug("File '%s' does not exist, skipping removal", dest_rel)
+                    except OSError as e:
+                        log.error(
+                            "Failed to remove file '%s': '%s'",
+                            dest_rel,
+                            e,
+                        )
+                        return False
+                else:
+                    # Perform copy operation
+                    dest_dir = os.path.dirname(dest_rel)
+                    if not ctx.dry_run and dest_dir:
+                        os.makedirs(os.path.join(repo_root, dest_dir), exist_ok=True)
+                    try:
+                        # Use __execute_command for copy operation
                         result = __execute_command(
                             ctx,
-                            repo_path,
-                            repo_name,
-                            ["rm", "-rf", dest_file],
-                            description=f"Remove file {dest_file}",
+                            repo_root_abs,
+                            record_repo_name,
+                            ["cp", "-rf", src_file, dest_rel],
+                            cwd=repo_root,
+                            description="Copy override file",
                         )
-                        if result.returncode != 0:
-                            log.error("Failed to remove file '%s': %s", dest_file, result.stderr)
-                            return False
-                        log.info("Removed file '%s'", dest_file)
-                    else:
-                        log.debug("File '%s' does not exist, skipping removal", dest_file)
-                except OSError as exc:
-                    log.error("Failed to remove file '%s': '%s'", dest_file, exc)
-                    return False
-                continue
 
-            dest_dir = os.path.dirname(dest_file)
-            if dest_dir:
-                os.makedirs(dest_dir, exist_ok=True)
-            try:
-                result = __execute_command(
-                    ctx, repo_path, repo_name, ["cp", "-rf", src_file, dest_file], description="Copy override file"
-                )
-                if result.returncode != 0:
-                    log.error("Failed to copy override file '%s' to '%s': %s", src_file, dest_file, result.stderr)
-                    return False
-                log.info("Copied override file '%s' to '%s'", src_file, dest_file)
-            except OSError as exc:
-                log.error("Failed to copy override file '%s' to '%s': '%s'", src_file, dest_file, exc)
-                return False
+                        if result.returncode != 0:
+                            log.error(
+                                "Failed to copy override file '%s' to '%s': %s", src_file, dest_rel, result.stderr
+                            )
+                            return False
+
+                        log.info("Copied override file '%s' to '%s' (repo_root=%s)", src_file, dest_rel, repo_root)
+                    except OSError as e:
+                        log.error(
+                            "Failed to copy override file '%s' to '%s': '%s'",
+                            src_file,
+                            dest_rel,
+                            e,
+                        )
+                        return False
 
         return True
 
@@ -458,64 +597,89 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.debug("No po_configs provided for custom apply of po: '%s'", ctx.po_name)
             return True
 
-        def __execute_file_copy(ctx, section_custom_dir, source_pattern, target_path, section_name):
+        def __execute_file_copy(ctx, section_name, section_custom_dir, source_pattern, target_path):
             """Execute a single file copy operation with wildcard and directory support.
 
-            - Supports *, ?, [], and ** patterns via cp command
-            - cp -rf handles both files and directories automatically
+            - Expands *, ?, [], and ** patterns via glob (no shell).
+            - Uses `cp -rf` with shell=False to handle file/dir copies safely.
             """
             log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
 
             abs_pattern = os.path.join(section_custom_dir, source_pattern)
-            target_for_resolve = target_path
-            if os.path.isabs(target_for_resolve):
-                try:
-                    target_for_resolve = os.path.relpath(target_for_resolve, start=ctx.workspace_root)
-                except ValueError:
-                    target_for_resolve = target_path
+            record_repo = __resolve_repo_for_target_path(target_path)
+            if record_repo is None:
+                record_repo_root = workspace_root
+                record_repo_name = "workspace"
+                path_in_repo = None
+            else:
+                record_repo_root, record_repo_name, path_in_repo = record_repo
+
+            if __applied_record_exists(record_repo_root, ctx.po_name):
+                log.info(
+                    "po '%s' already applied for repo '%s', skipping custom copy to '%s'",
+                    ctx.po_name,
+                    record_repo_name,
+                    target_path,
+                )
+                return True
+
+            record = __get_repo_record(ctx, record_repo_root, record_repo_name)
+            record["custom"].append(
+                {
+                    "section": section_name,
+                    "source": source_pattern,
+                    "target": target_path,
+                    "path_in_repo": path_in_repo,
+                }
+            )
 
             try:
-                # Create target directory if it doesn't exist
-                target_dir = os.path.dirname(target_path)
-                if target_dir:
-                    os.makedirs(target_dir, exist_ok=True)
-
-                # Use cp -rf for copy operation (handles wildcards, files and directories)
-                # Use shell=True to allow wildcard expansion
-                repo_path, repo_name, path_in_repo = _resolve_repo_for_relpath(
-                    target_for_resolve, ctx.repositories, ctx.workspace_root
-                )
-                if __applied_record_exists(repo_path, ctx.po_name):
-                    log.info(
-                        "po '%s' already applied for repo '%s', skipping custom copy to '%s'",
-                        ctx.po_name,
-                        repo_name,
-                        target_path,
-                    )
-                    return True
-
-                record = __get_repo_record(ctx, repo_path, repo_name)
-                record["custom"].append(
-                    {
-                        "section": section_name,
-                        "source": source_pattern,
-                        "target": target_path,
-                        "path_in_repo": path_in_repo,
-                    }
-                )
-
-                result = __execute_command(
-                    ctx,
-                    repo_path,
-                    repo_name,
-                    f"cp -rf {abs_pattern} {target_path}",
-                    description="Copy custom file",
-                    shell=True,
-                )
-
-                if result.returncode != 0:
-                    log.error("Failed to copy '%s' to '%s': %s", abs_pattern, target_path, result.stderr)
+                matches = glob.glob(abs_pattern, recursive=True)
+                if not matches:
+                    log.error("No files matched pattern '%s' (abs: '%s')", source_pattern, abs_pattern)
                     return False
+
+                # Determine a stable base directory so we can preserve relative paths when using patterns
+                # like "data/**/file" (without relying on shell expansion).
+                glob_markers = ["*", "?", "["]
+                first_marker = min(
+                    (abs_pattern.find(m) for m in glob_markers if m in abs_pattern),
+                    default=-1,
+                )
+                if first_marker == -1:
+                    base_dir = os.path.dirname(abs_pattern)
+                else:
+                    base_dir = os.path.dirname(abs_pattern[:first_marker])
+                if not base_dir:
+                    base_dir = section_custom_dir
+
+                # Determine if target should be treated as a directory.
+                target_is_dir = target_path.endswith(os.sep) or os.path.isdir(target_path) or len(matches) > 1
+                if not ctx.dry_run and target_is_dir and not os.path.exists(target_path):
+                    os.makedirs(target_path.rstrip(os.sep), exist_ok=True)
+
+                for src in matches:
+                    if target_is_dir:
+                        rel = os.path.relpath(src, base_dir)
+                        dest = os.path.join(target_path, rel)
+                    else:
+                        dest = target_path
+
+                    dest_dir = os.path.dirname(dest)
+                    if not ctx.dry_run and dest_dir:
+                        os.makedirs(dest_dir, exist_ok=True)
+
+                    result = __execute_command(
+                        ctx,
+                        record_repo_root,
+                        record_repo_name,
+                        ["cp", "-rf", src, dest],
+                        description="Copy custom file",
+                        shell=False,
+                    )
+                    if result.returncode != 0:
+                        log.error("Failed to copy '%s' to '%s': %s", src, dest, result.stderr)
+                        return False
 
                 return True
             except OSError as e:
@@ -523,11 +687,16 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 return False
 
         for section_name, section_config in ctx.po_configs.items():
+            # Only apply the configuration that matches the current PO name.
+            if section_name != f"po-{ctx.po_name}":
+                continue
+
             po_config_dict = section_config
             po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
 
-            # Without normalization: use custom root when empty; otherwise join relative to custom root
-            section_custom_dir = os.path.join(ctx.po_custom_dir, po_subdir) if po_subdir else ctx.po_custom_dir
+            # `PROJECT_PO_DIR` is relative to the PO root (not to `custom/`).
+            po_root = os.path.dirname(ctx.po_custom_dir)
+            section_custom_dir = os.path.join(po_root, po_subdir) if po_subdir else ctx.po_custom_dir
             if not os.path.isdir(section_custom_dir):
                 log.debug(
                     "Custom directory '%s' not found for po '%s' (section '%s')",
@@ -573,7 +742,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
             # Execute file copy operations for this section
             for source_pattern, target_path in copy_rules:
-                if not __execute_file_copy(ctx, section_custom_dir, source_pattern, target_path, section_name):
+                if not __execute_file_copy(ctx, section_name, section_custom_dir, source_pattern, target_path):
                     log.error(
                         "Failed to execute file copy for po: '%s', source: '%s', target: '%s'",
                         ctx.po_name,
@@ -586,42 +755,37 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
 
     for po_name in apply_pos:
         po_path = os.path.join(po_dir, po_name)
+        log.info("po '%s' starting to apply patch and override%s", po_name, " (dry-run)" if dry_run else "")
+
         ctx = PoApplyContext(
             project_name=project_name,
             board_name=board_name,
             po_name=po_name,
             po_path=po_path,
-            po_patch_dir=os.path.join(po_dir, po_name, "patches"),
-            po_override_dir=os.path.join(po_dir, po_name, "overrides"),
-            po_custom_dir=os.path.join(po_dir, po_name, "custom"),
+            po_patch_dir=os.path.join(po_path, "patches"),
+            po_override_dir=os.path.join(po_path, "overrides"),
+            po_custom_dir=os.path.join(po_path, "custom"),
+            dry_run=dry_run,
+            force=force,
             exclude_files=exclude_files,
             po_configs=env.get("po_configs", {}),
-            applied_records={},
             repositories=repositories,
             workspace_root=workspace_root,
+            applied_records={},
         )
 
-        log.info("po '%s' starting to apply patch and override", po_name)
-
-        if not __apply_patch(ctx):
-            log.error("po apply aborted due to patch error in po: '%s'", po_name)
-            return False
-        if not __apply_override(ctx):
-            log.error("po apply aborted due to override error in po: '%s'", po_name)
-            return False
-        # Apply custom from unified custom directory via ctx
-        if not __apply_custom(ctx):
-            log.error("po apply aborted due to custom po error in po: '%s'", po_name)
+        ok = __apply_patch(ctx) and __apply_override(ctx) and __apply_custom(ctx)
+        if not ok:
+            log.error("po apply aborted due to error in po: '%s'", po_name)
             return False
 
-        # Persist applied records as the authoritative applied marker.
-        for repo_path, record in ctx.applied_records.items():
-            record["applied_at"] = datetime.now().isoformat()
-            record_path = _po_applied_record_path(repo_path, ctx.board_name, ctx.project_name, ctx.po_name)
+        if not dry_run and ctx.applied_records:
             try:
-                _write_json_atomic(record_path, record)
-            except OSError as exc:
-                log.error("Failed to write po applied record '%s': %s", record_path, exc)
+                for repo_root, record in ctx.applied_records.items():
+                    record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
+                    _write_json_atomic(record_path, record)
+            except OSError as e:
+                log.error("Failed to finalize applied record for po '%s': '%s'", po_name, e)
                 return False
 
         log.info("po '%s' has been processed", po_name)
@@ -634,7 +798,7 @@ def po_apply(env: Dict, projects_info: Dict, project_name: str) -> bool:
     needs_repositories=True,
     desc="Revert patch and override for a project",
 )
-def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
+def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False) -> bool:
     """
     Revert patch and override for the specified project.
     Args:
@@ -669,8 +833,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
         log.debug("exclude_files: %s", str(exclude_files))
 
     # Use repositories from env
-    repositories: List[Tuple[str, str]] = env.get("repositories", [])
-    workspace_root = os.getcwd()
+    repositories = env.get("repositories", [])
 
     def __revert_patch(po_name, po_patch_dir, exclude_files):
         """Revert patches for the specified po."""
@@ -716,6 +879,13 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                 patch_file = os.path.join(current_dir, fname)
                 log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
                 try:
+                    if dry_run:
+                        log.info(
+                            "DRY-RUN: cd %s && git apply --reverse %s",
+                            patch_target,
+                            patch_file,
+                        )
+                        continue
                     result = subprocess.run(
                         ["git", "apply", "--reverse", patch_file],
                         cwd=patch_target,
@@ -755,16 +925,42 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
             log.debug("No overrides dir for po: '%s'", po_name)
             return True
         log.debug("reverting overrides for po: '%s'", po_name)
+        repo_map = {rname: repo_path for repo_path, rname in repositories}
+        repo_names = sorted(
+            [name for name in repo_map.keys() if name != "root"],
+            key=lambda x: len(x),
+            reverse=True,
+        )
 
-        def is_tracked(repo_path: str, path_in_repo: str) -> bool:
-            result = subprocess.run(
-                ["git", "ls-files", "--error-unmatch", path_in_repo],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return result.returncode == 0
+        def _split_repo_prefix(rel_path: str) -> Tuple[str, str]:
+            root_prefix = f"root{os.sep}"
+            if rel_path.startswith(root_prefix):
+                return "root", rel_path[len(root_prefix) :]
+            for repo_name in repo_names:
+                prefix = f"{repo_name}{os.sep}"
+                if rel_path.startswith(prefix):
+                    return repo_name, rel_path[len(prefix) :]
+                if rel_path == repo_name:
+                    return repo_name, ""
+            return "root", rel_path
+
+        def _safe_dest_rel(dest_rel: str) -> str:
+            dest_rel = dest_rel.strip()
+            dest_rel = dest_rel.lstrip("/\\")
+            dest_rel = os.path.normpath(dest_rel)
+            if dest_rel in ("", "."):
+                return ""
+            if os.path.isabs(dest_rel):
+                return ""
+            if dest_rel.startswith("..") or f"{os.sep}.." in dest_rel:
+                return ""
+            return dest_rel
+
+        def _validate_in_repo(repo_root: str, dest_rel: str) -> None:
+            repo_root_real = os.path.realpath(repo_root)
+            dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
+            if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
+                raise ValueError(f"override target escapes repo_root: {dest_rel}")
 
         for current_dir, _, files in os.walk(po_override_dir):
             for fname in files:
@@ -780,68 +976,96 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     )
                     continue
 
-                is_remove = fname.endswith(".remove")
-                dest_rel = rel_path[:-7] if is_remove else rel_path
-                repo_path, repo_name, path_in_repo = _resolve_repo_for_relpath(dest_rel, repositories, workspace_root)
-                log.debug(
-                    "override dest_rel='%s' resolved to repo='%s' path_in_repo='%s'",
-                    dest_rel,
-                    repo_name,
-                    path_in_repo,
-                )
+                repo_name, dest_rel = _split_repo_prefix(rel_path)
+                if fname.endswith(".remove"):
+                    dest_rel = dest_rel[:-7]
+                dest_rel = _safe_dest_rel(dest_rel)
+                if not dest_rel:
+                    log.error("Invalid override target path derived from '%s'", rel_path)
+                    return False
 
-                if is_remove:
-                    # restore removed file if possible
-                    if is_tracked(repo_path, path_in_repo):
-                        result = subprocess.run(
-                            ["git", "checkout", "--", path_in_repo],
-                            cwd=repo_path,
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        )
-                        if result.returncode != 0:
-                            log.error("Failed to restore removed file '%s': '%s'", dest_rel, result.stderr)
-                            return False
-                        log.info("Restored removed file '%s' in repo '%s'", dest_rel, repo_name)
-                    else:
-                        log.debug("Remove marker '%s' targets untracked path, cannot restore", dest_rel)
-                    continue
+                repo_root = repo_map.get(repo_name)
+                if not repo_root:
+                    log.error("Cannot find repo path for override target repo '%s' (from '%s')", repo_name, rel_path)
+                    return False
 
-                if not os.path.exists(dest_rel):
-                    log.debug("Override target '%s' does not exist, skipping", dest_rel)
-                    continue
+                try:
+                    _validate_in_repo(repo_root, dest_rel)
+                except ValueError as e:
+                    log.error("%s", e)
+                    return False
 
-                if is_tracked(repo_path, path_in_repo):
+                dest_abs = os.path.join(repo_root, dest_rel)
+                log.debug("override dest_abs: '%s'", dest_abs)
+                log.info("reverting override file: '%s' (repo_root=%s)", dest_rel, repo_root)
+                try:
                     result = subprocess.run(
-                        ["git", "checkout", "--", path_in_repo],
-                        cwd=repo_path,
+                        ["git", "ls-files", "--error-unmatch", dest_rel],
+                        cwd=repo_root,
                         capture_output=True,
                         text=True,
                         check=False,
                     )
-                    log.debug(
-                        "git checkout result: returncode: '%s', stdout: '%s', stderr: '%s'",
-                        result.returncode,
-                        result.stdout,
-                        result.stderr,
-                    )
-                    if result.returncode != 0:
-                        log.error("Failed to revert override file '%s': '%s'", dest_rel, result.stderr)
-                        return False
-                    log.info("Override reverted via git checkout: '%s'", dest_rel)
-                    continue
 
-                log.debug("File '%s' is not tracked by git, deleting directly", dest_rel)
-                try:
-                    if os.path.isdir(dest_rel):
-                        shutil.rmtree(dest_rel)
+                    if result.returncode == 0:
+                        if dry_run:
+                            log.info("DRY-RUN: cd %s && git checkout -- %s", repo_root, dest_rel)
+                            continue
+                        result = subprocess.run(
+                            ["git", "checkout", "--", dest_rel],
+                            cwd=repo_root,
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        log.debug(
+                            "git checkout result: returncode: '%s', stdout: '%s', stderr: '%s'",
+                            result.returncode,
+                            result.stdout,
+                            result.stderr,
+                        )
+                        if result.returncode != 0:
+                            log.error(
+                                "Failed to revert override file '%s': '%s'",
+                                dest_rel,
+                                result.stderr,
+                            )
+                            return False
+                    elif os.path.exists(dest_abs):
+                        log.debug(
+                            "File '%s' is not tracked by git, deleting directly",
+                            dest_rel,
+                        )
+                        if dry_run:
+                            log.info("DRY-RUN: cd %s && rm -rf %s", repo_root, dest_rel)
+                            continue
+                        if os.path.isdir(dest_abs):
+                            shutil.rmtree(dest_abs)
+                        else:
+                            os.remove(dest_abs)
                     else:
-                        os.remove(dest_rel)
-                except OSError as exc:
-                    log.error("OS error deleting untracked override '%s': '%s'", dest_rel, exc)
+                        log.debug("Override file '%s' does not exist, skipping", dest_abs)
+                        continue
+
+                    log.info(
+                        "override reverted for dir: '%s', file: '%s'",
+                        repo_root,
+                        dest_rel,
+                    )
+                except subprocess.SubprocessError as e:
+                    log.error(
+                        "Subprocess error reverting override file '%s': '%s'",
+                        dest_rel,
+                        e,
+                    )
                     return False
-                log.info("Deleted untracked override target '%s'", dest_rel)
+                except OSError as e:
+                    log.error(
+                        "OS error reverting override file '%s': '%s'",
+                        dest_rel,
+                        e,
+                    )
+                    return False
         return True
 
     def __revert_custom_po(po_name, po_custom_dir, po_config_dict):
@@ -908,20 +1132,16 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str) -> bool:
                                 log.error("po revert aborted due to custom po error in po: '%s'", po_name)
                                 return False
 
-        # Remove repo-root applied markers for this PO.
-        candidate_roots = {os.path.abspath(workspace_root)}
-        for repo_path, _repo_name in repositories:
-            candidate_roots.add(os.path.abspath(repo_path))
-        for repo_root in candidate_roots:
-            record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
-            if os.path.isfile(record_path):
-                try:
-                    os.remove(record_path)
-                    log.debug("Removed po applied record: %s", record_path)
-                except OSError as exc:
-                    log.warning("Failed to remove po applied record '%s': %s", record_path, exc)
-
         log.info("po '%s' has been reverted", po_name)
+        if not dry_run:
+            for repo_path, _repo_name in repositories or []:
+                record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+                try:
+                    if os.path.exists(record_path):
+                        os.remove(record_path)
+                except OSError:
+                    # Best-effort cleanup only.
+                    pass
     log.info("po revert finished for project: '%s'", project_name)
     return True
 
@@ -1884,17 +2104,13 @@ def po_del(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
         log.error("Failed to delete PO directory '%s': '%s'", po_path, e)
         return False
 
-    # Clean repo-root applied markers for this PO (best effort).
-    candidate_roots = {os.path.abspath(os.getcwd())}
     for repo_path, _repo_name in env.get("repositories", []) or []:
-        candidate_roots.add(os.path.abspath(repo_path))
-    for repo_root in candidate_roots:
-        record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
-        if os.path.isfile(record_path):
-            try:
+        record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+        try:
+            if os.path.exists(record_path):
                 os.remove(record_path)
-            except OSError as exc:
-                log.warning("Failed to remove po applied record '%s': %s", record_path, exc)
+        except OSError:
+            pass
 
     log.info("po_del finished for project: '%s', po_name: '%s'", project_name, po_name)
     return True

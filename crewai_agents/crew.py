@@ -1,37 +1,72 @@
 """
-CrewAI 工作流配置文件
-ProjectManager - 多Agent协作开发流程
+CrewAI workflow definition for ProjectManager.
+
+This module is optional. If CrewAI is not installed, importing this file will
+still succeed, but instantiating `ProjectManagerCrew` will raise an error with
+installation instructions.
 """
 
-from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task
+from __future__ import annotations
 
-# ProjectManager 的 src 路径
 import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from typing import Optional
 
-from typing import List, Optional
-from datetime import datetime
+_CREWAI_IMPORT_ERROR: Optional[Exception] = None
+
+try:
+    from crewai import Agent, Crew, Process, Task  # pylint: disable=import-error
+    from crewai.project import (  # pylint: disable=import-error
+        CrewBase,
+        agent,
+        crew,
+        task,
+    )
+except ImportError as exc:  # pragma: no cover
+    _CREWAI_IMPORT_ERROR = exc
+
+    Agent = object  # type: ignore
+    Crew = object  # type: ignore
+    Process = object  # type: ignore
+    Task = object  # type: ignore
+
+    def CrewBase(cls):  # type: ignore
+        """No-op decorator stub when CrewAI is unavailable."""
+        return cls
+
+    def agent(func):  # type: ignore
+        """No-op decorator stub when CrewAI is unavailable."""
+        return func
+
+    def crew(func):  # type: ignore
+        """No-op decorator stub when CrewAI is unavailable."""
+        return func
+
+    def task(func):  # type: ignore
+        """No-op decorator stub when CrewAI is unavailable."""
+        return func
 
 
 @CrewBase
 class ProjectManagerCrew:
     """ProjectManager CrewAI 工作流"""
 
-    agents_config = 'config/agents.yaml'
-    tasks_config = 'config/tasks.yaml'
+    agents_config = "config/agents.yaml"
+    tasks_config = "config/tasks.yaml"
 
-    def __init__(self, requirements: str = None):
-        """初始化工作流
-        
+    def __init__(self, requirements: Optional[str] = None):
+        """初始化工作流.
+
         Args:
             requirements: 用户需求描述
         """
+        if _CREWAI_IMPORT_ERROR is not None:
+            raise RuntimeError(
+                'CrewAI is not installed. Install optional dependencies with: pip install -e ".[crewai]"'
+            ) from _CREWAI_IMPORT_ERROR
         self.requirements = requirements
-        self.tasks_file = os.path.join(os.path.dirname(__file__), '..', 'docs', 'tasks.md')
-        self.test_cases_file = os.path.join(os.path.dirname(__file__), '..', 'docs', 'test_cases_zh.md')
-        
+        self.tasks_file = os.path.join(os.path.dirname(__file__), "..", "docs", "tasks.md")
+        self.test_cases_file = os.path.join(os.path.dirname(__file__), "..", "docs", "test_cases_zh.md")
+
         # 确保 docs 目录存在
         os.makedirs(os.path.dirname(self.tasks_file), exist_ok=True)
 
@@ -48,7 +83,7 @@ class ProjectManagerCrew:
             你总是确保测试用例覆盖正常流程、边界条件和异常场景。""",
             verbose=True,
             allow_delegation=True,
-            tools=[]  # 可以添加文件读写工具
+            tools=[],  # 可以添加文件读写工具
         )
 
     @agent
@@ -63,7 +98,7 @@ class ProjectManagerCrew:
             你注重代码质量、可维护性和可扩展性。""",
             verbose=True,
             allow_delegation=True,
-            tools=[]
+            tools=[],
         )
 
     @agent
@@ -78,7 +113,7 @@ class ProjectManagerCrew:
             你注重代码质量，包括适当的注释、类型提示和错误处理。""",
             verbose=True,
             allow_delegation=False,
-            tools=[]  # 可以添加文件操作工具
+            tools=[],  # 可以添加文件操作工具
         )
 
     @agent
@@ -93,7 +128,7 @@ class ProjectManagerCrew:
             你不会妥协代码质量，确保每一行代码都符合标准。""",
             verbose=True,
             allow_delegation=False,
-            tools=[]
+            tools=[],
         )
 
     @agent
@@ -108,7 +143,7 @@ class ProjectManagerCrew:
             你注重测试覆盖率，确保关键路径都经过测试。""",
             verbose=True,
             allow_delegation=False,
-            tools=[]
+            tools=[],
         )
 
     @agent
@@ -123,7 +158,7 @@ class ProjectManagerCrew:
             你注重效率，确保测试流程顺畅运行。""",
             verbose=True,
             allow_delegation=False,
-            tools=[]  # 可以添加命令执行工具
+            tools=[],  # 可以添加命令执行工具
         )
 
     # ========== TASKS ==========
@@ -153,7 +188,7 @@ class ProjectManagerCrew:
             - 保持测试用例的独立性和可重复性
             """,
             agent=self.requirement_analyst_agent(),
-            expected_output="清晰的需求规格文档和完整的测试用例列表"
+            expected_output="清晰的需求规格文档和完整的测试用例列表",
         )
 
     @task
@@ -190,7 +225,7 @@ class ProjectManagerCrew:
             - **创建时间**: ISO 格式时间
             """,
             agent=self.architect_agent(),
-            expected_output="任务分解文档 (tasks.md)"
+            expected_output="任务分解文档 (tasks.md)",
         )
 
     @task
@@ -215,7 +250,7 @@ class ProjectManagerCrew:
             - 保持代码简洁
             """,
             agent=self.coder_agent(),
-            expected_output="符合规范的代码实现"
+            expected_output="符合规范的代码实现",
         )
 
     @task
@@ -242,7 +277,7 @@ class ProjectManagerCrew:
             - 代码覆盖率不降低
             """,
             agent=self.review_agent(),
-            expected_output="审核通过或需要修改的反馈"
+            expected_output="审核通过或需要修改的反馈",
         )
 
     @task
@@ -268,7 +303,7 @@ class ProjectManagerCrew:
             - 使用 pytest fixtures
             """,
             agent=self.test_agent(),
-            expected_output="完整的测试用例文件"
+            expected_output="完整的测试用例文件",
         )
 
     @task
@@ -312,7 +347,7 @@ class ProjectManagerCrew:
             close #123
             """,
             agent=self.executor_agent(),
-            expected_output="测试结果报告和代码提交"
+            expected_output="测试结果报告和代码提交",
         )
 
     @crew

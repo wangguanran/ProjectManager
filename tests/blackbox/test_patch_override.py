@@ -49,7 +49,7 @@ def _remove_common_po_config(root: Path) -> None:
 def test_po_001_parse_po_config() -> None:
     apply_pos, exclude_pos, exclude_files = parse_po_config("po1 po2 -po3 -po4[file1 file2]")
     assert apply_pos == ["po1", "po2"]
-    assert exclude_pos == {"po3"}
+    assert exclude_pos == {"po3", "po4"}
     assert exclude_files["po4"] == {"file1", "file2"}
 
 
@@ -125,7 +125,7 @@ def test_po_008_remove_file(workspace_a: Path) -> None:
     remove_target = workspace_a / "remove_me.txt"
     remove_target.write_text("bye", encoding="utf-8")
     (remove_dir / "remove_me.txt.remove").write_text("", encoding="utf-8")
-    result = run_cli(["po_apply", "projA"], cwd=workspace_a, check=False)
+    result = run_cli(["po_apply", "projA", "--force"], cwd=workspace_a, check=False)
     assert result.returncode == 0
     assert not remove_target.exists()
 
@@ -212,7 +212,7 @@ def test_po_014b_remove_revert_tracked(workspace_a: Path) -> None:
     remove_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "overrides"
     (remove_dir / "remove_me.txt.remove").write_text("", encoding="utf-8")
 
-    run_cli(["po_apply", "projA"], cwd=workspace_a)
+    run_cli(["po_apply", "projA", "--force"], cwd=workspace_a)
     assert not target.exists()
 
     run_cli(["po_revert", "projA"], cwd=workspace_a)

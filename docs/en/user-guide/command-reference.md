@@ -26,7 +26,7 @@ All commands accept the following global options:
 
 ### `project_new` — Create a project
 
-**Status**: 🚧 TODO (not yet implemented)
+**Status**: ✅ Implemented
 
 **Syntax**
 ```bash
@@ -49,7 +49,7 @@ python -m src project_new myproject
 
 ### `project_del` — Remove a project
 
-**Status**: 🚧 TODO (not yet implemented)
+**Status**: ✅ Implemented
 
 **Syntax**
 ```bash
@@ -70,7 +70,7 @@ python -m src project_del myproject
 
 ### `project_build` — Build a project
 
-**Status**: 🚧 TODO (not yet implemented)
+**Status**: ✅ Implemented
 
 **Syntax**
 ```bash
@@ -93,7 +93,7 @@ python -m src project_build myproject
 
 ### `board_new` — Create a board
 
-**Status**: 🚧 TODO (not yet implemented)
+**Status**: ✅ Implemented
 
 **Syntax**
 ```bash
@@ -121,7 +121,7 @@ python -m src board_new myboard
 
 ### `board_del` — Remove a board
 
-**Status**: 🚧 TODO (not yet implemented)
+**Status**: ✅ Implemented
 
 **Syntax**
 ```bash

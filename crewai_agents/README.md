@@ -28,7 +28,8 @@
 ### 1. 安装依赖
 
 ```bash
-pip install crewai
+# 安装 ProjectManager + CrewAI 依赖
+pip install -e ".[crewai]"
 ```
 
 ### 2. 运行工作流

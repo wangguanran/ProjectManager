@@ -2,7 +2,7 @@
 
 ![GitHub stars](https://img.shields.io/github/stars/wangguanran/ProjectManager.svg) ![GitHub forks](https://img.shields.io/github/forks/wangguanran/ProjectManager.svg) ![GitHub issues](https://img.shields.io/github/issues/wangguanran/ProjectManager.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/wangguanran/ProjectManager.svg)
 ![Build Status](https://github.com/wangguanran/ProjectManager/actions/workflows/python-app.yml/badge.svg) ![Pylint](https://github.com/wangguanran/ProjectManager/actions/workflows/pylint.yml/badge.svg)
-![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg) ![Python](https://img.shields.io/badge/python-3.7+-blue.svg) ![Platform](https://img.shields.io/badge/platform-linux-blue.svg)
+![License](https://img.shields.io/github/license/wangguanran/ProjectManager.svg) ![Python](https://img.shields.io/badge/python-3.8+-blue.svg) ![Platform](https://img.shields.io/badge/platform-linux-blue.svg)
 
 Universal Project and Patch (PO) Management Tool
 
@@ -372,14 +372,18 @@ BOARD_NAME=board01
 
 ## Dependencies and Installation
 
-- **Python**: 3.7+
+- **Python**: 3.8+
+
+## License
+
+This project is licensed under **GNU GPLv3**. See `LICENSE`.
 - **Dependencies**: See `requirements.txt`
 - **Git**: Required for patch operations
 - **File System**: Standard POSIX file operations
 
 ## Notes
 
-- Currently, project/board management features are reserved (TODO), while PO management and patch application features are fully implemented.
+- Project/board management features are implemented (board/project create/delete, plus build/diff workflows).
 - Platform management features have been merged into existing plugins, with no separate `platform_manager.py` or `po_manager.py` files.
 - To extend platform-related operations, custom plugins can be added in the `projects/scripts/` directory.
 - All PO operations support interactive confirmation and detailed logging.

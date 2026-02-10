@@ -21,11 +21,7 @@ class TestProfilerFunctions:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.profiler import (
-            auto_profile,
-            func_cprofile,
-            func_time,
-        )
+        from src.profiler import auto_profile, func_cprofile, func_time
 
         self.func_time = func_time
         self.func_cprofile = func_cprofile
@@ -114,7 +110,7 @@ class TestAutoProfile:
         assert result == "magic_result"
 
     def test_auto_profile_with_cprofile_enabled(self):
-        """Test auto_profile with cProfile enabled."""
+        """PROF-001: ENABLE_CPROFILE toggles profiling."""
         import builtins
 
         builtins.ENABLE_CPROFILE = True
@@ -237,10 +233,7 @@ class TestProfilerIntegration:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.profiler import (
-            auto_profile,
-            func_time,
-        )
+        from src.profiler import auto_profile, func_time
 
         self.func_time = func_time
         self.auto_profile = auto_profile

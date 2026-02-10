@@ -19,6 +19,13 @@ echo -e "\033[32m--- Cleaning up old builds ---\033[0m"
 rm -rf build dist *.egg-info $OUT_DIR
 mkdir -p $PACKAGE_DIR $BINARY_DIR
 
+echo -e "\033[32m--- Generating build metadata (git commit hash) ---\033[0m"
+python3 scripts/write_build_info.py
+cleanup_build_info() {
+    rm -f src/_build_info.py
+}
+trap cleanup_build_info EXIT
+
 echo -e "\033[32m--- Building Python package ---\033[0m"
 python3 -m build --outdir $PACKAGE_DIR
 
@@ -43,6 +50,7 @@ if command -v pyinstaller &> /dev/null; then
         --hidden-import=src.log_manager \
         --hidden-import=src.profiler \
         --hidden-import=src.utils \
+        --hidden-import=src._build_info \
         --collect-all=git \
         --collect-all=importlib_metadata \
         --add-data "$(pwd)/pyproject.toml:." \
@@ -52,23 +60,32 @@ if command -v pyinstaller &> /dev/null; then
         -n projman \
         src/__main__.py
 
-    echo "Binary generated at $BINARY_DIR/projman"
+echo "Binary generated at $BINARY_DIR/projman"
 
-    # Apply static linking for better compatibility
-    echo -e "\033[32m--- Applying static linking for better compatibility ---\033[0m"
-    # Check if staticx is installed, install if not
-    if ! command -v staticx &> /dev/null; then
-        echo "staticx not found. Installing for better compatibility..."
-        pip install staticx
+    # Apply static linking for better compatibility (Linux-only; staticx does not support macOS).
+    if [ "$(uname -s)" = "Linux" ]; then
+        echo -e "\033[32m--- Applying static linking for better compatibility ---\033[0m"
+        # Check if staticx is installed, install if not
+        if ! command -v staticx &> /dev/null; then
+            echo "staticx not found. Installing for better compatibility..."
+            pip install staticx
+        fi
+
+        staticx $BINARY_DIR/projman $BINARY_DIR/projman-static
+        mv $BINARY_DIR/projman-static $BINARY_DIR/projman
+        echo "Static linking applied successfully"
+    else
+        echo "Skipping staticx (unsupported on $(uname -s))."
     fi
 
-    staticx $BINARY_DIR/projman $BINARY_DIR/projman-static
-mv $BINARY_DIR/projman-static $BINARY_DIR/projman
-    echo "Static linking applied successfully"
-
-    # Remove debug info to reduce file size
+    # Remove debug info to reduce file size.
+    # On macOS, stripping invalidates the code signature and can cause the binary to be killed at runtime.
     echo -e "\033[32m--- Final debug info removal ---\033[0m"
-    strip $BINARY_DIR/projman
+    if [ "$(uname -s)" = "Darwin" ]; then
+        echo "Skipping external strip on macOS to preserve code signature."
+    else
+        strip $BINARY_DIR/projman
+    fi
 
 echo "Final binary generated at $BINARY_DIR/projman"
 else

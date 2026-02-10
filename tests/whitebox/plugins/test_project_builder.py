@@ -3,9 +3,13 @@ Tests for project_builder functions.
 """
 
 import os
+import subprocess
 import sys
 import tarfile
 from unittest.mock import MagicMock, patch
+
+# Tests intentionally patch internal hook registry state.
+# pylint: disable=protected-access
 
 
 class TestProjectDiff:
@@ -65,6 +69,15 @@ class TestProjectDiff:
 
         # Assert
         assert result is True
+
+    def test_project_diff_dry_run_does_not_create_cache(self, tmp_path, monkeypatch):
+        """DRY-001: project_diff --dry-run does not create .cache/build diff directories."""
+        monkeypatch.chdir(tmp_path)
+        env = {"repositories": []}
+        projects_info = {}
+        result = self.project_diff(env, projects_info, "test_project", keep_diff_dir=False, dry_run=True)
+        assert result is True
+        assert not (tmp_path / ".cache").exists()
 
     def test_project_diff_empty_project_name(self):
         """Test project_diff with empty project name"""
@@ -250,6 +263,205 @@ class TestProjectDiff:
         )
         assert not main_diff_dir_removed
 
+    def test_project_diff_single_repo_archive_structure_real_git(self, tmp_path):
+        """BUILD-001: Single repo diff archive contains after/before/patch/commit without repo subdir."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        def _git(*args: str) -> None:
+            subprocess.run(
+                ["git", *args], cwd=str(repo_root), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+        _git("init")
+        _git("config", "user.email", "test@example.com")
+        _git("config", "user.name", "Test User")
+
+        (repo_root / "a.txt").write_text("base\n", encoding="utf-8")
+        _git("add", "a.txt")
+        _git("commit", "-m", "base")
+
+        # Create a worktree change.
+        (repo_root / "a.txt").write_text("base\nchange\n", encoding="utf-8")
+
+        # Run from tmp_path to exercise the real .cache/build layout.
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(str(tmp_path))
+            env = {"repositories": [(str(repo_root), "root")]}
+            assert self.project_diff(env, {}, "projA", keep_diff_dir=False) is True
+        finally:
+            os.chdir(old_cwd)
+
+        build_root = tmp_path / ".cache" / "build" / "projA"
+        ts_dirs = [p for p in build_root.iterdir() if p.is_dir()]
+        assert len(ts_dirs) == 1
+        ts_dir = ts_dirs[0]
+
+        archive = next(ts_dir.glob("diff_projA_*.tar.gz"))
+        assert archive.is_file()
+        assert not (ts_dir / "diff").exists()
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = set(tar.getnames())
+        assert "diff/after/a.txt" in names
+        assert "diff/before/a.txt" in names
+        assert "diff/patch/changes_worktree.patch" in names
+        # Single repo should not create a repo-name subdir.
+        assert "diff/after/root/a.txt" not in names
+
+    def test_project_diff_multi_repo_archive_structure_real_git(self, tmp_path):
+        """BUILD-002: Multi-repo diff archive groups files under repo subdirs."""
+        repo1 = tmp_path / "repo1"
+        repo2 = tmp_path / "repo2"
+        repo1.mkdir(parents=True, exist_ok=True)
+        repo2.mkdir(parents=True, exist_ok=True)
+
+        def _init_repo(repo_root, fname: str, content: str) -> None:
+            subprocess.run(
+                ["git", "init"], cwd=str(repo_root), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test User"],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            (repo_root / fname).write_text(content, encoding="utf-8")
+            subprocess.run(
+                ["git", "add", fname],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "base"],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        _init_repo(repo1, "a.txt", "r1\n")
+        _init_repo(repo2, "b.txt", "r2\n")
+
+        # Create worktree changes.
+        (repo1 / "a.txt").write_text("r1\nchange\n", encoding="utf-8")
+        (repo2 / "b.txt").write_text("r2\nchange\n", encoding="utf-8")
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(str(tmp_path))
+            env = {"repositories": [(str(repo1), "repo1"), (str(repo2), "repo2")]}
+            assert self.project_diff(env, {}, "projA", keep_diff_dir=False) is True
+        finally:
+            os.chdir(old_cwd)
+
+        build_root = tmp_path / ".cache" / "build" / "projA"
+        ts_dirs = [p for p in build_root.iterdir() if p.is_dir()]
+        assert len(ts_dirs) == 1
+        ts_dir = ts_dirs[0]
+
+        archive = next(ts_dir.glob("diff_projA_*.tar.gz"))
+        assert archive.is_file()
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = set(tar.getnames())
+        assert "diff/after/repo1/a.txt" in names
+        assert "diff/before/repo1/a.txt" in names
+        assert "diff/patch/repo1/changes_worktree.patch" in names
+        assert "diff/after/repo2/b.txt" in names
+        assert "diff/before/repo2/b.txt" in names
+        assert "diff/patch/repo2/changes_worktree.patch" in names
+
+    def test_project_diff_clean_repo_has_no_patch_files_real_git(self, tmp_path):
+        """BUILD-003: No changes => no patch files in archive."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        def _git(*args: str) -> None:
+            subprocess.run(
+                ["git", *args],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        _git("init")
+        _git("config", "user.email", "test@example.com")
+        _git("config", "user.name", "Test User")
+        (repo_root / "a.txt").write_text("base\n", encoding="utf-8")
+        _git("add", "a.txt")
+        _git("commit", "-m", "base")
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(str(tmp_path))
+            env = {"repositories": [(str(repo_root), "root")]}
+            assert self.project_diff(env, {}, "projA", keep_diff_dir=False) is True
+        finally:
+            os.chdir(old_cwd)
+
+        build_root = tmp_path / ".cache" / "build" / "projA"
+        ts_dir = next(p for p in build_root.iterdir() if p.is_dir())
+        archive = next(ts_dir.glob("diff_projA_*.tar.gz"))
+
+        with tarfile.open(str(archive), "r:gz") as tar:
+            names = set(tar.getnames())
+
+        assert "diff/patch/changes_worktree.patch" not in names
+        assert "diff/patch/changes_staged.patch" not in names
+
+    def test_project_diff_keep_diff_dir_preserves_output_real_git(self, tmp_path):
+        """BUILD-004: --keep-diff-dir preserves diff directory after archiving."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        def _git(*args: str) -> None:
+            subprocess.run(
+                ["git", *args],
+                cwd=str(repo_root),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        _git("init")
+        _git("config", "user.email", "test@example.com")
+        _git("config", "user.name", "Test User")
+        (repo_root / "a.txt").write_text("base\n", encoding="utf-8")
+        _git("add", "a.txt")
+        _git("commit", "-m", "base")
+        (repo_root / "a.txt").write_text("base\nchange\n", encoding="utf-8")
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(str(tmp_path))
+            env = {"repositories": [(str(repo_root), "root")]}
+            assert self.project_diff(env, {}, "projA", keep_diff_dir=True) is True
+        finally:
+            os.chdir(old_cwd)
+
+        build_root = tmp_path / ".cache" / "build" / "projA"
+        ts_dir = next(p for p in build_root.iterdir() if p.is_dir())
+        archive = next(ts_dir.glob("diff_projA_*.tar.gz"))
+        assert archive.is_file()
+        assert (ts_dir / "diff").is_dir()
+        assert (ts_dir / "diff" / "after").is_dir()
+        assert (ts_dir / "diff" / "before").is_dir()
+        assert (ts_dir / "diff" / "patch").is_dir()
+        assert (ts_dir / "diff" / "commit").is_dir()
+
 
 class TestProjectPreBuild:
     """Test cases for project_pre_build function."""
@@ -336,6 +548,29 @@ class TestProjectDoBuild:
         # Assert
         assert result is True
 
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_do_build_runs_configured_command(self, mock_run):
+        """When PROJECT_BUILD_CMD is set, project_do_build should execute it."""
+        mock_run.return_value = MagicMock(returncode=0)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_BUILD_CMD": "echo hello", "PROJECT_BUILD_CWD": "work"}}}
+
+        result = self.project_do_build(env, projects_info, "p")
+        assert result is True
+        mock_run.assert_called_once()
+        called_args, called_kwargs = mock_run.call_args
+        assert called_args[0] == ["echo", "hello"]
+        assert called_kwargs["cwd"] == "/tmp/root/work"
+
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_do_build_command_failure_returns_false(self, mock_run):
+        """Non-zero return code should fail build stage."""
+        mock_run.return_value = MagicMock(returncode=2)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_BUILD_CMD": "false"}}}
+
+        assert self.project_do_build(env, projects_info, "p") is False
+
     def test_project_do_build_empty_project_name(self):
         """Test project_do_build with empty project name"""
         # Arrange
@@ -404,6 +639,29 @@ class TestProjectPostBuild:
 
         # Assert
         assert result is True
+
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_post_build_runs_configured_command(self, mock_run):
+        """When PROJECT_POST_BUILD_CMD is set, project_post_build should execute it."""
+        mock_run.return_value = MagicMock(returncode=0)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_POST_BUILD_CMD": "echo done", "PROJECT_POST_BUILD_CWD": "work"}}}
+
+        result = self.project_post_build(env, projects_info, "p")
+        assert result is True
+        mock_run.assert_called_once()
+        called_args, called_kwargs = mock_run.call_args
+        assert called_args[0] == ["echo", "done"]
+        assert called_kwargs["cwd"] == "/tmp/root/work"
+
+    @patch("src.plugins.project_builder.subprocess.run")
+    def test_project_post_build_command_failure_returns_false(self, mock_run):
+        """Non-zero return code should fail post-build stage."""
+        mock_run.return_value = MagicMock(returncode=1)
+        env = {"root_path": "/tmp/root"}
+        projects_info = {"p": {"config": {"PROJECT_POST_BUILD_CMD": "false"}}}
+
+        assert self.project_post_build(env, projects_info, "p") is False
 
     def test_project_post_build_empty_project_name(self):
         """Test project_post_build with empty project name"""
@@ -601,3 +859,132 @@ class TestProjectBuild:
 
         # Assert
         assert result is True
+
+    @patch("src.plugins.project_builder.execute_hooks_with_fallback")
+    @patch("src.plugins.project_builder.project_pre_build")
+    def test_project_build_validation_hook_failure_aborts(self, mock_pre_build, mock_exec_hooks):
+        """BUILD-005: Validation hook failure aborts build."""
+        from src.hooks import HookType
+        from src.hooks import registry as hooks_registry
+
+        old_hooks = hooks_registry._platform_hooks
+        try:
+            hooks_registry._platform_hooks = {"linux": {HookType.VALIDATION.value: [lambda _ctx: False]}}
+            mock_exec_hooks.return_value = False
+            mock_pre_build.return_value = True
+
+            env = {}
+            projects_info = {"p": {"config": {"PROJECT_PLATFORM": "linux"}}}
+            assert self.project_build(env, projects_info, "p") is False
+            mock_pre_build.assert_not_called()
+        finally:
+            hooks_registry._platform_hooks = old_hooks
+
+    @patch("src.plugins.project_builder.execute_hooks_with_fallback")
+    @patch("src.plugins.project_builder.project_pre_build")
+    @patch("src.plugins.project_builder.project_do_build")
+    @patch("src.plugins.project_builder.project_post_build")
+    def test_project_build_pre_build_hook_failure_aborts(
+        self, mock_post_build, mock_do_build, mock_pre_build, mock_exec_hooks
+    ):
+        """BUILD-006: Pre-build hook failure aborts."""
+        from src.hooks import HookType
+        from src.hooks import registry as hooks_registry
+
+        old_hooks = hooks_registry._platform_hooks
+        try:
+            hooks_registry._platform_hooks = {"linux": {HookType.PRE_BUILD.value: [lambda _ctx: False]}}
+            mock_exec_hooks.return_value = False
+            mock_pre_build.return_value = True
+            mock_do_build.return_value = True
+            mock_post_build.return_value = True
+
+            env = {}
+            projects_info = {"p": {"config": {"PROJECT_PLATFORM": "linux"}}}
+            assert self.project_build(env, projects_info, "p") is False
+            mock_pre_build.assert_called_once()
+            mock_do_build.assert_not_called()
+            mock_post_build.assert_not_called()
+        finally:
+            hooks_registry._platform_hooks = old_hooks
+
+    @patch("src.plugins.project_builder.execute_hooks_with_fallback")
+    @patch("src.plugins.project_builder.project_pre_build")
+    @patch("src.plugins.project_builder.project_do_build")
+    @patch("src.plugins.project_builder.project_post_build")
+    def test_project_build_build_hook_failure_aborts(
+        self, mock_post_build, mock_do_build, mock_pre_build, mock_exec_hooks
+    ):
+        """BUILD-006: Build hook failure aborts."""
+        from src.hooks import HookType
+        from src.hooks import registry as hooks_registry
+
+        old_hooks = hooks_registry._platform_hooks
+        try:
+            hooks_registry._platform_hooks = {"linux": {HookType.BUILD.value: [lambda _ctx: False]}}
+            mock_exec_hooks.return_value = False
+            mock_pre_build.return_value = True
+            mock_do_build.return_value = True
+            mock_post_build.return_value = True
+
+            env = {}
+            projects_info = {"p": {"config": {"PROJECT_PLATFORM": "linux"}}}
+            assert self.project_build(env, projects_info, "p") is False
+            mock_pre_build.assert_called_once()
+            mock_do_build.assert_not_called()
+            mock_post_build.assert_not_called()
+        finally:
+            hooks_registry._platform_hooks = old_hooks
+
+    @patch("src.plugins.project_builder.execute_hooks_with_fallback")
+    @patch("src.plugins.project_builder.project_pre_build")
+    @patch("src.plugins.project_builder.project_do_build")
+    @patch("src.plugins.project_builder.project_post_build")
+    def test_project_build_post_build_hook_failure_aborts(
+        self, mock_post_build, mock_do_build, mock_pre_build, mock_exec_hooks
+    ):
+        """BUILD-006: Post-build hook failure aborts."""
+        from src.hooks import HookType
+        from src.hooks import registry as hooks_registry
+
+        old_hooks = hooks_registry._platform_hooks
+        try:
+            hooks_registry._platform_hooks = {"linux": {HookType.POST_BUILD.value: [lambda _ctx: False]}}
+            mock_exec_hooks.return_value = False
+            mock_pre_build.return_value = True
+            mock_do_build.return_value = True
+            mock_post_build.return_value = True
+
+            env = {}
+            projects_info = {"p": {"config": {"PROJECT_PLATFORM": "linux"}}}
+            assert self.project_build(env, projects_info, "p") is False
+            mock_pre_build.assert_called_once()
+            mock_do_build.assert_called_once()
+            mock_post_build.assert_not_called()
+        finally:
+            hooks_registry._platform_hooks = old_hooks
+
+    @patch("src.plugins.project_builder.execute_hooks_with_fallback")
+    @patch("src.plugins.project_builder.project_pre_build")
+    @patch("src.plugins.project_builder.project_do_build")
+    @patch("src.plugins.project_builder.project_post_build")
+    def test_project_build_no_platform_skips_hooks(
+        self, mock_post_build, mock_do_build, mock_pre_build, mock_exec_hooks
+    ):
+        """BUILD-007: No platform skips hooks."""
+        from src.hooks import registry as hooks_registry
+
+        old_hooks = hooks_registry._platform_hooks
+        try:
+            # Hooks exist for some platform, but project has no platform so they must be skipped.
+            hooks_registry._platform_hooks = {"linux": {"validation": [lambda _ctx: True]}}
+            mock_exec_hooks.side_effect = AssertionError("execute_hooks_with_fallback should not be called")
+            mock_pre_build.return_value = True
+            mock_do_build.return_value = True
+            mock_post_build.return_value = True
+
+            env = {}
+            projects_info = {"p": {"config": {}}}
+            assert self.project_build(env, projects_info, "p") is True
+        finally:
+            hooks_registry._platform_hooks = old_hooks

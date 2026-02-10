@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import os
+import re
 from pathlib import Path
 
 from src.profiler import func_cprofile
@@ -13,7 +14,7 @@ from .conftest import run_cli
 
 
 def test_util_001_version_matches_pyproject(workspace_a: Path) -> None:
-    assert get_version() == "0.0.11"
+    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7})?", get_version())
 
 
 def test_util_002_version_fallback(tmp_path: Path) -> None:
@@ -22,7 +23,8 @@ def test_util_002_version_fallback(tmp_path: Path) -> None:
     backup.write_text(pyproject.read_text(encoding="utf-8"), encoding="utf-8")
     pyproject.rename(pyproject.with_suffix(".bak"))
     try:
-        assert get_version() == "0.0.0-dev"
+        version = get_version()
+        assert version == "0.0.0-dev" or re.fullmatch(r"\d+\.\d+\.\d+(\+g[0-9a-f]{7})?", version)
     finally:
         pyproject.with_suffix(".bak").rename(pyproject)
 

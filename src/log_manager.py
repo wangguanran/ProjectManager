@@ -2,9 +2,13 @@
 Log manager module.
 """
 
+from __future__ import annotations
+
+import json
 import logging
 import logging.config
 import os
+from typing import Any, Optional
 
 from src.utils import get_filename
 
@@ -131,3 +135,26 @@ class LogManager:
 
 
 log = LogManager().get_logger()
+
+
+def log_cmd_event(
+    logger: logging.Logger,
+    *,
+    command: Any,
+    cwd: Optional[str],
+    description: str,
+    returncode: int,
+    stdout: str,
+    stderr: str,
+) -> None:
+    """Emit a structured command execution event as a single JSON line (debug level)."""
+    payload = {
+        "type": "cmd",
+        "desc": description,
+        "cwd": cwd or "",
+        "cmd": command,
+        "rc": int(returncode),
+        "stdout_len": len(stdout or ""),
+        "stderr_len": len(stderr or ""),
+    }
+    logger.debug("CMD_JSON %s", json.dumps(payload, ensure_ascii=False))

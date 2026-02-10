@@ -179,7 +179,7 @@ class TestPatchOverrideApply:
             projects_info = {
                 "proj": {
                     "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": f"{po_name} -{po_name}[repo1/skip.patch]"},
+                    "config": {"PROJECT_PO_CONFIG": f"{po_name}[repo1/skip.patch]"},
                 }
             }
 
@@ -311,13 +311,13 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             # Exclude the deep file so only root file is copied
             projects_info = {
                 "proj": {
                     "board_name": board_name,
-                    "config": {"PROJECT_PO_CONFIG": f"{po_name} -{po_name}[{deep_file_rel}]"},
+                    "config": {"PROJECT_PO_CONFIG": f"{po_name}[{deep_file_rel}]"},
                 }
             }
 
@@ -360,7 +360,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -412,7 +412,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -432,7 +432,7 @@ class TestPatchOverrideApply:
                 # Verify target file exists before removal
                 assert os.path.exists(target_file)
 
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
                 # Verify target file was removed
@@ -459,7 +459,7 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -472,7 +472,7 @@ class TestPatchOverrideApply:
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmpdir)
-                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+                result = self.PatchOverride.po_apply(env, projects_info, "proj", force=True)
                 assert result is True
 
             finally:
@@ -503,9 +503,9 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
                 "po_configs": {
-                    "po-custom": {
+                    f"po-{po_name}": {
                         "PROJECT_PO_DIR": "",
                         "PROJECT_PO_FILE_COPY": f"*:{dest_dir}{os.sep}",
                     }
@@ -556,9 +556,9 @@ class TestPatchOverrideApply:
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
                 "po_configs": {
-                    "po-custom": {
+                    f"po-{po_name}": {
                         "PROJECT_PO_DIR": "",
                         "PROJECT_PO_FILE_COPY": f"data/*:{dest_data}",
                     }
@@ -1292,11 +1292,9 @@ class TestPatchOverrideUpdate:
         apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(po_config)
 
         # Assert
-        # The current implementation doesn't properly parse file exclusions
-        # It treats the entire token as the PO name
-        assert apply_pos == ["po1[file1.txt file2.txt]"]
+        assert apply_pos == ["po1"]
         assert exclude_pos == set()
-        assert not exclude_files
+        assert exclude_files == {"po1": {"file1.txt", "file2.txt"}}
 
     def test_parse_po_config_complex(self):
         """Test parse_po_config with complex config."""
@@ -1307,12 +1305,9 @@ class TestPatchOverrideUpdate:
         apply_pos, exclude_pos, exclude_files = self.PatchOverride.parse_po_config(po_config)
 
         # Assert
-        # The current implementation doesn't properly parse file exclusions for apply_pos
-        # It treats the entire token as the PO name
-        assert apply_pos == ["po1[file1.txt]", "po2"]
-        # But it correctly parses excluded POs with file exclusions
-        assert exclude_pos == set()
-        assert exclude_files == {"po3": {"file2.txt", "file3.txt"}}
+        assert apply_pos == ["po1", "po2"]
+        assert exclude_pos == {"po3"}
+        assert exclude_files == {"po1": {"file1.txt"}, "po3": {"file2.txt", "file3.txt"}}
 
     def test_parse_po_config_empty(self):
         """Test parse_po_config with empty config."""
@@ -1500,7 +1495,7 @@ class TestPatchOverrideUpdate:
                 "projects_path": projects_path,
                 "repositories": [(repo_dir, "root")],
                 "po_configs": {
-                    "test_section": {"PROJECT_PO_DIR": "", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}
+                    f"po-{po_name}": {"PROJECT_PO_DIR": "", "PROJECT_PO_FILE_COPY": "test_custom.txt:custom_dest.txt"}
                 },
             }
 

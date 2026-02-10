@@ -212,7 +212,7 @@ class TestProjectNew:
         # This test validates that pattern matching for board inference works correctly
 
     def test_project_new_no_pattern_match(self, tmp_path):
-        """Test project_new when no pattern matches (line 85)."""
+        """PM-010: project_new cannot resolve board."""
         env = {}
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
@@ -1229,7 +1229,7 @@ PROJECT_PLATFORM=platform
         assert result is True
 
     def test_project_new_verify_ini_file_content(self, tmp_path):
-        """Test project_new and verify actual INI file content."""
+        """PM-009: project_new success and ini appended."""
         env = {}
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
@@ -1499,7 +1499,7 @@ class TestProjectDel:
         assert "[board01]" in content
 
     def test_project_del_project_with_subprojects(self, tmp_path):
-        """Test project_del with a project that has subprojects."""
+        """PM-013: project_del removes project and subprojects."""
         env = {}
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
@@ -1552,7 +1552,7 @@ class TestProjectDel:
         assert "[board01]" in content
 
     def test_project_del_nonexistent_project(self, tmp_path):
-        """Test project_del with a project that doesn't exist in ini file."""
+        """PM-014: project_del missing project message."""
         env = {}
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
@@ -1646,7 +1646,7 @@ class TestBoardNew:
         self.ProjectManager = ProjectManager
 
     def test_board_new_creates_expected_structure(self, tmp_path):
-        """Creating a board should produce expected directory structure and metadata."""
+        """PM-002: board_new succeeds without template (default structure)."""
 
         env = {"projects_path": str(tmp_path)}
         projects_info = {}
@@ -1675,7 +1675,7 @@ class TestBoardNew:
         assert metadata["projects"] == []
 
     def test_board_new_uses_template_when_available(self, tmp_path):
-        """Template ini file should be adapted when present."""
+        """PM-001: board_new succeeds with template."""
 
         template_dir = tmp_path / "template"
         template_dir.mkdir(parents=True)
@@ -1701,21 +1701,12 @@ class TestBoardNew:
         assert content_lines[0] == f"[{board_name}]"
         assert "PROJECT_NAME=default" in content_lines
         assert "CUSTOM=value" in content_lines
-        copied_patch = (
-            tmp_path
-            / board_name
-            / "po"
-            / "sample_po"
-            / "patches"
-            / "placeholder.patch"
-        )
+        copied_patch = tmp_path / board_name / "po" / "sample_po" / "patches" / "placeholder.patch"
         assert copied_patch.is_file()
-        assert (
-            tmp_path / board_name / "po" / "sample_po" / "overrides"
-        ).is_dir()
+        assert (tmp_path / board_name / "po" / "sample_po" / "overrides").is_dir()
 
     def test_board_new_fails_if_board_already_exists(self, tmp_path):
-        """Creating a board with an existing name should fail without altering files."""
+        """PM-006: board_new fails if board already exists."""
 
         env = {"projects_path": str(tmp_path)}
         board_name = "board_gamma"
@@ -1731,16 +1722,15 @@ class TestBoardNew:
         assert existing_marker.read_text(encoding="utf-8") == "keep"
 
     def test_board_new_rejects_invalid_or_missing_parameters(self, tmp_path):
-        """Invalid parameters such as empty names or missing paths should fail."""
+        """PM-003/PM-004/PM-005: board_new rejects invalid/reserved names and paths."""
 
         env_with_path = {"projects_path": str(tmp_path)}
-        assert (
-            self.ProjectManager.board_new(env_with_path, {}, "") is False
-        )
-        assert (
-            self.ProjectManager.board_new(env_with_path, {}, "invalid/name")
-            is False
-        )
+        assert self.ProjectManager.board_new(env_with_path, {}, "") is False
+        assert self.ProjectManager.board_new(env_with_path, {}, ".") is False
+        assert self.ProjectManager.board_new(env_with_path, {}, "..") is False
+        assert self.ProjectManager.board_new(env_with_path, {}, "invalid/name") is False
+        assert self.ProjectManager.board_new(env_with_path, {}, "/abs/path") is False
+        assert self.ProjectManager.board_new(env_with_path, {}, "common") is False
         assert self.ProjectManager.board_new({}, {}, "board_delta") is False
 
     def test_project_new_with_empty_projects_info(self):
@@ -1799,7 +1789,7 @@ class TestBoardNew:
         assert result is False
 
     def test_project_new_project_name_same_as_board_name(self, tmp_path):
-        """Test project_new when project name is same as board name (line 138-144)."""
+        """PM-011: project_new rejects same as board."""
         env = {}
         projects_info = {
             "test_board": {
@@ -1819,7 +1809,7 @@ class TestBoardNew:
         assert result is False
 
     def test_project_new_project_already_exists_in_config(self, tmp_path):
-        """Test project_new when project already exists in config (line 151-155)."""
+        """PM-012: project_new rejects duplicate."""
         env = {}
         projects_info = {
             "parent-project": {
@@ -2315,7 +2305,7 @@ class TestBoardDel:
         self.ProjectManager = ProjectManager
 
     def test_board_del_removes_board_and_caches(self, tmp_path):
-        """Deleting a board should remove its directory, caches, and projects info."""
+        """PM-007: board_del removes board and caches."""
 
         root_dir = tmp_path
         projects_path = root_dir / "projects"
@@ -2364,7 +2354,7 @@ class TestBoardDel:
         assert result is False
 
     def test_board_del_protected_board(self, tmp_path):
-        """Protected boards should not be deleted even if the directory exists."""
+        """PM-008: board_del blocks protected boards."""
 
         projects_path = tmp_path / "projects"
         projects_path.mkdir()
@@ -2387,10 +2377,7 @@ class TestBoardDel:
 
         env_with_path = {"projects_path": str(tmp_path)}
         assert self.ProjectManager.board_del(env_with_path, {}, "") is False
-        assert (
-            self.ProjectManager.board_del(env_with_path, {}, "invalid/name")
-            is False
-        )
+        assert self.ProjectManager.board_del(env_with_path, {}, "invalid/name") is False
         assert self.ProjectManager.board_del({}, {}, "board_theta") is False
 
     def test_board_del_updates_projects_index(self, tmp_path):

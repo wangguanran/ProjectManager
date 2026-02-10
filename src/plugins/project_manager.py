@@ -371,9 +371,7 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
             board_name,
             projects_path,
         )
-        print(
-            f"Error: Board name '{board_name}' resolves outside of projects path '{projects_path}'."
-        )
+        print(f"Error: Board name '{board_name}' resolves outside of projects path '{projects_path}'.")
         return False
     if os.path.exists(board_path):
         log.error("Board '%s' already exists at '%s'.", board_name, board_path)
@@ -550,9 +548,7 @@ def board_del(env: Dict, projects_info: Dict, board_name: str) -> bool:
             board_name,
             projects_path,
         )
-        print(
-            f"Error: Board name '{board_name}' resolves outside of projects path '{projects_path}'."
-        )
+        print(f"Error: Board name '{board_name}' resolves outside of projects path '{projects_path}'.")
         return False
     if not os.path.isdir(board_path):
         log.error("Board '%s' does not exist at '%s'.", board_name, board_path)

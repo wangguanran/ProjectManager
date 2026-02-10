@@ -62,7 +62,7 @@ class TestGetFilename:
     """Test cases for get_filename function."""
 
     def test_get_filename_creates_directory(self):
-        """Test get_filename creates directory if it doesn't exist."""
+        """UTIL-003: get_filename creates directory if it doesn't exist."""
         with tempfile.TemporaryDirectory() as temp_dir:
             test_path = os.path.join(temp_dir, "nonexistent_dir")
 
@@ -152,7 +152,7 @@ class TestGetVersion:
             utils.get_version = original_get_version
 
     def test_get_version_file_not_found(self):
-        """Test get_version when pyproject.toml is not found."""
+        """UTIL-002: get_version fallback when pyproject.toml is not found."""
         with patch.dict("sys.__dict__", {"_MEIPASS": None}, clear=False):
             with patch("os.path.dirname", return_value="/test/path"):
                 with patch("os.path.exists", return_value=False):
@@ -176,7 +176,7 @@ class TestGetVersion:
                 assert result == "0.0.0-dev"
 
     def test_get_version_with_tmp_path(self, tmp_path, monkeypatch):
-        """Test get_version with pytest tmp_path."""
+        """UTIL-001: get_version reads pyproject version."""
         # Create pyproject.toml
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(
@@ -261,7 +261,7 @@ class TestListFilePath:
                 assert expected_path in result
 
     def test_list_file_path_with_max_depth(self):
-        """Test list_file_path with max_depth limitation."""
+        """UTIL-004: list_file_path max_depth limitation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create nested directory structure
             nested_dir = os.path.join(temp_dir, "level1", "level2", "level3")

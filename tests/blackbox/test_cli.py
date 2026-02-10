@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from .conftest import run_cli
@@ -21,7 +22,8 @@ def test_cli_001_help_lists_operations(workspace_a: Path) -> None:
 
 def test_cli_002_version_matches_pyproject(workspace_a: Path) -> None:
     result = run_cli(["--version"], cwd=workspace_a)
-    assert result.stdout.strip() == "0.0.11"
+    version = result.stdout.strip()
+    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7})?", version)
 
 
 def test_cli_003_exact_operation_runs(workspace_a: Path) -> None:

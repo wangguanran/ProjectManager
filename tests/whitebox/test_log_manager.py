@@ -21,9 +21,7 @@ class TestColoredFormatter:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import (
-            ColoredFormatter,
-        )
+        from src.log_manager import ColoredFormatter
 
         self.colored_formatter = ColoredFormatter
 
@@ -147,9 +145,7 @@ class TestLogManager:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import (
-            LogManager,
-        )
+        from src.log_manager import LogManager
 
         self.log_manager = LogManager
 
@@ -232,6 +228,25 @@ class TestLogManager:
                     log_files = [f for f in os.listdir(temp_dir) if f.endswith(".log")]
                     assert len(log_files) > 0
 
+    def test_latest_log_symlink_created(self):
+        """LOG-001: latest.log symlink created."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            latest_link = os.path.join(temp_dir, "latest.log")
+
+            with patch("src.log_manager.LOG_PATH", logs_dir), patch("src.log_manager.LATEST_LOG_LINK", latest_link):
+                lm = self.log_manager()
+                logger = lm.get_logger()
+
+                # Touch the file handler so a filename is available/created.
+                logger.info("hello")
+
+                assert os.path.islink(latest_link)
+
+                file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
+                assert file_handlers, "Expected at least one FileHandler"
+                assert os.path.realpath(os.readlink(latest_link)) == os.path.realpath(file_handlers[0].baseFilename)
+
     def test_logger_multiple_instances(self):
         """Test multiple instances of LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -254,9 +269,7 @@ class TestLogManagerIntegration:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from src.log_manager import (
-            LogManager,
-        )
+        from src.log_manager import LogManager
 
         self.log_manager = LogManager
 
