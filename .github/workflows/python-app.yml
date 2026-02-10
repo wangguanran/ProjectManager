@@ -49,10 +49,10 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: build-artifacts
-	        path: |
-	          out/binary/projman*
-	          install.sh
-	          uninstall.sh
+        path: |
+          out/binary/projman*
+          install.sh
+          uninstall.sh
 
   install_test:
     name: install_test
