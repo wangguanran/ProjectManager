@@ -903,6 +903,27 @@ def project_do_build(
         )
     cmd = cmd or str(project_cfg.get("PROJECT_BUILD_CMD", "")).strip()
     if not cmd:
+        # Debug-friendly hint without leaking full command content (commands may contain tokens).
+        full_cmd = str(project_cfg.get("PROJECT_BUILD_FULL_CMD", "")).strip()
+        full_cmd_legacy = str(project_cfg.get("PROJECT_BUILD_CMD_FULL", "")).strip()
+        single_cmd = str(project_cfg.get("PROJECT_BUILD_SINGLE_CMD", "")).strip()
+        single_cmd_legacy = str(project_cfg.get("PROJECT_BUILD_CMD_SINGLE", "")).strip()
+        generic_cmd = str(project_cfg.get("PROJECT_BUILD_CMD", "")).strip()
+        build_keys = sorted(k for k in project_cfg.keys() if "BUILD" in k)
+        log.debug(
+            "Build cmd missing (project=%s profile=%s repo=%s target=%s cfg_keys=%d build_keys=%s has_full=%s has_full_legacy=%s has_single=%s has_single_legacy=%s has_generic=%s)",
+            project_name,
+            profile_norm,
+            repo_text,
+            target_text,
+            len(project_cfg) if isinstance(project_cfg, dict) else -1,
+            build_keys,
+            bool(full_cmd),
+            bool(full_cmd_legacy),
+            bool(single_cmd),
+            bool(single_cmd_legacy),
+            bool(generic_cmd),
+        )
         log.info("No PROJECT_BUILD_CMD configured for project: %s (skipping build stage)", project_name)
         return True
 
