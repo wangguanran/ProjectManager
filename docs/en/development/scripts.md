@@ -16,6 +16,7 @@ Installs the standalone `projman` binary produced by `build.sh`.
 **Features**:
 - Copies `out/binary/projman` into an install prefix
 - Auto-selects `/usr/local/bin` when run as root, otherwise `~/.local/bin`
+- Uses `sudo` automatically when installing to a protected prefix
 - Prints PATH guidance for user installs
 
 ### `uninstall.sh`
@@ -64,6 +65,7 @@ Builds the Python package and the standalone `projman` binary (PyInstaller).
 - Builds Python packages into `out/package/`
 - Builds the standalone binary into `out/binary/`
 - Linux-only: best-effort static linking via `staticx`
+- Builds only for the current OS/arch; use GitHub Actions release workflow for multi-platform binaries
 
 ### `release.sh`
 
@@ -95,6 +97,7 @@ Downloads the latest GitHub Release asset for the current OS/arch and installs `
 - Displays release information
 - Selects the best-matching asset (for example `projman-linux-x86_64`)
 - Installs `projman` to `/usr/local/bin` when run as root, otherwise `~/.local/bin`
+- Uses `sudo` automatically when installing to a protected prefix
 - For Windows, use `install.ps1`
 
 ### `install.ps1`
@@ -110,6 +113,14 @@ iwr -useb https://raw.githubusercontent.com/wangguanran/ProjectManager/<tag>/ins
 - Downloads the latest Windows release asset (for example `projman-windows-x86_64.exe`)
 - Installs `projman.exe` to a per-user or system directory
 - Updates PATH (User or Machine)
+
+### `get_latest_artifact.sh` (GitHub Actions artifacts)
+
+Downloads the latest successful GitHub Actions *artifact* and installs `projman`.
+
+Notes:
+- GitHub Actions artifact download requires authentication. You must provide `GITHUB_TOKEN`.
+- For tokenless installs (public repo), prefer `get_latest_release.sh` (GitHub Releases).
 
 ## Development Scripts
 

@@ -2,6 +2,20 @@
 
 set -euo pipefail
 
+maybe_sudo() {
+    if "$@"; then
+        return 0
+    fi
+    if [ "$(id -u)" = "0" ]; then
+        return 1
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+        return 0
+    fi
+    return 1
+}
+
 echo "--- Checking if multi-project-manager is installed ---"
 
 # Uninstall from system environment (pip)
@@ -19,7 +33,7 @@ if [ -f "$USER_BIN" ]; then
 fi
 if [ -f "$SYSTEM_BIN" ]; then
     echo "Removing standalone binary: $SYSTEM_BIN"
-    rm -f "$SYSTEM_BIN"
+    maybe_sudo rm -f "$SYSTEM_BIN"
 fi
 
 # Remove venv directory and run_projman.sh script

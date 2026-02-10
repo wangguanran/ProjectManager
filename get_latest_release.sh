@@ -19,6 +19,20 @@ export PATH="$BIN_DIR:$PATH"
 INSTALL_MODE="auto"  # auto|system|user
 INSTALL_PREFIX=""
 
+maybe_sudo() {
+    if "$@"; then
+        return 0
+    fi
+    if [ "$(id -u)" = "0" ]; then
+        return 1
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+        return 0
+    fi
+    return 1
+}
+
 # Function to display usage
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -155,16 +169,26 @@ check_curl() {
 # Function to check if jq is available
 check_jq() {
     if ! command -v jq &> /dev/null; then
-        local arch
-        arch=$(uname -m)
-        local url=""
-        case "$arch" in
-            x86_64|amd64)
-                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" ;;
-            aarch64|arm64)
-                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-aarch64" ;;
+        local platform arch url=""
+        platform="$(detect_platform)"
+        arch="$(detect_arch)"
+        case "$platform-$arch" in
+            linux-x86_64)
+                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64"
+                ;;
+            linux-arm64)
+                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-aarch64"
+                ;;
+            macos-x86_64)
+                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-macos-amd64"
+                ;;
+            macos-arm64)
+                url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-macos-arm64"
+                ;;
             *)
-                echo "Unsupported arch for jq: $arch" >&2; return 1 ;;
+                echo "jq is required but not installed. Please install jq and retry." >&2
+                return 1
+                ;;
         esac
         echo "Installing jq to $BIN_DIR ..." >&2
         curl -fsSL "$url" -o "$BIN_DIR/jq"
@@ -295,7 +319,10 @@ download_and_update_bin() {
     echo "Found asset: $asset_name"
     echo "Downloading from: $asset_url"
     
-    mkdir -p "$install_dir"
+    if ! maybe_sudo mkdir -p "$install_dir"; then
+        echo "Failed to create install directory: $install_dir" >&2
+        return 1
+    fi
     
     # 下载 asset 到临时文件
     local temp_file=$(mktemp)
@@ -305,7 +332,14 @@ download_and_update_bin() {
     chmod +x "$temp_file"
     
     # 重命名为 projman 并移动到 .local/bin 目录
-    mv "$temp_file" "$install_dir/projman"
+    if ! mv "$temp_file" "$install_dir/projman" 2>/dev/null; then
+        if ! maybe_sudo mv "$temp_file" "$install_dir/projman"; then
+            echo "Failed to move projman into $install_dir (try --user or run with sudo)" >&2
+            rm -f "$temp_file" 2>/dev/null || true
+            return 1
+        fi
+    fi
+    maybe_sudo chmod +x "$install_dir/projman" 2>/dev/null || true
     
     echo "Downloaded and installed as $install_dir/projman"
 }

@@ -2,6 +2,20 @@
 
 set -euo pipefail
 
+maybe_sudo() {
+    if "$@"; then
+        return 0
+    fi
+    if [ "$(id -u)" = "0" ]; then
+        return 1
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+        return 0
+    fi
+    return 1
+}
+
 detect_platform() {
     local uname_s
     uname_s="$(uname -s 2>/dev/null || echo unknown)"
@@ -100,10 +114,16 @@ else
 fi
 
 echo "--- Installing standalone binary ($PLATFORM) ---"
-mkdir -p "$TARGET_BIN"
-rm -f "$TARGET_BIN/projman${EXE_SUFFIX}" 2>/dev/null || true
-cp "$SRC_BIN" "$TARGET_BIN/projman${EXE_SUFFIX}"
-chmod +x "$TARGET_BIN/projman${EXE_SUFFIX}" 2>/dev/null || true
+if ! maybe_sudo mkdir -p "$TARGET_BIN"; then
+    echo "Failed to create install directory: $TARGET_BIN (try --user or run with sudo)" >&2
+    exit 1
+fi
+maybe_sudo rm -f "$TARGET_BIN/projman${EXE_SUFFIX}" 2>/dev/null || true
+if ! maybe_sudo cp "$SRC_BIN" "$TARGET_BIN/projman${EXE_SUFFIX}"; then
+    echo "Failed to copy binary into $TARGET_BIN (try --user or run with sudo)" >&2
+    exit 1
+fi
+maybe_sudo chmod +x "$TARGET_BIN/projman${EXE_SUFFIX}" 2>/dev/null || true
 echo "Installed to $TARGET_BIN/projman${EXE_SUFFIX}"
 
 if [ "$TARGET_BIN" != "/usr/local/bin" ] && ! echo ":$PATH:" | grep -q ":$TARGET_BIN:"; then

@@ -16,6 +16,7 @@
 **功能**:
 - 将 `out/binary/projman` 复制到安装目录
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
+- 当安装目录需要权限时自动使用 `sudo`
 - 对用户态安装输出 PATH 配置提示
 
 ### `uninstall.sh`
@@ -64,6 +65,7 @@
 - Python 包输出到 `out/package/`
 - 独立二进制输出到 `out/binary/`
 - 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）
+- 只会构建当前系统/架构的二进制；跨平台产物请用 GitHub Actions Release 工作流
 
 ### `release.sh`
 
@@ -95,6 +97,7 @@
 - 显示发布信息
 - 自动选择最匹配的资源（例如 `projman-linux-x86_64`）
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
+- 当安装目录需要权限时自动使用 `sudo`
 - Windows 请使用 `install.ps1`
 
 ### `install.ps1`
@@ -110,6 +113,14 @@ iwr -useb https://raw.githubusercontent.com/wangguanran/ProjectManager/<tag>/ins
 - 下载最新的 Windows Release 资源（例如 `projman-windows-x86_64.exe`）
 - 安装 `projman.exe` 到用户或系统目录
 - 自动更新 PATH（用户或系统）
+
+### `get_latest_artifact.sh`（GitHub Actions artifacts）
+
+下载最新成功的 GitHub Actions *artifact* 并安装 `projman`。
+
+说明:
+- GitHub Actions artifact 下载需要鉴权，必须提供 `GITHUB_TOKEN`。
+- 如果希望免 token（公开仓库），建议使用 `get_latest_release.sh`（GitHub Releases）。
 
 ## 开发脚本
 
