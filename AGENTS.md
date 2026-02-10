@@ -11,7 +11,7 @@ You are working in the `ProjectManager` repository.
 5. Before each commit, run `make format` (black + isort).
 6. After each push, confirm GitHub Actions is green for the pushed commit SHA.
 7. Track work in the repo-root TODO note and delete completed TODO items:
-   - `./RepoScan_TODO.md`
+   - `./TODO.md`
 
 ## Local Dev Commands
 
