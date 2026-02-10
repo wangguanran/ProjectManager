@@ -10,8 +10,8 @@ You are working in the `ProjectManager` repository.
 4. After each module-level change (or after verifying a test suite passes), make a small commit and push it.
 5. Before each commit, run `make format` (black + isort).
 6. After each push, confirm GitHub Actions is green for the pushed commit SHA.
-7. Track work in the repo TODO note and delete completed TODO items:
-   - `RepoScan_TODO.md`
+7. Track work in the repo-root TODO note and delete completed TODO items:
+   - `./RepoScan_TODO.md`
 
 ## Local Dev Commands
 

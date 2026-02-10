@@ -3,76 +3,27 @@ Patch and override operations for project management.
 """
 
 import fnmatch
-import glob
-import json
 import os
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List
 
-from src.log_manager import log, log_cmd_event
+from src.log_manager import log
 from src.operations.registry import register
+from src.plugins.po_plugins.registry import (
+    APPLY_PHASE_GLOBAL_PRE,
+    APPLY_PHASE_PER_PO,
+    REVERT_PHASE_GLOBAL_POST,
+    REVERT_PHASE_PER_PO,
+    get_po_plugins,
+)
+from src.plugins.po_plugins.runtime import PoPluginContext, PoPluginRuntime
+from src.plugins.po_plugins.utils import (
+    po_applied_record_path as _po_applied_record_path,
+)
 
 # from src.profiler import auto_profile  # unused
-
-
-def _safe_cache_segment(value: str) -> str:
-    value = str(value or "").strip()
-    if not value:
-        return "_"
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", value)
-
-
-def _po_applied_record_path(repo_path: str, board_name: str, project_name: str, po_name: str) -> str:
-    """
-    Where to store the applied marker/record for a PO.
-
-    The record lives under each target repository root to avoid cross-workspace
-    false positives when multiple workspaces share the same `projects/`
-    directory.
-    """
-    repo_root = os.path.abspath(repo_path)
-    return os.path.join(
-        repo_root,
-        ".cache",
-        "po_applied",
-        _safe_cache_segment(board_name),
-        _safe_cache_segment(project_name),
-        f"{_safe_cache_segment(po_name)}.json",
-    )
-
-
-def _write_json_atomic(path: str, payload: Dict[str, Any]) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, ensure_ascii=False)
-        handle.write("\n")
-    os.replace(tmp_path, path)
-
-
-def _extract_patch_targets(patch_text: str) -> List[str]:
-    targets: List[str] = []
-    for line in patch_text.splitlines():
-        if not line.startswith("diff --git "):
-            continue
-        parts = line.split()
-        if len(parts) < 4:
-            continue
-        a_path = parts[2]
-        b_path = parts[3]
-        if a_path.startswith("a/"):
-            a_path = a_path[2:]
-        if b_path.startswith("b/"):
-            b_path = b_path[2:]
-        if b_path and b_path != "/dev/null":
-            targets.append(b_path)
-        elif a_path and a_path != "/dev/null":
-            targets.append(a_path)
-    return sorted(set(targets))
 
 
 def parse_po_config(po_config):
@@ -134,7 +85,7 @@ def po_apply(
     force: bool = False,
 ) -> bool:
     """
-    Apply patch and override for the specified project.
+    Apply patch/override/commits for the specified project.
     Args:
         env (dict): Global environment dict.
         projects_info (dict): All projects info.
@@ -144,18 +95,20 @@ def po_apply(
     """
     projects_path = env["projects_path"]
     log.info("start po_apply for project: '%s'", project_name)
-    project_info = projects_info.get(project_name, {})
-    project_cfg = project_info.get("config", {})
-    board_name = project_info.get("board_name")
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    board_name = project_info.get("board_name") if isinstance(project_info, dict) else None
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return False
+
     board_path = os.path.join(projects_path, board_name)
     po_dir = os.path.join(board_path, "po")
-    po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
+    po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
     if not po_config:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
+
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:
@@ -165,786 +118,30 @@ def po_apply(
     if exclude_files:
         log.debug("exclude_files: %s", str(exclude_files))
 
-    # Use repositories from env
     repositories = env.get("repositories", [])
-    workspace_root = os.getcwd()
-
-    def __applied_record_exists(repo_root: str, po_name: str) -> bool:
-        record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
-        return os.path.isfile(record_path)
-
-    def __format_command(command, cwd=None, description="", shell=False):
-        if isinstance(command, list):
-            cmd_str = " ".join(f'"{arg}"' if " " in arg else arg for arg in command)
-        else:
-            cmd_str = str(command)
-        return {
-            "description": description or "",
-            "cmd": cmd_str,
-            "cwd": cwd or "",
-            "shell": bool(shell),
-        }
-
-    def __get_repo_record(ctx, repo_root: str, repo_name: str) -> Dict[str, Any]:
-        abs_repo_root = os.path.abspath(repo_root)
-        record = ctx.applied_records.get(abs_repo_root)
-        if record is None:
-            record = {
-                "schema_version": 2,
-                "status": "applied",
-                "applied_at": datetime.now().isoformat(),
-                "project_name": ctx.project_name,
-                "board_name": ctx.board_name,
-                "po_name": ctx.po_name,
-                "repo_name": repo_name,
-                "repo_path": abs_repo_root,
-                "commits": [],
-                "patches": [],
-                "overrides": [],
-                "custom": [],
-                "commands": [],
-            }
-            ctx.applied_records[abs_repo_root] = record
-        return record
-
-    def __execute_command(ctx, repo_root: str, repo_name: str, command, cwd=None, description="", shell=False):
-        """Execute command and record it to repo-root applied record."""
-        formatted = __format_command(command, cwd=cwd, description=description, shell=shell)
-
-        try:
-            if getattr(ctx, "dry_run", False):
-                log.info("DRY-RUN: %s", formatted["cmd"])
-                return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
-
-            result = subprocess.run(
-                command,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                check=False,
-                shell=shell,
-            )
-
-            log_cmd_event(
-                log,
-                command=command,
-                cwd=cwd,
-                description=description,
-                returncode=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr,
-            )
-
-            formatted["returncode"] = result.returncode
-            record = __get_repo_record(ctx, repo_root, repo_name)
-            record["commands"].append(formatted)
-            return result
-
-        except Exception as e:  # pylint: disable=broad-except
-            log.error("Command execution failed: %s", e)
-            raise
-
-    @dataclass
-    class PoApplyContext:
-        """Context container for po_apply execution.
-
-        Holds frequently used paths and configuration for a single PO during apply:
-        - project_name: current project name
-        - board_name: current board name
-        - po_name: current PO name
-        - po_path: path to po/<po_name>
-        - po_commit_dir: directory containing commit patches (po/<po_name>/commits)
-        - po_patch_dir: directory containing patch files (po/<po_name>/patches)
-        - po_override_dir: directory containing override files (po/<po_name>/overrides)
-        - po_custom_dir: unified custom root directory (po/<po_name>/custom)
-        - exclude_files: mapping of PO name to a set of excluded relative file paths
-        - po_configs: custom configuration sections from env used to drive custom apply
-        - applied_records: per-repository applied records to be persisted on success
-        """
-
-        project_name: str
-        board_name: str
-        po_name: str
-        po_path: str
-        po_commit_dir: str
-        po_patch_dir: str
-        po_override_dir: str
-        po_custom_dir: str
-        dry_run: bool
-        force: bool
-        exclude_files: Dict[str, set]
-        po_configs: Dict
-        repositories: List[Tuple[str, str]]
-        workspace_root: str
-        applied_records: Dict[str, Dict[str, Any]]
-
-    def __resolve_repo_for_target_path(target_path: str) -> Optional[Tuple[str, str, Optional[str]]]:
-        """Best-effort map a custom target path to a repository root for record placement."""
-        candidate = target_path
-        if candidate.endswith(os.sep) and len(candidate) > 1:
-            candidate = candidate.rstrip(os.sep)
-        abs_target = candidate
-        if not os.path.isabs(abs_target):
-            abs_target = os.path.abspath(os.path.join(workspace_root, abs_target))
-        abs_target_real = os.path.realpath(abs_target)
-
-        best: Optional[Tuple[str, str, Optional[str]]] = None
-        best_len = -1
-        for repo_path, repo_name in repositories:
-            repo_real = os.path.realpath(repo_path)
-            try:
-                common = os.path.commonpath([repo_real, abs_target_real])
-            except ValueError:
-                continue
-            if common == repo_real and len(repo_real) > best_len:
-                rel = os.path.relpath(abs_target_real, repo_real)
-                best = (os.path.abspath(repo_path), repo_name, (rel if rel != "." else "."))
-                best_len = len(repo_real)
-
-        if best:
-            return best
-
-        root_repo_path = next((path for path, name in repositories if name == "root"), None)
-        if root_repo_path:
-            root_real = os.path.realpath(root_repo_path)
-            try:
-                if os.path.commonpath([root_real, abs_target_real]) == root_real:
-                    rel = os.path.relpath(abs_target_real, root_real)
-                    return os.path.abspath(root_repo_path), "root", (rel if rel != "." else ".")
-            except ValueError:
-                pass
-            return os.path.abspath(root_repo_path), "root", None
-
-        return None
-
-    def __apply_commits(ctx: PoApplyContext) -> bool:
-        """Apply git-format-patch commits for the specified po (git am)."""
-        log.debug("po_name: '%s', po_commit_dir: '%s'", ctx.po_name, ctx.po_commit_dir)
-        if not os.path.isdir(ctx.po_commit_dir):
-            log.debug("No commits dir for po: '%s'", ctx.po_name)
-            return True
-        log.debug("applying commits for po: '%s'", ctx.po_name)
-
-        repo_map = {rname: repo_path for repo_path, rname in repositories}
-
-        commit_files: List[Tuple[str, str]] = []
-        for current_dir, _, files in os.walk(ctx.po_commit_dir):
-            for fname in files:
-                if fname == ".gitkeep":
-                    continue
-                patch_file = os.path.join(current_dir, fname)
-                rel_path = os.path.relpath(patch_file, ctx.po_commit_dir)
-                commit_files.append((rel_path, patch_file))
-
-        for rel_path, patch_file in sorted(commit_files, key=lambda item: item[0]):
-            path_parts = rel_path.split(os.sep)
-            if len(path_parts) == 1:
-                repo_name = "root"
-            elif len(path_parts) >= 2:
-                repo_name = os.path.join(*path_parts[:-1])
-            else:
-                log.error("Invalid commit file path: '%s'", rel_path)
-                return False
-
-            if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
-                log.debug(
-                    "commit file '%s' in po '%s' is excluded by config",
-                    rel_path,
-                    ctx.po_name,
-                )
-                continue
-
-            patch_target = repo_map.get(repo_name)
-            if not patch_target:
-                log.error("Cannot find repo path for '%s'", repo_name)
-                return False
-
-            if __applied_record_exists(patch_target, ctx.po_name):
-                log.info(
-                    "po '%s' already applied for repo '%s', skipping commit '%s'",
-                    ctx.po_name,
-                    repo_name,
-                    rel_path,
-                )
-                continue
-
-            try:
-                with open(patch_file, "r", encoding="utf-8") as f:
-                    patch_text = f.read()
-            except OSError as e:
-                log.error("Failed to read commit patch '%s': %s", patch_file, e)
-                return False
-
-            patch_targets = _extract_patch_targets(patch_text)
-
-            head_before = None
-            head_before_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=patch_target,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if head_before_result.returncode == 0:
-                head_before = head_before_result.stdout.strip()
-
-            result = __execute_command(
-                ctx,
-                patch_target,
-                repo_name,
-                ["git", "am", patch_file],
-                cwd=patch_target,
-                description=f"Apply commit patch {os.path.basename(patch_file)} to {repo_name}",
-            )
-            if result.returncode != 0:
-                # Make sure we clean up am state before continuing.
-                __execute_command(
-                    ctx,
-                    patch_target,
-                    repo_name,
-                    ["git", "am", "--abort"],
-                    cwd=patch_target,
-                    description=f"Abort failed git am for {os.path.basename(patch_file)}",
-                )
-
-                already_applied = __execute_command(
-                    ctx,
-                    patch_target,
-                    repo_name,
-                    ["git", "apply", "--reverse", "--check", patch_file],
-                    cwd=patch_target,
-                    description=f"Check commit patch already applied {os.path.basename(patch_file)} to {repo_name}",
-                )
-                if already_applied.returncode == 0:
-                    log.info(
-                        "Commit patch '%s' already applied for repo '%s' (record missing); skipping.",
-                        rel_path,
-                        repo_name,
-                    )
-                    record = __get_repo_record(ctx, patch_target, repo_name)
-                    record["commits"].append(
-                        {
-                            "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
-                            "targets": patch_targets,
-                            "status": "already_applied",
-                        }
-                    )
-                    continue
-
-                log.error("Failed to apply commit patch '%s': '%s'", patch_file, result.stderr)
-                return False
-
-            head_after = head_before
-            head_after_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=patch_target,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if head_after_result.returncode == 0:
-                head_after = head_after_result.stdout.strip()
-
-            commit_shas: List[str] = []
-            if head_before and head_after and head_before != head_after and not ctx.dry_run:
-                rev_list = subprocess.run(
-                    ["git", "rev-list", "--reverse", f"{head_before}..{head_after}"],
-                    cwd=patch_target,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                if rev_list.returncode == 0 and rev_list.stdout.strip():
-                    commit_shas = [line.strip() for line in rev_list.stdout.splitlines() if line.strip()]
-
-            if not commit_shas and head_after:
-                commit_shas = [head_after]
-
-            record = __get_repo_record(ctx, patch_target, repo_name)
-            record["commits"].append(
-                {
-                    "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
-                    "targets": patch_targets,
-                    "head_before": head_before,
-                    "head_after": head_after,
-                    "commit_shas": commit_shas,
-                }
-            )
-
-        return True
-
-    def __apply_patch(ctx: PoApplyContext):
-        """Apply patches for the specified po."""
-        log.debug("po_name: '%s', po_patch_dir: '%s'", ctx.po_name, ctx.po_patch_dir)
-        if not os.path.isdir(ctx.po_patch_dir):
-            log.debug("No patches dir for po: '%s'", ctx.po_name)
-            return True
-        log.debug("applying patches for po: '%s'", ctx.po_name)
-
-        def find_repo_path_by_name(repo_name):
-            for repo_path, rname in repositories:
-                if rname == repo_name:
-                    return repo_path
-            return None
-
-        for current_dir, _, files in os.walk(ctx.po_patch_dir):
-            for fname in files:
-                if fname == ".gitkeep":
-                    continue
-                rel_path = os.path.relpath(os.path.join(current_dir, fname), ctx.po_patch_dir)
-                path_parts = rel_path.split(os.sep)
-                if len(path_parts) == 1:
-                    repo_name = "root"
-                elif len(path_parts) >= 2:
-                    repo_name = os.path.join(*path_parts[:-1])
-                else:
-                    log.error("Invalid patch file path: '%s'", rel_path)
-                    return False
-
-                if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
-                    log.debug(
-                        "patch file '%s' in po '%s' is excluded by config",
-                        rel_path,
-                        ctx.po_name,
-                    )
-                    continue
-                patch_target = find_repo_path_by_name(repo_name)
-                if not patch_target:
-                    log.error("Cannot find repo path for '%s'", repo_name)
-                    return False
-                patch_file = os.path.join(current_dir, fname)
-                log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
-                if __applied_record_exists(patch_target, ctx.po_name):
-                    log.info(
-                        "po '%s' already applied for repo '%s', skipping patch '%s'", ctx.po_name, repo_name, rel_path
-                    )
-                    continue
-
-                try:
-                    with open(patch_file, "r", encoding="utf-8") as f:
-                        patch_targets = _extract_patch_targets(f.read())
-                except OSError as e:
-                    log.error("Failed to read patch '%s': %s", patch_file, e)
-                    return False
-
-                record = __get_repo_record(ctx, patch_target, repo_name)
-                record["patches"].append(
-                    {
-                        "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
-                        "targets": patch_targets,
-                    }
-                )
-                try:
-                    result = __execute_command(
-                        ctx,
-                        patch_target,
-                        repo_name,
-                        ["git", "apply", patch_file],
-                        cwd=patch_target,
-                        description=f"Apply patch {os.path.basename(patch_file)} to {repo_name}",
-                    )
-                    log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
-                    log.debug(
-                        "git apply result: returncode: '%s', stdout: '%s', stderr: '%s'",
-                        result.returncode,
-                        result.stdout,
-                        result.stderr,
-                    )
-                    if result.returncode != 0:
-                        already_applied = __execute_command(
-                            ctx,
-                            patch_target,
-                            repo_name,
-                            ["git", "apply", "--reverse", "--check", patch_file],
-                            cwd=patch_target,
-                            description=f"Check patch already applied {os.path.basename(patch_file)} to {repo_name}",
-                        )
-                        if already_applied.returncode == 0:
-                            log.info(
-                                "Patch '%s' already applied for repo '%s' (record missing); skipping.",
-                                rel_path,
-                                repo_name,
-                            )
-                            continue
-
-                        log.error(
-                            "Failed to apply patch '%s': '%s'",
-                            patch_file,
-                            result.stderr,
-                        )
-                        return False
-                    log.info("patch applied successfully for repo: '%s'", patch_target)
-                except subprocess.SubprocessError as e:
-                    log.error("Subprocess error applying patch '%s': '%s'", patch_file, e)
-                    return False
-                except OSError as e:
-                    log.error("OS error applying patch '%s': '%s'", patch_file, e)
-                    return False
-
-        return True
-
-    def __apply_override(ctx: PoApplyContext):
-        """Apply overrides for the specified po."""
-        log.debug("po_name: '%s', po_override_dir: '%s'", ctx.po_name, ctx.po_override_dir)
-        if not os.path.isdir(ctx.po_override_dir):
-            log.debug("No overrides dir for po: '%s'", ctx.po_name)
-            return True
-        log.debug("applying overrides for po: '%s'", ctx.po_name)
-
-        repo_map = {rname: repo_path for repo_path, rname in repositories}
-        repo_path_to_name = {os.path.abspath(repo_path): rname for repo_path, rname in repositories}
-        repo_names = sorted(
-            [name for name in repo_map.keys() if name != "root"],
-            key=lambda x: len(x),
-            reverse=True,
-        )
-
-        def _split_repo_prefix(rel_path: str) -> Tuple[str, str]:
-            """Return (repo_name, dest_rel_in_repo) for an overrides rel_path."""
-            root_prefix = f"root{os.sep}"
-            if rel_path.startswith(root_prefix):
-                return "root", rel_path[len(root_prefix) :]
-
-            for repo_name in repo_names:
-                prefix = f"{repo_name}{os.sep}"
-                if rel_path.startswith(prefix):
-                    return repo_name, rel_path[len(prefix) :]
-                if rel_path == repo_name:
-                    return repo_name, ""
-
-            return "root", rel_path
-
-        def _safe_dest_rel(dest_rel: str) -> str:
-            # Normalize and prevent escaping repo_root. Keep it relative.
-            dest_rel = dest_rel.strip()
-            dest_rel = dest_rel.lstrip("/\\")
-            dest_rel = os.path.normpath(dest_rel)
-            if dest_rel in ("", "."):
-                return ""
-            if os.path.isabs(dest_rel):
-                return ""
-            if dest_rel.startswith("..") or f"{os.sep}.." in dest_rel:
-                return ""
-            return dest_rel
-
-        def _validate_in_repo(repo_root: str, dest_rel: str) -> None:
-            repo_root_real = os.path.realpath(repo_root)
-            dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
-            if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
-                raise ValueError(f"override target escapes repo_root: {dest_rel}")
-
-        # 1) Group files by repo_root before copying/deleting
-        repo_to_files: Dict[str, List[Tuple[str, str, bool]]] = {}  # (src_file, dest_rel, is_remove)
-        for current_dir, _, files in os.walk(ctx.po_override_dir):
-            for fname in files:
-                if fname == ".gitkeep":
-                    continue
-                rel_path = os.path.relpath(os.path.join(current_dir, fname), ctx.po_override_dir)
-                log.debug("override rel_path: '%s'", rel_path)
-                if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
-                    log.debug(
-                        "override file '%s' in po '%s' is excluded by config",
-                        rel_path,
-                        ctx.po_name,
-                    )
-                    continue
-                src_file = os.path.join(current_dir, fname)
-
-                # Check if this is a remove operation
-                is_remove = fname.endswith(".remove")
-                repo_name, dest_rel = _split_repo_prefix(rel_path)
-                if is_remove:
-                    dest_rel = dest_rel[:-7]  # Remove '.remove' suffix
-                    log.debug("remove operation detected for file: '%s'", dest_rel)
-                dest_rel = _safe_dest_rel(dest_rel)
-                if not dest_rel:
-                    log.error("Invalid override target path derived from '%s'", rel_path)
-                    return False
-
-                repo_root = repo_map.get(repo_name)
-                if not repo_root:
-                    log.error("Cannot find repo path for override target repo '%s' (from '%s')", repo_name, rel_path)
-                    return False
-
-                repo_to_files.setdefault(repo_root, []).append((src_file, dest_rel, is_remove))
-
-        # 2) Perform copies/deletes per repo_root (with applied record gating)
-        for repo_root, file_list in repo_to_files.items():
-            repo_root_abs = os.path.abspath(repo_root)
-            record_repo_name = repo_path_to_name.get(repo_root_abs, "unknown")
-            if __applied_record_exists(repo_root_abs, ctx.po_name):
-                log.info("po '%s' already applied for repo '%s', skipping overrides", ctx.po_name, record_repo_name)
-                continue
-
-            log.debug(
-                "override repo_root: '%s'",
-                repo_root,
-            )
-            for src_file, dest_rel, is_remove in file_list:
-                log.debug("override src_file: '%s', dest_rel: '%s', is_remove: %s", src_file, dest_rel, is_remove)
-                try:
-                    _validate_in_repo(repo_root, dest_rel)
-                except ValueError as e:
-                    log.error("%s", e)
-                    return False
-
-                record = __get_repo_record(ctx, repo_root_abs, record_repo_name)
-                record["overrides"].append(
-                    {
-                        "operation": "remove" if is_remove else "copy",
-                        "po_source": os.path.relpath(src_file, start=ctx.po_path),
-                        "path_in_repo": dest_rel,
-                    }
-                )
-
-                if is_remove:
-                    # Perform delete operation
-                    try:
-                        if not ctx.force and not ctx.dry_run:
-                            log.error(
-                                "Refusing to remove '%s' without --force (override .remove safeguard)",
-                                dest_rel,
-                            )
-                            return False
-
-                        # Check if target file exists
-                        if os.path.exists(os.path.join(repo_root, dest_rel)):
-                            # Use __execute_command for delete operation
-                            result = __execute_command(
-                                ctx,
-                                repo_root_abs,
-                                record_repo_name,
-                                ["rm", "-rf", dest_rel],
-                                cwd=repo_root,
-                                description=f"Remove file {dest_rel}",
-                            )
-
-                            if result.returncode != 0:
-                                log.error("Failed to remove file '%s': %s", dest_rel, result.stderr)
-                                return False
-
-                            log.info("Removed file '%s' (repo_root=%s)", dest_rel, repo_root)
-                        else:
-                            log.debug("File '%s' does not exist, skipping removal", dest_rel)
-                    except OSError as e:
-                        log.error(
-                            "Failed to remove file '%s': '%s'",
-                            dest_rel,
-                            e,
-                        )
-                        return False
-                else:
-                    # Perform copy operation
-                    dest_dir = os.path.dirname(dest_rel)
-                    if not ctx.dry_run and dest_dir:
-                        os.makedirs(os.path.join(repo_root, dest_dir), exist_ok=True)
-                    try:
-                        # Use __execute_command for copy operation
-                        result = __execute_command(
-                            ctx,
-                            repo_root_abs,
-                            record_repo_name,
-                            ["cp", "-rf", src_file, dest_rel],
-                            cwd=repo_root,
-                            description="Copy override file",
-                        )
-
-                        if result.returncode != 0:
-                            log.error(
-                                "Failed to copy override file '%s' to '%s': %s", src_file, dest_rel, result.stderr
-                            )
-                            return False
-
-                        log.info("Copied override file '%s' to '%s' (repo_root=%s)", src_file, dest_rel, repo_root)
-                    except OSError as e:
-                        log.error(
-                            "Failed to copy override file '%s' to '%s': '%s'",
-                            src_file,
-                            dest_rel,
-                            e,
-                        )
-                        return False
-
-        return True
-
-    def __apply_custom(ctx: PoApplyContext):
-        """Apply all custom configurations for the specified po.
-
-        - All custom files are expected under po/<po_name>/custom[/subdir]
-        - Each section in po_configs may specify PROJECT_PO_DIR as a subdir under custom
-        - PROJECT_PO_FILE_COPY rules are executed relative to the resolved custom subdir
-        """
-        log.debug("po_name: '%s', po_custom_dir: '%s'", ctx.po_name, ctx.po_custom_dir)
-        if not os.path.isdir(ctx.po_custom_dir):
-            log.debug("No custom dir for po: '%s'", ctx.po_name)
-            return True
-        log.debug("applying custom for po: '%s'", ctx.po_name)
-
-        if not isinstance(ctx.po_configs, dict) or not ctx.po_configs:
-            log.debug("No po_configs provided for custom apply of po: '%s'", ctx.po_name)
-            return True
-
-        def __execute_file_copy(ctx, section_name, section_custom_dir, source_pattern, target_path):
-            """Execute a single file copy operation with wildcard and directory support.
-
-            - Expands *, ?, [], and ** patterns via glob (no shell).
-            - Uses `cp -rf` with shell=False to handle file/dir copies safely.
-            """
-            log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
-
-            abs_pattern = os.path.join(section_custom_dir, source_pattern)
-            record_repo = __resolve_repo_for_target_path(target_path)
-            if record_repo is None:
-                record_repo_root = workspace_root
-                record_repo_name = "workspace"
-                path_in_repo = None
-            else:
-                record_repo_root, record_repo_name, path_in_repo = record_repo
-
-            if __applied_record_exists(record_repo_root, ctx.po_name):
-                log.info(
-                    "po '%s' already applied for repo '%s', skipping custom copy to '%s'",
-                    ctx.po_name,
-                    record_repo_name,
-                    target_path,
-                )
-                return True
-
-            record = __get_repo_record(ctx, record_repo_root, record_repo_name)
-            record["custom"].append(
-                {
-                    "section": section_name,
-                    "source": source_pattern,
-                    "target": target_path,
-                    "path_in_repo": path_in_repo,
-                }
-            )
-
-            try:
-                matches = glob.glob(abs_pattern, recursive=True)
-                if not matches:
-                    log.error("No files matched pattern '%s' (abs: '%s')", source_pattern, abs_pattern)
-                    return False
-
-                # Determine a stable base directory so we can preserve relative paths when using patterns
-                # like "data/**/file" (without relying on shell expansion).
-                glob_markers = ["*", "?", "["]
-                first_marker = min(
-                    (abs_pattern.find(m) for m in glob_markers if m in abs_pattern),
-                    default=-1,
-                )
-                if first_marker == -1:
-                    base_dir = os.path.dirname(abs_pattern)
-                else:
-                    base_dir = os.path.dirname(abs_pattern[:first_marker])
-                if not base_dir:
-                    base_dir = section_custom_dir
-
-                # Determine if target should be treated as a directory.
-                target_is_dir = target_path.endswith(os.sep) or os.path.isdir(target_path) or len(matches) > 1
-                if not ctx.dry_run and target_is_dir and not os.path.exists(target_path):
-                    os.makedirs(target_path.rstrip(os.sep), exist_ok=True)
-
-                for src in matches:
-                    if target_is_dir:
-                        rel = os.path.relpath(src, base_dir)
-                        dest = os.path.join(target_path, rel)
-                    else:
-                        dest = target_path
-
-                    dest_dir = os.path.dirname(dest)
-                    if not ctx.dry_run and dest_dir:
-                        os.makedirs(dest_dir, exist_ok=True)
-
-                    result = __execute_command(
-                        ctx,
-                        record_repo_root,
-                        record_repo_name,
-                        ["cp", "-rf", src, dest],
-                        description="Copy custom file",
-                        shell=False,
-                    )
-                    if result.returncode != 0:
-                        log.error("Failed to copy '%s' to '%s': %s", src, dest, result.stderr)
-                        return False
-
-                return True
-            except OSError as e:
-                log.error("Failed to copy '%s' to '%s': %s", abs_pattern, target_path, e)
-                return False
-
-        for section_name, section_config in ctx.po_configs.items():
-            # Only apply the configuration that matches the current PO name.
-            if section_name != f"po-{ctx.po_name}":
-                continue
-
-            po_config_dict = section_config
-            po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
-
-            # `PROJECT_PO_DIR` is relative to the PO root (not to `custom/`).
-            po_root = os.path.dirname(ctx.po_custom_dir)
-            section_custom_dir = os.path.join(po_root, po_subdir) if po_subdir else ctx.po_custom_dir
-            if not os.path.isdir(section_custom_dir):
-                log.debug(
-                    "Custom directory '%s' not found for po '%s' (section '%s')",
-                    section_custom_dir,
-                    ctx.po_name,
-                    section_name,
-                )
-                continue
-
-            log.info(
-                "Processing custom po '%s' with directory '%s' (from section '%s')",
-                ctx.po_name,
-                (
-                    os.path.relpath(
-                        section_custom_dir, start=os.path.join(os.path.dirname(ctx.po_custom_dir), ctx.po_name)
-                    )
-                    if os.path.isdir(section_custom_dir)
-                    else section_custom_dir
-                ),
-                section_name,
-            )
-
-            file_copy_config = po_config_dict.get("PROJECT_PO_FILE_COPY", "")
-            if not file_copy_config:
-                log.warning(
-                    "No PROJECT_PO_FILE_COPY configuration found for po: '%s' (section '%s')",
-                    ctx.po_name,
-                    section_name,
-                )
-                continue
-
-            log.debug("File copy config for po '%s': '%s'", ctx.po_name, file_copy_config)
-
-            # Parse file copy configuration
-            copy_rules = []
-            for line in file_copy_config.split("\\"):
-                line = line.strip()
-                if not line:
-                    continue
-                if ":" in line:
-                    source, target = line.split(":", 1)
-                    copy_rules.append((source.strip(), target.strip()))
-
-            # Execute file copy operations for this section
-            for source_pattern, target_path in copy_rules:
-                if not __execute_file_copy(ctx, section_name, section_custom_dir, source_pattern, target_path):
-                    log.error(
-                        "Failed to execute file copy for po: '%s', source: '%s', target: '%s'",
-                        ctx.po_name,
-                        source_pattern,
-                        target_path,
-                    )
-                    return False
-
-        return True
-
-    ctxs: List[PoApplyContext] = []
+    runtime = PoPluginRuntime(
+        board_name=board_name,
+        project_name=project_name,
+        repositories=repositories,
+        workspace_root=os.getcwd(),
+        po_configs=env.get("po_configs", {}),
+    )
+
+    plugins = get_po_plugins()
+    global_pre_plugins = sorted(
+        [plugin for plugin in plugins if plugin.apply_phase == APPLY_PHASE_GLOBAL_PRE],
+        key=lambda plugin: plugin.apply_order,
+    )
+    per_po_plugins = sorted(
+        [plugin for plugin in plugins if plugin.apply_phase == APPLY_PHASE_PER_PO],
+        key=lambda plugin: plugin.apply_order,
+    )
+
+    ctxs: List[PoPluginContext] = []
     for po_name in apply_pos:
         po_path = os.path.join(po_dir, po_name)
         ctxs.append(
-            PoApplyContext(
+            PoPluginContext(
                 project_name=project_name,
                 board_name=board_name,
                 po_name=po_name,
@@ -956,40 +153,41 @@ def po_apply(
                 dry_run=dry_run,
                 force=force,
                 exclude_files=exclude_files,
-                po_configs=env.get("po_configs", {}),
-                repositories=repositories,
-                workspace_root=workspace_root,
                 applied_records={},
             )
         )
 
-    # Stage 1: apply all commit patches first (git am requires clean index).
-    for ctx in ctxs:
-        log.info("po '%s' starting to apply commits%s", ctx.po_name, " (dry-run)" if dry_run else "")
-        ok = __apply_commits(ctx)
-        if not ok:
-            log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
-            return False
+    # Stage 1: apply global-pre plugins (git am requires clean index).
+    for plugin in global_pre_plugins:
+        for ctx in ctxs:
+            suffix = " (dry-run)" if dry_run else ""
+            if plugin.name == "commits":
+                log.info("po '%s' starting to apply commits%s", ctx.po_name, suffix)
+            else:
+                log.info("po '%s' starting to apply %s%s", ctx.po_name, plugin.name, suffix)
 
-    # Stage 2: apply patches/overrides/custom (may dirty working tree).
+            if not plugin.apply(ctx, runtime):
+                log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
+                return False
+
+    # Stage 2: apply per-po plugins (may dirty working tree).
     for ctx in ctxs:
         log.info("po '%s' starting to apply patch and override%s", ctx.po_name, " (dry-run)" if dry_run else "")
 
-        ok = __apply_patch(ctx) and __apply_override(ctx) and __apply_custom(ctx)
-        if not ok:
-            log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
-            return False
+        for plugin in per_po_plugins:
+            if not plugin.apply(ctx, runtime):
+                log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
+                return False
 
         if not dry_run and ctx.applied_records:
             try:
-                for repo_root, record in ctx.applied_records.items():
-                    record_path = _po_applied_record_path(repo_root, board_name, project_name, ctx.po_name)
-                    _write_json_atomic(record_path, record)
-            except OSError as e:
-                log.error("Failed to finalize applied record for po '%s': '%s'", ctx.po_name, e)
+                runtime.finalize_records(ctx)
+            except OSError as exc:
+                log.error("Failed to finalize applied record for po '%s': '%s'", ctx.po_name, exc)
                 return False
 
         log.info("po '%s' has been processed", ctx.po_name)
+
     log.info("po apply finished for project: '%s'", project_name)
     return True
 
@@ -1011,18 +209,20 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
     """
     projects_path = env["projects_path"]
     log.info("start po_revert for project: '%s'", project_name)
-    project_info = projects_info.get(project_name, {})
-    project_cfg = project_info.get("config", {})
-    board_name = project_info.get("board_name")
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    board_name = project_info.get("board_name") if isinstance(project_info, dict) else None
     if not board_name:
         log.error("Cannot find board name for project: '%s'", project_name)
         return False
+
     board_path = os.path.join(projects_path, board_name)
     po_dir = os.path.join(board_path, "po")
-    po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
+    po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
     if not po_config:
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
+
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
@@ -1033,383 +233,70 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
     if exclude_files:
         log.debug("exclude_files: %s", str(exclude_files))
 
-    # Use repositories from env
     repositories = env.get("repositories", [])
+    runtime = PoPluginRuntime(
+        board_name=board_name,
+        project_name=project_name,
+        repositories=repositories,
+        workspace_root=os.getcwd(),
+        po_configs=env.get("po_configs", {}),
+    )
 
-    def __load_applied_record(repo_root: str, po_name: str) -> Optional[Dict[str, Any]]:
-        record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
-        if not os.path.exists(record_path):
-            return None
-        try:
-            with open(record_path, "r", encoding="utf-8") as handle:
-                return json.load(handle)
-        except (OSError, ValueError) as e:
-            log.warning("Failed to read applied record '%s': %s", record_path, e)
-            return None
-
-    def __revert_commits(po_name: str) -> bool:
-        """Revert commits applied by PO (git revert)."""
-        for repo_root, repo_name in repositories or []:
-            record = __load_applied_record(repo_root, po_name)
-            if not record:
-                continue
-            commits = record.get("commits") or []
-            if not commits:
-                continue
-
-            repo_path = record.get("repo_path") or repo_root
-            log.info("reverting commits for po '%s' in repo '%s'", po_name, repo_name)
-
-            for commit_entry in reversed(commits):
-                if commit_entry.get("status") == "already_applied":
-                    continue
-                shas = commit_entry.get("commit_shas") or []
-                if not shas and commit_entry.get("head_after"):
-                    shas = [commit_entry["head_after"]]
-
-                for sha in reversed(shas):
-                    if not sha:
-                        continue
-                    if dry_run:
-                        log.info("DRY-RUN: cd %s && git revert --no-edit %s", repo_path, sha)
-                        continue
-
-                    result = subprocess.run(
-                        ["git", "revert", "--no-edit", sha],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    log.debug(
-                        "git revert result: returncode: '%s', stdout: '%s', stderr: '%s'",
-                        result.returncode,
-                        result.stdout,
-                        result.stderr,
-                    )
-                    if result.returncode != 0:
-                        log.error(
-                            "Failed to revert commit '%s' for po '%s' in repo '%s': %s",
-                            sha,
-                            po_name,
-                            repo_name,
-                            result.stderr,
-                        )
-                        # Best-effort cleanup of revert state.
-                        subprocess.run(
-                            ["git", "revert", "--abort"],
-                            cwd=repo_path,
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        )
-                        return False
-
-        return True
-
-    def __revert_patch(po_name, po_patch_dir, exclude_files):
-        """Revert patches for the specified po."""
-        log.debug("po_name: '%s', po_patch_dir: '%s'", po_name, po_patch_dir)
-        if not os.path.isdir(po_patch_dir):
-            log.debug("No patches dir for po: '%s'", po_name)
-            return True
-        log.debug("reverting patches for po: '%s'", po_name)
-        for current_dir, _, files in os.walk(po_patch_dir):
-            log.debug("current_dir: '%s', files: '%s'", current_dir, files)
-            for fname in files:
-                if fname == ".gitkeep":
-                    continue
-                log.debug("current_dir: '%s', fname: '%s'", current_dir, fname)
-                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_patch_dir)
-                log.debug("patch rel_path: '%s'", rel_path)
-                if po_name in exclude_files and rel_path in exclude_files[po_name]:
-                    log.debug(
-                        "patch file '%s' in po '%s' is excluded by config",
-                        rel_path,
-                        po_name,
-                    )
-                    continue
-                path_parts = rel_path.split(os.sep)
-                if len(path_parts) == 1:
-                    repo_name = "root"
-                elif len(path_parts) >= 2:
-                    repo_name = os.path.join(*path_parts[:-1])
-                else:
-                    log.error("Invalid patch file path: '%s'", rel_path)
-                    return False
-
-                def find_repo_path_by_name(repo_name):
-                    for repo_path, rname in repositories:
-                        if rname == repo_name:
-                            return repo_path
-                    return None
-
-                patch_target = find_repo_path_by_name(repo_name)
-                if not patch_target:
-                    log.error("Cannot find repo path for '%s'", repo_name)
-                    return False
-                patch_file = os.path.join(current_dir, fname)
-                log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
-                try:
-                    if dry_run:
-                        log.info(
-                            "DRY-RUN: cd %s && git apply --reverse %s",
-                            patch_target,
-                            patch_file,
-                        )
-                        continue
-                    result = subprocess.run(
-                        ["git", "apply", "--reverse", patch_file],
-                        cwd=patch_target,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    log.debug(
-                        "git apply --reverse result: returncode: '%s', stdout: '%s', stderr: '%s'",
-                        result.returncode,
-                        result.stdout,
-                        result.stderr,
-                    )
-                    if result.returncode != 0:
-                        log.error(
-                            "Failed to revert patch '%s': '%s'",
-                            patch_file,
-                            result.stderr,
-                        )
-                        return False
-                    log.info(
-                        "patch reverted for dir: '%s'",
-                        patch_target,
-                    )
-                except subprocess.SubprocessError as e:
-                    log.error("Subprocess error reverting patch '%s': '%s'", patch_file, e)
-                    return False
-                except OSError as e:
-                    log.error("OS error reverting patch '%s': '%s'", patch_file, e)
-                    return False
-        return True
-
-    def __revert_override(po_name, po_override_dir, exclude_files):
-        """Revert overrides for the specified po."""
-        log.debug("po_name: '%s', po_override_dir: '%s'", po_name, po_override_dir)
-        if not os.path.isdir(po_override_dir):
-            log.debug("No overrides dir for po: '%s'", po_name)
-            return True
-        log.debug("reverting overrides for po: '%s'", po_name)
-        repo_map = {rname: repo_path for repo_path, rname in repositories}
-        repo_names = sorted(
-            [name for name in repo_map.keys() if name != "root"],
-            key=lambda x: len(x),
-            reverse=True,
-        )
-
-        def _split_repo_prefix(rel_path: str) -> Tuple[str, str]:
-            root_prefix = f"root{os.sep}"
-            if rel_path.startswith(root_prefix):
-                return "root", rel_path[len(root_prefix) :]
-            for repo_name in repo_names:
-                prefix = f"{repo_name}{os.sep}"
-                if rel_path.startswith(prefix):
-                    return repo_name, rel_path[len(prefix) :]
-                if rel_path == repo_name:
-                    return repo_name, ""
-            return "root", rel_path
-
-        def _safe_dest_rel(dest_rel: str) -> str:
-            dest_rel = dest_rel.strip()
-            dest_rel = dest_rel.lstrip("/\\")
-            dest_rel = os.path.normpath(dest_rel)
-            if dest_rel in ("", "."):
-                return ""
-            if os.path.isabs(dest_rel):
-                return ""
-            if dest_rel.startswith("..") or f"{os.sep}.." in dest_rel:
-                return ""
-            return dest_rel
-
-        def _validate_in_repo(repo_root: str, dest_rel: str) -> None:
-            repo_root_real = os.path.realpath(repo_root)
-            dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
-            if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
-                raise ValueError(f"override target escapes repo_root: {dest_rel}")
-
-        for current_dir, _, files in os.walk(po_override_dir):
-            for fname in files:
-                if fname == ".gitkeep":
-                    continue
-                rel_path = os.path.relpath(os.path.join(current_dir, fname), po_override_dir)
-                log.debug("override rel_path: '%s'", rel_path)
-                if po_name in exclude_files and rel_path in exclude_files[po_name]:
-                    log.debug(
-                        "override file '%s' in po '%s' is excluded by config",
-                        rel_path,
-                        po_name,
-                    )
-                    continue
-
-                repo_name, dest_rel = _split_repo_prefix(rel_path)
-                if fname.endswith(".remove"):
-                    dest_rel = dest_rel[:-7]
-                dest_rel = _safe_dest_rel(dest_rel)
-                if not dest_rel:
-                    log.error("Invalid override target path derived from '%s'", rel_path)
-                    return False
-
-                repo_root = repo_map.get(repo_name)
-                if not repo_root:
-                    log.error("Cannot find repo path for override target repo '%s' (from '%s')", repo_name, rel_path)
-                    return False
-
-                try:
-                    _validate_in_repo(repo_root, dest_rel)
-                except ValueError as e:
-                    log.error("%s", e)
-                    return False
-
-                dest_abs = os.path.join(repo_root, dest_rel)
-                log.debug("override dest_abs: '%s'", dest_abs)
-                log.info("reverting override file: '%s' (repo_root=%s)", dest_rel, repo_root)
-                try:
-                    result = subprocess.run(
-                        ["git", "ls-files", "--error-unmatch", dest_rel],
-                        cwd=repo_root,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-
-                    if result.returncode == 0:
-                        if dry_run:
-                            log.info("DRY-RUN: cd %s && git checkout -- %s", repo_root, dest_rel)
-                            continue
-                        result = subprocess.run(
-                            ["git", "checkout", "--", dest_rel],
-                            cwd=repo_root,
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        )
-                        log.debug(
-                            "git checkout result: returncode: '%s', stdout: '%s', stderr: '%s'",
-                            result.returncode,
-                            result.stdout,
-                            result.stderr,
-                        )
-                        if result.returncode != 0:
-                            log.error(
-                                "Failed to revert override file '%s': '%s'",
-                                dest_rel,
-                                result.stderr,
-                            )
-                            return False
-                    elif os.path.exists(dest_abs):
-                        log.debug(
-                            "File '%s' is not tracked by git, deleting directly",
-                            dest_rel,
-                        )
-                        if dry_run:
-                            log.info("DRY-RUN: cd %s && rm -rf %s", repo_root, dest_rel)
-                            continue
-                        if os.path.isdir(dest_abs):
-                            shutil.rmtree(dest_abs)
-                        else:
-                            os.remove(dest_abs)
-                    else:
-                        log.debug("Override file '%s' does not exist, skipping", dest_abs)
-                        continue
-
-                    log.info(
-                        "override reverted for dir: '%s', file: '%s'",
-                        repo_root,
-                        dest_rel,
-                    )
-                except subprocess.SubprocessError as e:
-                    log.error(
-                        "Subprocess error reverting override file '%s': '%s'",
-                        dest_rel,
-                        e,
-                    )
-                    return False
-                except OSError as e:
-                    log.error(
-                        "OS error reverting override file '%s': '%s'",
-                        dest_rel,
-                        e,
-                    )
-                    return False
-        return True
-
-    def __revert_custom_po(po_name, po_custom_dir, po_config_dict):
-        """Revert custom po configuration for the specified po."""
-        log.debug("po_name: '%s', po_custom_dir: '%s'", po_name, po_custom_dir)
-
-        file_copy_config = po_config_dict.get("PROJECT_PO_FILE_COPY", "")
-        if not file_copy_config:
-            log.warning("No PROJECT_PO_FILE_COPY configuration found for po: '%s'", po_name)
-            return True
-
-        log.debug("File copy config for po '%s': '%s'", po_name, file_copy_config)
-
-        # Parse file copy configuration to get target paths
-        target_paths = set()
-        for line in file_copy_config.split("\\"):
-            line = line.strip()
-            if not line:
-                continue
-            if ":" in line:
-                _, target = line.split(":", 1)
-                target_paths.add(target.strip())
-
-        # For custom po, we can't easily revert file copies
-        # Just log a warning that manual cleanup may be needed
-        log.warning("Custom po '%s' files were copied to multiple locations. Manual cleanup may be required:", po_name)
-        for target_path in target_paths:
-            log.warning("  - Target: %s", target_path)
-
-        return True
-
-    # Get po configurations from env
-    po_configs = env.get("po_configs", {})
+    plugins = get_po_plugins()
+    per_po_plugins = sorted(
+        [plugin for plugin in plugins if plugin.revert_phase == REVERT_PHASE_PER_PO],
+        key=lambda plugin: plugin.revert_order,
+    )
+    global_post_plugins = sorted(
+        [plugin for plugin in plugins if plugin.revert_phase == REVERT_PHASE_GLOBAL_POST],
+        key=lambda plugin: plugin.revert_order,
+    )
 
     # Stage 1: revert patches/overrides/custom first (these may leave the repo dirty).
     for po_name in reversed(apply_pos):
-        # Always process standard patches and overrides
-        po_patch_dir = os.path.join(po_dir, po_name, "patches")
-        if not __revert_patch(po_name, po_patch_dir, exclude_files):
-            log.error("po revert aborted due to patch error in po: '%s'", po_name)
-            return False
-        po_override_dir = os.path.join(po_dir, po_name, "overrides")
-        if not __revert_override(po_name, po_override_dir, exclude_files):
-            log.error("po revert aborted due to override error in po: '%s'", po_name)
-            return False
+        po_path = os.path.join(po_dir, po_name)
+        ctx = PoPluginContext(
+            project_name=project_name,
+            board_name=board_name,
+            po_name=po_name,
+            po_path=po_path,
+            po_commit_dir=os.path.join(po_path, "commits"),
+            po_patch_dir=os.path.join(po_path, "patches"),
+            po_override_dir=os.path.join(po_path, "overrides"),
+            po_custom_dir=os.path.join(po_path, "custom"),
+            dry_run=dry_run,
+            force=False,
+            exclude_files=exclude_files,
+            applied_records={},
+        )
 
-        # Check for custom po configurations in common.ini
-        for section_name, section_config in po_configs.items():
-            if section_name.startswith("po-"):
-                # Only apply configurations that match the current po_name
-                expected_po_name = section_name[3:]  # Remove "po-" prefix
-                if expected_po_name == po_name:
-                    po_config_dict = section_config
-                    po_subdir = po_config_dict.get("PROJECT_PO_DIR", "").rstrip("/")
-                    if po_subdir:
-                        po_custom_dir = os.path.join(po_dir, po_name, po_subdir)
-                        if os.path.isdir(po_custom_dir):
-                            log.info(
-                                "Processing custom po '%s' with directory '%s' (from section '%s')",
-                                po_name,
-                                po_subdir,
-                                section_name,
-                            )
-                            if not __revert_custom_po(po_name, po_custom_dir, po_config_dict):
-                                log.error("po revert aborted due to custom po error in po: '%s'", po_name)
-                                return False
+        for plugin in per_po_plugins:
+            if not plugin.revert(ctx, runtime):
+                log.error("po revert aborted due to %s error in po: '%s'", plugin.name, po_name)
+                return False
 
     # Stage 2: revert commit patches (git revert requires clean index).
     for po_name in reversed(apply_pos):
-        if not __revert_commits(po_name):
-            log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
-            return False
+        po_path = os.path.join(po_dir, po_name)
+        ctx = PoPluginContext(
+            project_name=project_name,
+            board_name=board_name,
+            po_name=po_name,
+            po_path=po_path,
+            po_commit_dir=os.path.join(po_path, "commits"),
+            po_patch_dir=os.path.join(po_path, "patches"),
+            po_override_dir=os.path.join(po_path, "overrides"),
+            po_custom_dir=os.path.join(po_path, "custom"),
+            dry_run=dry_run,
+            force=False,
+            exclude_files=exclude_files,
+            applied_records={},
+        )
+
+        for plugin in global_post_plugins:
+            if not plugin.revert(ctx, runtime):
+                log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
+                return False
 
         log.info("po '%s' has been reverted", po_name)
         if not dry_run:
@@ -1421,6 +308,7 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
                 except OSError:
                     # Best-effort cleanup only.
                     pass
+
     log.info("po revert finished for project: '%s'", project_name)
     return True
 
@@ -1474,9 +362,6 @@ def po_new(
 
     # Create the new po directory structure
     po_path = os.path.join(po_dir, po_name)
-    commits_dir = os.path.join(po_path, "commits")
-    patches_dir = os.path.join(po_path, "patches")
-    overrides_dir = os.path.join(po_path, "overrides")
 
     # Existence checks differ for new vs update
     if po_check_exists:
@@ -2121,14 +1006,8 @@ def po_new(
             os.makedirs(po_path, exist_ok=True)
             log.info("Created po directory: '%s'", po_path)
 
-            # Create commits directory (force mode creates empty directories)
-            os.makedirs(commits_dir, exist_ok=True)
-
-            # Create patches directory (force mode creates empty directories)
-            os.makedirs(patches_dir, exist_ok=True)
-
-            # Create overrides directory (force mode creates empty directories)
-            os.makedirs(overrides_dir, exist_ok=True)
+            for plugin in get_po_plugins():
+                plugin.ensure_structure(po_path, True)
 
         log.info(
             "po_new finished for project: '%s', po_name: '%s'",
@@ -2434,6 +1313,15 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
     if po_config:
         apply_pos, _, _ = parse_po_config(po_config)
 
+    runtime = PoPluginRuntime(
+        board_name=board_name,
+        project_name=project_name,
+        repositories=env.get("repositories", []),
+        workspace_root=os.getcwd(),
+        po_configs=po_configs,
+    )
+    plugins = get_po_plugins()
+
     # Only list POs enabled in configuration
     po_infos = []
     for po_name in sorted(apply_pos):
@@ -2441,69 +1329,15 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         if not os.path.isdir(po_path):
             continue
 
-        # Always check standard patches and overrides
-        commits_dir = os.path.join(po_path, "commits")
-        patches_dir = os.path.join(po_path, "patches")
-        overrides_dir = os.path.join(po_path, "overrides")
-        commit_files = []
-        patch_files = []
-        override_files = []
-        if os.path.isdir(commits_dir):
-            for root, _, files in os.walk(commits_dir):
-                for f in files:
-                    if f == ".gitkeep":
-                        continue
-                    rel_path = os.path.relpath(os.path.join(root, f), commits_dir)
-                    commit_files.append(rel_path)
-        if os.path.isdir(patches_dir):
-            for root, _, files in os.walk(patches_dir):
-                for f in files:
-                    if f == ".gitkeep":
-                        continue
-                    rel_path = os.path.relpath(os.path.join(root, f), patches_dir)
-                    patch_files.append(rel_path)
-        if os.path.isdir(overrides_dir):
-            for root, _, files in os.walk(overrides_dir):
-                for f in files:
-                    if f == ".gitkeep":
-                        continue
-                    rel_path = os.path.relpath(os.path.join(root, f), overrides_dir)
-                    override_files.append(rel_path)
-
-        # Check for custom po configurations in common.ini
-        custom_dirs = []
-        for section_name, section_config in po_configs.items():
-            if section_name.startswith("po-"):
-                # Only apply configurations that match the current po_name
-                expected_po_name = section_name[3:]  # Remove "po-" prefix
-                if expected_po_name == po_name:
-                    po_subdir = section_config.get("PROJECT_PO_DIR", "").rstrip("/")
-                    if po_subdir:
-                        custom_dir = os.path.join(po_path, po_subdir)
-                        custom_files = []
-                        if os.path.isdir(custom_dir):
-                            for root, _, files in os.walk(custom_dir):
-                                for f in files:
-                                    if f == ".gitkeep":
-                                        continue
-                                    rel_path = os.path.relpath(os.path.join(root, f), custom_dir)
-                                    custom_files.append(rel_path)
-                            custom_dirs.append(
-                                {
-                                    "section": section_name,
-                                    "dir": po_subdir,
-                                    "files": custom_files,
-                                    "file_copy_config": section_config.get("PROJECT_PO_FILE_COPY", ""),
-                                }
-                            )
-
         po_info = {
             "name": po_name,
-            "commit_files": commit_files,
-            "patch_files": patch_files,
-            "override_files": override_files,
-            "custom_dirs": custom_dirs,
+            "commit_files": [],
+            "patch_files": [],
+            "override_files": [],
+            "custom_dirs": [],
         }
+        for plugin in plugins:
+            po_info.update(plugin.list_files(po_path, runtime))
         po_infos.append(po_info)
     # Print summary
     print(f"\nConfigured PO list for project: {project_name} (board: {board_name})")
