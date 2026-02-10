@@ -119,8 +119,24 @@ jobs:
         if not failures:
             print("::error::pytest failed, but no failing testcases were found in junit xml.")
             sys.exit(0)
-        
+
         shown = failures[:20]
         suffix = "" if len(failures) <= len(shown) else f" (and {len(failures) - len(shown)} more)"
         print("::error::pytest failures: " + ", ".join(shown) + suffix)
+
+        # Emit a short excerpt from the first failure to help debugging without full logs access.
+        first_failure = None
+        for testcase in tree.findall(".//testcase"):
+            failure_node = testcase.find("failure") or testcase.find("error")
+            if failure_node is not None:
+                first_failure = failure_node
+                break
+
+        if first_failure is not None:
+            text = (first_failure.text or "").strip().splitlines()
+            tail = " | ".join(line.strip() for line in text[-12:] if line.strip())
+            if tail:
+                if len(tail) > 1500:
+                    tail = tail[-1500:]
+                print("::error::pytest first failure excerpt: " + tail)
         PY
