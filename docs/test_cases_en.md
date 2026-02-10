@@ -158,10 +158,10 @@
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|
 | PO-001 | PO Config | parse_po_config basic parsing | None | 1. In Python REPL, run `from src.plugins.patch_override import parse_po_config`.<br>2. Call `parse_po_config("po1 po2 -po3 -po4[file1 file2]")`. | apply_pos has `po1`, `po2`; exclude_pos has `po3`; exclude_files has `po4` with file1/file2. | P1 | Functional |
-| PO-002 | PO Apply | Empty PROJECT_PO_CONFIG returns True | Set PROJECT_PO_CONFIG empty | 1. Run `python -m src po_apply projA`. | Warns no PO config and returns True; no po_applied file created. | P2 | Edge |
+| PO-002 | PO Apply | Empty PROJECT_PO_CONFIG returns True | Set PROJECT_PO_CONFIG empty | 1. Run `python -m src po_apply projA`. | Warns no PO config and returns True; no applied record created. | P2 | Edge |
 | PO-003 | PO Apply | Missing board_name fails | Remove board_name in projects_info (via script) | 1. Call `po_apply` from script. | Returns False; log indicates board not found. | P1 | Negative |
-| PO-004 | PO Apply | Already-applied PO is skipped | Create `projects/boardA/po/po_base/po_applied` | 1. Run `python -m src po_apply projA`. | Logs “already applied, skipping”; no re-apply. | P2 | Compatibility |
-| PO-005 | PO Apply | Patch apply success | Patch file prepared | 1. Run `python -m src po_apply projA`.<br>2. Verify file changes are applied. | `git apply` succeeds; po_applied records commands. | P0 | Functional |
+| PO-004 | PO Apply | Already-applied PO is skipped | Create repo-root record `.cache/po_applied/<board>/<project>/<po>.json` | 1. Run `python -m src po_apply projA`. | Logs “already applied ... skipping”; no re-apply. | P2 | Compatibility |
+| PO-005 | PO Apply | Patch apply success | Patch file prepared | 1. Run `python -m src po_apply projA`.<br>2. Verify file changes are applied. | `git apply` succeeds; applied record JSON captures commands and affected files. | P0 | Functional |
 | PO-006 | PO Apply | Patch failure aborts | Use a patch that doesn’t match repo | 1. Run `python -m src po_apply projA`. | Error logged; returns False; override/custom not executed. | P0 | Negative |
 | PO-007 | PO Apply | Override copy success | Override file prepared | 1. Run `python -m src po_apply projA`.<br>2. Verify target file content matches override. | Override file copied successfully; log shows copy. | P1 | Functional |
 | PO-008 | PO Apply | .remove deletes target file | Create `path/to/file.remove` under overrides | 1. Ensure target file exists.<br>2. Run `python -m src po_apply projA`. | Target file removed; log shows remove action. | P1 | Functional |

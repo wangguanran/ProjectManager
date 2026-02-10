@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
+import json
+import shutil
+import subprocess
 from pathlib import Path
 
 from src.plugins.patch_override import parse_po_config, po_apply, po_revert
 from src.__main__ import _load_all_projects, _load_common_config
 
-from .conftest import run_cli
+from .conftest import init_git_repo, run_cli, setup_dataset_a
 
 
 def _load_projects(root: Path):
@@ -68,12 +71,27 @@ def test_po_003_missing_board_name(workspace_a: Path) -> None:
 
 
 def test_po_004_skip_applied_po(workspace_a: Path) -> None:
-    po_applied = workspace_a / "projects" / "boardA" / "po" / "po_base" / "po_applied"
-    po_applied.write_text("applied", encoding="utf-8")
+    record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    record_path.write_text('{"status":"applied"}\n', encoding="utf-8")
     result = run_cli(["po_apply", "projA"], cwd=workspace_a)
     log_text = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
     assert result.returncode == 0
     assert "already applied" in log_text.lower()
+
+
+def test_po_004b_applied_record_written(workspace_a: Path) -> None:
+    (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    result = run_cli(["po_apply", "projA"], cwd=workspace_a)
+    assert result.returncode == 0
+
+    record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
+    assert record_path.exists()
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    assert record["project_name"] == "projA"
+    assert record["po_name"] == "po_base"
+    patch_targets = {t for item in record.get("patches", []) for t in item.get("targets", [])}
+    assert "src/tmp_file.txt" in patch_targets
 
 
 def test_po_005_patch_apply_success(workspace_a: Path) -> None:
@@ -181,6 +199,54 @@ def test_po_014_custom_revert_warning(workspace_a: Path) -> None:
     log_text = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
     assert result.returncode == 0
     assert "manual cleanup may be required" in log_text.lower()
+
+
+def test_po_014b_remove_revert_tracked(workspace_a: Path) -> None:
+    (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_common_po_config(workspace_a)
+    target = workspace_a / "remove_me.txt"
+    target.write_text("base", encoding="utf-8")
+    subprocess.run(["git", "add", "remove_me.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "track remove target"], cwd=str(workspace_a), check=True)
+
+    remove_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "overrides"
+    (remove_dir / "remove_me.txt.remove").write_text("", encoding="utf-8")
+
+    run_cli(["po_apply", "projA"], cwd=workspace_a)
+    assert not target.exists()
+
+    run_cli(["po_revert", "projA"], cwd=workspace_a)
+    assert target.exists()
+    assert target.read_text(encoding="utf-8") == "base"
+
+
+def test_po_014c_shared_projects_dont_share_applied_marker(tmp_path: Path) -> None:
+    ws1 = tmp_path / "ws1"
+    ws2 = tmp_path / "ws2"
+    shared_projects = tmp_path / "shared_projects"
+    ws1.mkdir()
+    ws2.mkdir()
+
+    setup_dataset_a(ws1)
+    shutil.move(str(ws1 / "projects"), str(shared_projects))
+    os.symlink(shared_projects, ws1 / "projects")
+
+    # create ws2 baseline repo compatible with shared PO patches
+    init_git_repo(ws2)
+    (ws2 / "src").mkdir(exist_ok=True)
+    tmp_file = ws2 / "src" / "tmp_file.txt"
+    tmp_file.write_text("line1", encoding="utf-8")
+    subprocess.run(["git", "add", "src/tmp_file.txt"], cwd=str(ws2), check=True)
+    subprocess.run(["git", "commit", "-m", "add tmp file"], cwd=str(ws2), check=True)
+    os.symlink(shared_projects, ws2 / "projects")
+
+    (ws1 / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    run_cli(["po_apply", "projA"], cwd=ws1)
+    assert (ws1 / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json").exists()
+    assert not (ws2 / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json").exists()
+
+    run_cli(["po_apply", "projA"], cwd=ws2)
+    assert "line2" in tmp_file.read_text(encoding="utf-8")
 
 
 def test_po_015_po_new_invalid_name(workspace_a: Path) -> None:

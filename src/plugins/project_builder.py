@@ -265,7 +265,7 @@ def project_diff(env: Dict, projects_info: Dict, project_name: str, keep_diff_di
 
 @register(
     "project_pre_build",
-    needs_repositories=False,
+    needs_repositories=True,
     desc="Pre-build stage for the specified project.",
 )
 def project_pre_build(env: Dict, projects_info: Dict, project_name: str) -> bool:
@@ -320,7 +320,7 @@ def project_post_build(env: Dict, projects_info: Dict, project_name: str) -> boo
 
 @register(
     "project_build",
-    needs_repositories=False,
+    needs_repositories=True,
     desc="Build the specified project, including pre-build, build, and post-build stages.",
 )
 def project_build(env: Dict, projects_info: Dict, project_name: str) -> bool:

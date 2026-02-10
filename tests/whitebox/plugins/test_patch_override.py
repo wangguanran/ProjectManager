@@ -6,6 +6,7 @@ Tests for patch_override module.
 # pylint: disable=import-outside-toplevel
 # pylint: disable=protected-access
 
+import json
 import os
 import shutil
 import subprocess
@@ -517,7 +518,12 @@ class TestPatchOverrideApply:
                 }
             }
 
-            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            finally:
+                os.chdir(old_cwd)
             assert result is True
 
             # Assert files are copied with relative structure preserved
@@ -565,7 +571,12 @@ class TestPatchOverrideApply:
                 }
             }
 
-            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            finally:
+                os.chdir(old_cwd)
             assert result is True
 
             # Should copy files under data/ recursively
@@ -692,7 +703,7 @@ class TestPatchOverrideApply:
             assert len(repo2_calls) == 2
 
     def test_po_apply_skips_when_flag_exists(self):
-        """When po_applied flag exists, po_apply should skip processing and not run git apply."""
+        """When applied record exists, po_apply should skip processing and not run git apply."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
@@ -707,11 +718,11 @@ class TestPatchOverrideApply:
             with open(patch_file, "w", encoding="utf-8") as f:
                 f.write("diff --git a/x b/x\n")
 
-            # Create the applied flag to trigger skip
-            po_path = os.path.join(projects_path, board_name, "po", po_name)
-            os.makedirs(po_path, exist_ok=True)
-            with open(os.path.join(po_path, "po_applied"), "w", encoding="utf-8") as f:
-                f.write("applied\n")
+            # Create the applied record to trigger skip
+            record_path = self.PatchOverride._po_applied_record_path(repo1_path, board_name, "proj", po_name)
+            os.makedirs(os.path.dirname(record_path), exist_ok=True)
+            with open(record_path, "w", encoding="utf-8") as f:
+                f.write('{"status":"applied"}\n')
 
             env = {
                 "projects_path": projects_path,
@@ -730,19 +741,26 @@ class TestPatchOverrideApply:
                 mock_run.assert_not_called()
 
     def test_po_apply_creates_flag_after_success(self):
-        """After successful apply, po_applied flag should be created under PO directory."""
+        """After successful apply, applied record should be created under repo root."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "board"
             po_name = "po1"
 
-            # No patches/overrides -> success path
-            po_base = os.path.join(projects_path, board_name, "po", po_name)
-            os.makedirs(po_base, exist_ok=True)
+            # Prepare overrides so at least one command is executed
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "sample.txt"), "w", encoding="utf-8") as f:
+                f.write("override")
+
+            # Create a git repo as workspace root (root repo)
+            subprocess.run(["git", "init"], cwd=tmpdir, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmpdir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmpdir, check=True)
 
             env = {
                 "projects_path": projects_path,
-                "repositories": [],
+                "repositories": [(tmpdir, "root")],
             }
             projects_info = {
                 "proj": {
@@ -751,14 +769,20 @@ class TestPatchOverrideApply:
                 }
             }
 
-            result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, "proj")
+            finally:
+                os.chdir(old_cwd)
             assert result is True
 
-            applied_flag = os.path.join(po_base, "po_applied")
-            assert os.path.exists(applied_flag)
-            with open(applied_flag, "r", encoding="utf-8") as f:
-                content = f.read()
-                assert "project proj" in content
+            record_path = self.PatchOverride._po_applied_record_path(tmpdir, board_name, "proj", po_name)
+            assert os.path.exists(record_path)
+            record = json.loads(open(record_path, "r", encoding="utf-8").read())
+            assert record["project_name"] == "proj"
+            assert record["po_name"] == po_name
+            assert record["overrides"], "should record override operations"
 
 
 class TestPatchOverrideRevert:
@@ -1308,7 +1332,7 @@ class TestPatchOverrideUpdate:
         assert True
 
     def test_po_apply_logs_commands_to_po_applied_file(self):
-        """Test that po_apply logs all executed commands to po_applied file."""
+        """Test that po_apply logs all executed commands to applied record."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
@@ -1323,11 +1347,8 @@ class TestPatchOverrideUpdate:
             os.makedirs(patches_dir, exist_ok=True)
             os.makedirs(overrides_dir, exist_ok=True)
 
-            # Create a test repository first
-            repo_dir = os.path.join(tmpdir, "test_repo")
-            os.makedirs(repo_dir, exist_ok=True)
-
-            # Initialize git repo
+            # Use tmpdir as the workspace root and root git repository
+            repo_dir = tmpdir
 
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
@@ -1368,10 +1389,9 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run in tmpdir so files are created in temporary directory
             old_cwd = os.getcwd()
             try:
-                os.chdir(tmpdir)
+                os.chdir(repo_dir)
                 result = self.PatchOverride.po_apply(env, projects_info, project_name)
             finally:
                 os.chdir(old_cwd)
@@ -1379,20 +1399,14 @@ class TestPatchOverrideUpdate:
             # Check result
             assert result, "po_apply should succeed"
 
-            # Check po_applied file exists
-            po_applied_file = os.path.join(po_dir, "po_applied")
-            assert os.path.exists(po_applied_file), "po_applied file should exist"
+            record_path = self.PatchOverride._po_applied_record_path(repo_dir, board_name, project_name, po_name)
+            assert os.path.exists(record_path), "applied record should exist"
+            record = json.loads(open(record_path, "r", encoding="utf-8").read())
 
-            # Read and check po_applied content
-            with open(po_applied_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Verify logging format
-            assert "# Applied for project" in content, "Should contain project info"
-            assert "Operation log" in content, "Should contain operation log header"
-            assert "git apply" in content, "Should contain git apply command"
-            assert "cp -rf" in content, "Should contain cp -rf commands"
-            assert "Copy override file" in content, "Should contain override description"
+            commands = record.get("commands", [])
+            assert any("git apply" in item.get("cmd", "") for item in commands)
+            assert any(item.get("cmd", "").startswith("cp -rf") for item in commands)
+            assert any(item.get("description") == "Copy override file" for item in commands)
 
     def test_po_apply_uses_cp_command_instead_of_shutil(self):
         """Test that po_apply uses cp command instead of shutil.copy2."""
@@ -1413,12 +1427,8 @@ class TestPatchOverrideUpdate:
             with open(override_file, "w", encoding="utf-8") as f:
                 f.write("override content")
 
-            # Create a test repository
-            repo_dir = os.path.join(tmpdir, "test_repo")
-            os.makedirs(repo_dir, exist_ok=True)
-
-            # Initialize git repo
-
+            # Use tmpdir as the workspace root and root repository
+            repo_dir = tmpdir
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
@@ -1434,10 +1444,9 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run in tmpdir so files are created in temporary directory
             old_cwd = os.getcwd()
             try:
-                os.chdir(tmpdir)
+                os.chdir(repo_dir)
                 result = self.PatchOverride.po_apply(env, projects_info, project_name)
             finally:
                 os.chdir(old_cwd)
@@ -1445,30 +1454,18 @@ class TestPatchOverrideUpdate:
             # Check result
             assert result, "po_apply should succeed"
 
-            # Check po_applied file exists
-            po_applied_file = os.path.join(po_dir, "po_applied")
-            assert os.path.exists(po_applied_file), "po_applied file should exist"
+            record_path = self.PatchOverride._po_applied_record_path(repo_dir, board_name, project_name, po_name)
+            assert os.path.exists(record_path), "applied record should exist"
+            record = json.loads(open(record_path, "r", encoding="utf-8").read())
 
-            # Read and check po_applied content
-            with open(po_applied_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Verify cp command is used
-            assert "cp " in content, "Should contain cp command"
-            assert "Copy override file" in content, "Should contain copy description"
-
-            # Verify the command format
-            lines = content.split("\n")
-            cp_lines = [line for line in lines if line.startswith("cp ")]
-            assert len(cp_lines) >= 1, "Should have at least one cp command"
-
-            # Verify the cp command has correct format
-            cp_line = cp_lines[0]
-            assert "test_override.txt" in cp_line, "Should contain source file name"
-            assert "test_override.txt" in cp_line, "Should contain destination file name"
+            commands = record.get("commands", [])
+            cp_cmds = [item for item in commands if item.get("cmd", "").startswith("cp -rf")]
+            assert cp_cmds, "Should have at least one cp command"
+            assert any(item.get("description") == "Copy override file" for item in cp_cmds)
+            assert "test_override.txt" in cp_cmds[0]["cmd"]
 
     def test_po_apply_custom_operations_logged(self):
-        """Test that custom operations are logged to po_applied file."""
+        """Test that custom operations are logged to applied record."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
@@ -1486,12 +1483,8 @@ class TestPatchOverrideUpdate:
             with open(custom_file, "w", encoding="utf-8") as f:
                 f.write("custom content")
 
-            # Create a test repository
-            repo_dir = os.path.join(tmpdir, "test_repo")
-            os.makedirs(repo_dir, exist_ok=True)
-
-            # Initialize git repo
-
+            # Use tmpdir as workspace root and root repository
+            repo_dir = tmpdir
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
@@ -1513,10 +1506,9 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run in tmpdir so files are created in temporary directory
             old_cwd = os.getcwd()
             try:
-                os.chdir(tmpdir)
+                os.chdir(repo_dir)
                 result = self.PatchOverride.po_apply(env, projects_info, project_name)
             finally:
                 os.chdir(old_cwd)
@@ -1524,30 +1516,18 @@ class TestPatchOverrideUpdate:
             # Check result
             assert result, "po_apply should succeed"
 
-            # Check po_applied file exists
-            po_applied_file = os.path.join(po_dir, "po_applied")
-            assert os.path.exists(po_applied_file), "po_applied file should exist"
+            record_path = self.PatchOverride._po_applied_record_path(repo_dir, board_name, project_name, po_name)
+            assert os.path.exists(record_path), "applied record should exist"
+            record = json.loads(open(record_path, "r", encoding="utf-8").read())
 
-            # Read and check po_applied content
-            with open(po_applied_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Verify custom operations are logged
-            assert "Copy custom file" in content, "Should contain custom copy description"
-            assert "cp " in content, "Should contain cp command"
-
-            # Verify the command format
-            lines = content.split("\n")
-            cp_lines = [line for line in lines if line.startswith("cp ")]
-            assert len(cp_lines) >= 1, "Should have at least one cp command"
-
-            # Verify the cp command has correct format
-            cp_line = cp_lines[0]
-            assert "test_custom.txt" in cp_line, "Should contain source file name"
-            assert "custom_dest.txt" in cp_line, "Should contain destination file name"
+            commands = record.get("commands", [])
+            custom_cmds = [item for item in commands if item.get("description") == "Copy custom file"]
+            assert custom_cmds, "Should record custom copy commands"
+            assert "test_custom.txt" in custom_cmds[0].get("cmd", "")
+            assert "custom_dest.txt" in custom_cmds[0].get("cmd", "")
 
     def test_po_applied_file_format(self):
-        """Test that po_applied file has correct format without timestamps."""
+        """Test that applied record command strings have no timestamps."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
@@ -1565,12 +1545,8 @@ class TestPatchOverrideUpdate:
             with open(override_file, "w", encoding="utf-8") as f:
                 f.write("override content")
 
-            # Create a test repository
-            repo_dir = os.path.join(tmpdir, "test_repo")
-            os.makedirs(repo_dir, exist_ok=True)
-
-            # Initialize git repo
-
+            # Use tmpdir as workspace root and root repository
+            repo_dir = tmpdir
             subprocess.run(["git", "init"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, check=True)
             subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True)
@@ -1586,41 +1562,21 @@ class TestPatchOverrideUpdate:
 
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            # Run in tmpdir so files are created in temporary directory
             old_cwd = os.getcwd()
             try:
-                os.chdir(tmpdir)
+                os.chdir(repo_dir)
                 result = self.PatchOverride.po_apply(env, projects_info, project_name)
             finally:
                 os.chdir(old_cwd)
 
             # Check result
             assert result, "po_apply should succeed"
-
-            # Check po_applied file exists
-            po_applied_file = os.path.join(po_dir, "po_applied")
-            assert os.path.exists(po_applied_file), "po_applied file should exist"
-
-            # Read and check po_applied content
-            with open(po_applied_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # Verify file format
-            lines = content.split("\n")
-
-            # Check header
-            assert lines[0].startswith("# Applied for project"), "Should start with project info"
-            assert "# Operation log" in content, "Should contain operation log header"
-            assert "# Commands can be re-executed" in content, "Should contain re-execution note"
-
-            # Check that there are no timestamps in command lines
-            command_lines = [line for line in lines if line.startswith("cp -rf") or line.startswith("git ")]
-            for line in command_lines:
-                # Should not contain timestamp pattern [YYYY-MM-DD HH:MM:SS]
-                assert not (line.startswith("[") and "]" in line), f"Command line should not contain timestamp: {line}"
-
-            # Check that descriptions are present
-            assert "Copy override file" in content, "Should contain operation descriptions"
+            record_path = self.PatchOverride._po_applied_record_path(repo_dir, board_name, project_name, po_name)
+            assert os.path.exists(record_path), "applied record should exist"
+            record = json.loads(open(record_path, "r", encoding="utf-8").read())
+            for item in record.get("commands", []):
+                cmd = item.get("cmd", "")
+                assert not (cmd.startswith("[") and "]" in cmd), f"Command line should not contain timestamp: {cmd}"
 
     def test_po_new_detects_deleted_files(self):
         """Test that po_new detects deleted files correctly."""
