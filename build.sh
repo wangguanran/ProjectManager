@@ -69,7 +69,16 @@ BINARY_DIR="$OUT_DIR/binary"
 mkdir -p "$PACKAGE_DIR" "$BINARY_DIR"
 
 echo -e "\033[32m--- Cleaning up old builds ---\033[0m"
-rm -rf build dist .pytest_cache *.egg-info "$OUT_DIR"
+if ! rm -rf build dist .pytest_cache *.egg-info "$OUT_DIR" 2>/dev/null; then
+    if command -v sudo >/dev/null 2>&1; then
+        echo "Permission denied during cleanup; retrying with sudo..."
+        sudo rm -rf build dist .pytest_cache *.egg-info "$OUT_DIR"
+    else
+        echo "Cleanup failed (permission denied) and sudo is unavailable." >&2
+        echo "Please remove build artifacts manually and retry." >&2
+        exit 1
+    fi
+fi
 mkdir -p "$PACKAGE_DIR" "$BINARY_DIR"
 
 echo -e "\033[32m--- Generating build metadata (git commit hash) ---\033[0m"
