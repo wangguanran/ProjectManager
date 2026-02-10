@@ -179,8 +179,8 @@ def test_build_009_clean_requires_force_and_excludes_projects(workspace_a: Path)
 def test_build_010_profile_dispatch(workspace_a: Path) -> None:
     full_marker = workspace_a / "full.marker"
     single_marker = workspace_a / "single-r1-t1.marker"
-    full_cmd = f'{sys.executable} -c "open(\\"full.marker\\", \\"a\\").close()"'
-    single_cmd = f'{sys.executable} -c "open(\\"single-{{repo}}-{{target}}.marker\\", \\"a\\").close()"'
+    full_cmd = f"{sys.executable} -c \"open('full.marker','a').close()\""
+    single_cmd = f"{sys.executable} -c \"open('single-{{repo}}-{{target}}.marker','a').close()\""
     _set_project_config(
         workspace_a,
         "projA",
