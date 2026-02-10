@@ -165,6 +165,10 @@ else
     echo "Skipping external strip on $PLATFORM."
 fi
 
+if [ "$PLATFORM" != "windows" ]; then
+    chmod 755 "$BINARY_PATH" 2>/dev/null || true
+fi
+
 echo "Final binary generated at $BINARY_PATH"
 
 # Clean egg-info in src directory
