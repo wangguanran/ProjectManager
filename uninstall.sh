@@ -3,7 +3,7 @@
 set -euo pipefail
 
 maybe_sudo() {
-    if "$@"; then
+    if "$@" 2>/dev/null; then
         return 0
     fi
     if [ "$(id -u)" = "0" ]; then
