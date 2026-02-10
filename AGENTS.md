@@ -16,17 +16,21 @@ You are working in the `ProjectManager` repository.
 ## Local Dev Commands
 
 - Setup (recommended):
+  - `REPO_ROOT="$(git rev-parse --show-toplevel)" && cd "$REPO_ROOT"`
   - `python3 -m venv /tmp/pm-venv`
   - `/tmp/pm-venv/bin/python -m pip install -U pip`
-  - `cd /Users/wangguanran/Codes/ProjectManager && /tmp/pm-venv/bin/python -m pip install -e '.[dev]'`
+  - `/tmp/pm-venv/bin/python -m pip install -e '.[dev]'`
+  - `/tmp/pm-venv/bin/projman --version`
 - Tests:
-  - `cd /Users/wangguanran/Codes/ProjectManager && /tmp/pm-venv/bin/python -m pytest`
+  - `cd "$(git rev-parse --show-toplevel)" && /tmp/pm-venv/bin/python -m pytest`
 - Lint/format:
-  - `cd /Users/wangguanran/Codes/ProjectManager && PATH="/tmp/pm-venv/bin:$PATH" make lint`
-  - `cd /Users/wangguanran/Codes/ProjectManager && PATH="/tmp/pm-venv/bin:$PATH" make format`
+  - `cd "$(git rev-parse --show-toplevel)" && PATH="/tmp/pm-venv/bin:$PATH" make lint`
+  - `cd "$(git rev-parse --show-toplevel)" && PATH="/tmp/pm-venv/bin:$PATH" make format`
+- Install/Update projman (standalone binary):
+  - `cd "$(git rev-parse --show-toplevel)" && PATH="/tmp/pm-venv/bin:$PATH" ./build.sh`
+  - `cd "$(git rev-parse --show-toplevel)" && ./install.sh`
 - GitHub Actions check (no token required for public repo):
-  - `cd /Users/wangguanran/Codes/ProjectManager && SHA=$(git rev-parse HEAD)`
-  - `curl -sS -H "Accept: application/vnd.github+json" "https://api.github.com/repos/wangguanran/ProjectManager/actions/runs?per_page=30&branch=master" | python3 -c 'import os,sys,json; sha=os.environ["SHA"]; data=json.load(sys.stdin); runs=[r for r in data.get("workflow_runs",[]) if r.get("head_sha")==sha]; print([(r.get("name"),r.get("status"),r.get("conclusion")) for r in runs])'`
+  - `cd "$(git rev-parse --show-toplevel)" && SHA="$(git rev-parse HEAD)" && curl -sS -H "Accept: application/vnd.github+json" "https://api.github.com/repos/wangguanran/ProjectManager/actions/runs?per_page=30&branch=master" | SHA="$SHA" python3 -c 'import os,sys,json; sha=os.environ["SHA"]; data=json.load(sys.stdin); runs=[r for r in data.get("workflow_runs",[]) if r.get("head_sha")==sha]; print([(r.get("name"),r.get("status"),r.get("conclusion")) for r in runs])'`
 
 ## Safety Rules
 
