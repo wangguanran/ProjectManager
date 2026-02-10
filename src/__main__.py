@@ -373,6 +373,37 @@ def _import_platform_scripts(projects_path):
 
 @func_time
 def _parse_args_and_plugin_args(builtin_operations):
+    def _extract_plugin_tokens(argv: List[str]) -> List[str]:
+        """
+        Extract plugin tokens in original argv order.
+
+        Rationale:
+        - `argparse.parse_known_args()` may split unknown option values into the
+          positional `args` bucket, which breaks our later `args + unknown`
+          reconstruction (order is lost).
+        - Plugin flags/args are defined as "everything after <operate> <name>".
+        """
+
+        # Skip global options before <operate>. Today we only have boolean flags
+        # (`--perf-analyze`) plus early-exit flags (`--help/--version`).
+        operate_idx = None
+        name_idx = None
+        for idx, token in enumerate(argv):
+            if token in {"-h", "--help", "--version", "--perf-analyze"}:
+                continue
+            if token.startswith("-"):
+                # Unknown option before <operate>; treat as global and ignore.
+                continue
+            if operate_idx is None:
+                operate_idx = idx
+                continue
+            name_idx = idx
+            break
+
+        if name_idx is None:
+            return []
+        return argv[name_idx + 1 :]
+
     def get_supported_flags(sig):
         return [
             name
@@ -467,9 +498,11 @@ def _parse_args_and_plugin_args(builtin_operations):
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
     parser.epilog = plugin_options if plugin_options else None
 
-    args, unknown = parser.parse_known_args()
+    argv = sys.argv[1:]
+    args, _unknown = parser.parse_known_args(argv)
     args_dict = vars(args)
-    additional_args = args_dict.get("args", []) + unknown
+    # Preserve original order; do NOT concatenate `args` + `unknown`.
+    additional_args = _extract_plugin_tokens(argv)
     parsed_args = []
     parsed_kwargs = {}
     i = 0
