@@ -106,6 +106,43 @@ def test_po_005_patch_apply_success(workspace_a: Path) -> None:
     assert "line2" in target.read_text(encoding="utf-8")
 
 
+def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
+    commits_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "commits"
+    commits_dir.mkdir(parents=True, exist_ok=True)
+
+    commit_file = workspace_a / "commit_file.txt"
+    commit_file.write_text("from commit\n", encoding="utf-8")
+    subprocess.run(["git", "add", "commit_file.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "add commit file"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "format-patch", "-1", "HEAD", "-o", str(commits_dir)], cwd=str(workspace_a), check=True)
+
+    subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=str(workspace_a), check=True)
+    assert not commit_file.exists()
+
+    result = run_cli(["po_apply", "projA"], cwd=workspace_a)
+    assert result.returncode == 0
+    assert commit_file.exists()
+    assert "line2" in (workspace_a / "src" / "tmp_file.txt").read_text(encoding="utf-8")
+
+    subject = subprocess.run(
+        ["git", "log", "-1", "--pretty=%s"],
+        cwd=str(workspace_a),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert subject == "add commit file"
+
+    record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    assert record.get("commits"), "Commit application should be recorded"
+
+    revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
+    assert revert.returncode == 0
+    assert not commit_file.exists()
+    assert not record_path.exists()
+
+
 def test_po_006_patch_apply_fail(workspace_a: Path) -> None:
     bad_patch = workspace_a / "projects" / "boardA" / "po" / "po_base" / "patches" / "bad.patch"
     bad_patch.write_text("invalid patch", encoding="utf-8")
@@ -261,6 +298,7 @@ def test_po_015_po_new_invalid_name(workspace_a: Path) -> None:
 def test_po_016_po_new_force(workspace_a: Path) -> None:
     result = run_cli(["po_new", "projA", "po_force", "--force"], cwd=workspace_a)
     assert result.returncode == 0
+    assert (workspace_a / "projects" / "boardA" / "po" / "po_force" / "commits").exists()
     assert (workspace_a / "projects" / "boardA" / "po" / "po_force" / "patches").exists()
 
 
@@ -306,5 +344,6 @@ def test_po_023_po_list_short(workspace_a: Path) -> None:
 
 def test_po_024_po_list_detail(workspace_a: Path) -> None:
     result = run_cli(["po_list", "projA"], cwd=workspace_a)
+    assert "commits" in result.stdout
     assert "patches" in result.stdout
     assert "overrides" in result.stdout

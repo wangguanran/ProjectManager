@@ -165,12 +165,14 @@
 | PO-003 | PO Apply | Missing board_name fails | Remove board_name in projects_info (via script) | 1. Call `po_apply` from script. | Returns False; log indicates board not found. | P1 | Negative |
 | PO-004 | PO Apply | Already-applied PO is skipped | Create repo-root record `.cache/po_applied/<board>/<project>/<po>.json` | 1. Run `python -m src po_apply projA`. | Logs “already applied ... skipping”; no re-apply. | P2 | Compatibility |
 | PO-005 | PO Apply | Patch apply success | Patch file prepared | 1. Run `python -m src po_apply projA`.<br>2. Verify file changes are applied. | `git apply` succeeds; applied record JSON captures commands and affected files. | P0 | Functional |
+| PO-005b | PO Apply | Commit apply success (commits first) | Commit patch prepared under `po/<po>/commits/` via `git format-patch` | 1. Create a commit in target repo.<br>2. Export it to `projects/<board>/po/<po>/commits/`.<br>3. Reset repo to remove the commit.<br>4. Run `python -m src po_apply projA`. | `git am` succeeds and runs before `git apply`/overrides/custom; applied record JSON captures commit SHAs and affected files. | P1 | Functional |
 | PO-006 | PO Apply | Patch failure aborts | Use a patch that doesn’t match repo | 1. Run `python -m src po_apply projA`. | Error logged; returns False; override/custom not executed. | P0 | Negative |
 | PO-007 | PO Apply | Override copy success | Override file prepared | 1. Run `python -m src po_apply projA`.<br>2. Verify target file content matches override. | Override file copied successfully; log shows copy. | P1 | Functional |
 | PO-008 | PO Apply | .remove deletes target file | Create `path/to/file.remove` under overrides | 1. Ensure target file exists.<br>2. Run `python -m src po_apply projA --force`. | Target file removed; log shows remove action. | P1 | Functional |
 | PO-009 | PO Apply | exclude_files skips specified items | Add `po_base[file.remove]` to PROJECT_PO_CONFIG | 1. Run `python -m src po_apply projA`. | Specified file is skipped; no copy/remove executed. | P2 | Functional |
 | PO-010 | PO Apply | Custom dir copies by config | Dataset A custom files prepared | 1. Run `python -m src po_apply projA`.<br>2. Check `out/cfg/sample.ini` and `out/data/sample.dat`. | Custom files copied to target paths. | P1 | Functional |
 | PO-011 | PO Revert | Patch reverse success | PO-005 executed | 1. Run `python -m src po_revert projA`.<br>2. Verify changes are reverted. | `git apply --reverse` succeeds; file restored. | P1 | Functional |
+| PO-011b | PO Revert | Commit revert success | PO-005b executed | 1. Run `python -m src po_revert projA`.<br>2. Verify the commit changes are undone. | Commits from `commits/` are reverted via `git revert`; applied record is removed. | P1 | Functional |
 | PO-012 | PO Revert | Override revert for tracked file | Override target is Git-tracked | 1. Run `python -m src po_revert projA`. | File restored via `git checkout --`. | P1 | Functional |
 | PO-013 | PO Revert | Override revert for untracked file | Override target is untracked | 1. Run `python -m src po_revert projA`. | File is deleted directly. | P1 | Functional |
 | PO-014 | PO Revert | Custom revert warns manual cleanup | PROJECT_PO_FILE_COPY configured | 1. Run `python -m src po_revert projA`.<br>2. Check logs. | Warning indicates custom files may need manual cleanup; flow returns True. | P2 | Compatibility |
@@ -180,7 +182,7 @@
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|
 | PO-015 | PO Create | po_new rejects invalid name | Dataset A completed | 1. Run `python -m src po_new projA PO-INVALID`. | Error indicates name must match `po[a-z0-9_]*`. | P1 | Negative |
-| PO-016 | PO Create | po_new force creates empty structure | Dataset A completed | 1. Run `python -m src po_new projA po_force --force`.<br>2. Check `projects/boardA/po/po_force/patches` and `overrides`. | Structure created successfully without prompts. | P1 | Functional |
+| PO-016 | PO Create | po_new force creates empty structure | Dataset A completed | 1. Run `python -m src po_new projA po_force --force`.<br>2. Check `projects/boardA/po/po_force/commits`, `patches`, and `overrides`. | Structure created successfully without prompts. | P1 | Functional |
 | PO-017 | PO Create | po_new interactive selection | Workspace has modified/deleted files | 1. Run `python -m src po_new projA po_interactive`.<br>2. Select files and choose patch/override/remove. | Selected files are processed and files created accordingly. | P1 | Functional |
 | PO-018 | PO Create | po_new with no repositories | `env['repositories']` empty (run in non-git dir) | 1. Run `python -m src po_new projA po_empty` in non-git dir. | “No git repositories found” message; no crash. | P2 | Edge |
 | PO-019 | PO Update | po_update requires existing PO | Dataset A completed | 1. Create `po_update_target` first.<br>2. Run `python -m src po_update projA po_update_target --force`. | Update succeeds, reusing po_new flow. | P1 | Functional |
@@ -188,7 +190,7 @@
 | PO-021 | PO Delete | po_del removes directory and config | PO exists and is referenced | 1. Run `python -m src po_del projA po_base --force`.<br>2. Verify PO dir removed.<br>3. Verify PROJECT_PO_CONFIG no longer includes it. | PO directory deleted and config updated. | P0 | Functional |
 | PO-022 | PO Delete | po_del cancelled by user | PO exists | 1. Run `python -m src po_del projA po_base`.<br>2. Enter `no`. | Deletion cancelled; PO directory and config unchanged. | P2 | Compatibility |
 | PO-023 | PO List | po_list short names only | Dataset A completed | 1. Run `python -m src po_list projA --short`. | Only PO names printed. | P1 | Functional |
-| PO-024 | PO List | po_list detailed output | Dataset A completed | 1. Run `python -m src po_list projA`. | Outputs patches, overrides, and custom file lists. | P1 | Functional |
+| PO-024 | PO List | po_list detailed output | Dataset A completed | 1. Run `python -m src po_list projA`. | Outputs commits, patches, overrides, and custom file lists. | P1 | Functional |
 
 ## 9. Utilities & Logging (src/utils.py / src/log_manager.py / src/profiler.py)
 

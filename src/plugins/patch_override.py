@@ -112,6 +112,16 @@ def parse_po_config(po_config):
     # Filter apply_pos to exclude items in exclude_pos
     apply_pos = [po_name for po_name in apply_pos if po_name not in exclude_pos]
 
+    # Dedupe apply_pos while preserving order (config inheritance may concatenate).
+    seen = set()
+    deduped_apply_pos = []
+    for po_name in apply_pos:
+        if po_name in seen:
+            continue
+        seen.add(po_name)
+        deduped_apply_pos.append(po_name)
+    apply_pos = deduped_apply_pos
+
     return apply_pos, exclude_pos, exclude_files
 
 
@@ -180,7 +190,7 @@ def po_apply(
         record = ctx.applied_records.get(abs_repo_root)
         if record is None:
             record = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "status": "applied",
                 "applied_at": datetime.now().isoformat(),
                 "project_name": ctx.project_name,
@@ -188,6 +198,7 @@ def po_apply(
                 "po_name": ctx.po_name,
                 "repo_name": repo_name,
                 "repo_path": abs_repo_root,
+                "commits": [],
                 "patches": [],
                 "overrides": [],
                 "custom": [],
@@ -242,6 +253,7 @@ def po_apply(
         - board_name: current board name
         - po_name: current PO name
         - po_path: path to po/<po_name>
+        - po_commit_dir: directory containing commit patches (po/<po_name>/commits)
         - po_patch_dir: directory containing patch files (po/<po_name>/patches)
         - po_override_dir: directory containing override files (po/<po_name>/overrides)
         - po_custom_dir: unified custom root directory (po/<po_name>/custom)
@@ -254,6 +266,7 @@ def po_apply(
         board_name: str
         po_name: str
         po_path: str
+        po_commit_dir: str
         po_patch_dir: str
         po_override_dir: str
         po_custom_dir: str
@@ -303,6 +316,162 @@ def po_apply(
             return os.path.abspath(root_repo_path), "root", None
 
         return None
+
+    def __apply_commits(ctx: PoApplyContext) -> bool:
+        """Apply git-format-patch commits for the specified po (git am)."""
+        log.debug("po_name: '%s', po_commit_dir: '%s'", ctx.po_name, ctx.po_commit_dir)
+        if not os.path.isdir(ctx.po_commit_dir):
+            log.debug("No commits dir for po: '%s'", ctx.po_name)
+            return True
+        log.debug("applying commits for po: '%s'", ctx.po_name)
+
+        repo_map = {rname: repo_path for repo_path, rname in repositories}
+
+        commit_files: List[Tuple[str, str]] = []
+        for current_dir, _, files in os.walk(ctx.po_commit_dir):
+            for fname in files:
+                if fname == ".gitkeep":
+                    continue
+                patch_file = os.path.join(current_dir, fname)
+                rel_path = os.path.relpath(patch_file, ctx.po_commit_dir)
+                commit_files.append((rel_path, patch_file))
+
+        for rel_path, patch_file in sorted(commit_files, key=lambda item: item[0]):
+            path_parts = rel_path.split(os.sep)
+            if len(path_parts) == 1:
+                repo_name = "root"
+            elif len(path_parts) >= 2:
+                repo_name = os.path.join(*path_parts[:-1])
+            else:
+                log.error("Invalid commit file path: '%s'", rel_path)
+                return False
+
+            if ctx.po_name in ctx.exclude_files and rel_path in ctx.exclude_files[ctx.po_name]:
+                log.debug(
+                    "commit file '%s' in po '%s' is excluded by config",
+                    rel_path,
+                    ctx.po_name,
+                )
+                continue
+
+            patch_target = repo_map.get(repo_name)
+            if not patch_target:
+                log.error("Cannot find repo path for '%s'", repo_name)
+                return False
+
+            if __applied_record_exists(patch_target, ctx.po_name):
+                log.info(
+                    "po '%s' already applied for repo '%s', skipping commit '%s'",
+                    ctx.po_name,
+                    repo_name,
+                    rel_path,
+                )
+                continue
+
+            try:
+                with open(patch_file, "r", encoding="utf-8") as f:
+                    patch_text = f.read()
+            except OSError as e:
+                log.error("Failed to read commit patch '%s': %s", patch_file, e)
+                return False
+
+            patch_targets = _extract_patch_targets(patch_text)
+
+            head_before = None
+            head_before_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=patch_target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if head_before_result.returncode == 0:
+                head_before = head_before_result.stdout.strip()
+
+            result = __execute_command(
+                ctx,
+                patch_target,
+                repo_name,
+                ["git", "am", patch_file],
+                cwd=patch_target,
+                description=f"Apply commit patch {os.path.basename(patch_file)} to {repo_name}",
+            )
+            if result.returncode != 0:
+                # Make sure we clean up am state before continuing.
+                __execute_command(
+                    ctx,
+                    patch_target,
+                    repo_name,
+                    ["git", "am", "--abort"],
+                    cwd=patch_target,
+                    description=f"Abort failed git am for {os.path.basename(patch_file)}",
+                )
+
+                already_applied = __execute_command(
+                    ctx,
+                    patch_target,
+                    repo_name,
+                    ["git", "apply", "--reverse", "--check", patch_file],
+                    cwd=patch_target,
+                    description=f"Check commit patch already applied {os.path.basename(patch_file)} to {repo_name}",
+                )
+                if already_applied.returncode == 0:
+                    log.info(
+                        "Commit patch '%s' already applied for repo '%s' (record missing); skipping.",
+                        rel_path,
+                        repo_name,
+                    )
+                    record = __get_repo_record(ctx, patch_target, repo_name)
+                    record["commits"].append(
+                        {
+                            "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
+                            "targets": patch_targets,
+                            "status": "already_applied",
+                        }
+                    )
+                    continue
+
+                log.error("Failed to apply commit patch '%s': '%s'", patch_file, result.stderr)
+                return False
+
+            head_after = head_before
+            head_after_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=patch_target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if head_after_result.returncode == 0:
+                head_after = head_after_result.stdout.strip()
+
+            commit_shas: List[str] = []
+            if head_before and head_after and head_before != head_after and not ctx.dry_run:
+                rev_list = subprocess.run(
+                    ["git", "rev-list", "--reverse", f"{head_before}..{head_after}"],
+                    cwd=patch_target,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if rev_list.returncode == 0 and rev_list.stdout.strip():
+                    commit_shas = [line.strip() for line in rev_list.stdout.splitlines() if line.strip()]
+
+            if not commit_shas and head_after:
+                commit_shas = [head_after]
+
+            record = __get_repo_record(ctx, patch_target, repo_name)
+            record["commits"].append(
+                {
+                    "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
+                    "targets": patch_targets,
+                    "head_before": head_before,
+                    "head_after": head_after,
+                    "commit_shas": commit_shas,
+                }
+            )
+
+        return True
 
     def __apply_patch(ctx: PoApplyContext):
         """Apply patches for the specified po."""
@@ -771,42 +940,56 @@ def po_apply(
 
         return True
 
+    ctxs: List[PoApplyContext] = []
     for po_name in apply_pos:
         po_path = os.path.join(po_dir, po_name)
-        log.info("po '%s' starting to apply patch and override%s", po_name, " (dry-run)" if dry_run else "")
-
-        ctx = PoApplyContext(
-            project_name=project_name,
-            board_name=board_name,
-            po_name=po_name,
-            po_path=po_path,
-            po_patch_dir=os.path.join(po_path, "patches"),
-            po_override_dir=os.path.join(po_path, "overrides"),
-            po_custom_dir=os.path.join(po_path, "custom"),
-            dry_run=dry_run,
-            force=force,
-            exclude_files=exclude_files,
-            po_configs=env.get("po_configs", {}),
-            repositories=repositories,
-            workspace_root=workspace_root,
-            applied_records={},
+        ctxs.append(
+            PoApplyContext(
+                project_name=project_name,
+                board_name=board_name,
+                po_name=po_name,
+                po_path=po_path,
+                po_commit_dir=os.path.join(po_path, "commits"),
+                po_patch_dir=os.path.join(po_path, "patches"),
+                po_override_dir=os.path.join(po_path, "overrides"),
+                po_custom_dir=os.path.join(po_path, "custom"),
+                dry_run=dry_run,
+                force=force,
+                exclude_files=exclude_files,
+                po_configs=env.get("po_configs", {}),
+                repositories=repositories,
+                workspace_root=workspace_root,
+                applied_records={},
+            )
         )
+
+    # Stage 1: apply all commit patches first (git am requires clean index).
+    for ctx in ctxs:
+        log.info("po '%s' starting to apply commits%s", ctx.po_name, " (dry-run)" if dry_run else "")
+        ok = __apply_commits(ctx)
+        if not ok:
+            log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
+            return False
+
+    # Stage 2: apply patches/overrides/custom (may dirty working tree).
+    for ctx in ctxs:
+        log.info("po '%s' starting to apply patch and override%s", ctx.po_name, " (dry-run)" if dry_run else "")
 
         ok = __apply_patch(ctx) and __apply_override(ctx) and __apply_custom(ctx)
         if not ok:
-            log.error("po apply aborted due to error in po: '%s'", po_name)
+            log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
             return False
 
         if not dry_run and ctx.applied_records:
             try:
                 for repo_root, record in ctx.applied_records.items():
-                    record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
+                    record_path = _po_applied_record_path(repo_root, board_name, project_name, ctx.po_name)
                     _write_json_atomic(record_path, record)
             except OSError as e:
-                log.error("Failed to finalize applied record for po '%s': '%s'", po_name, e)
+                log.error("Failed to finalize applied record for po '%s': '%s'", ctx.po_name, e)
                 return False
 
-        log.info("po '%s' has been processed", po_name)
+        log.info("po '%s' has been processed", ctx.po_name)
     log.info("po apply finished for project: '%s'", project_name)
     return True
 
@@ -814,11 +997,11 @@ def po_apply(
 @register(
     "po_revert",
     needs_repositories=True,
-    desc="Revert patch and override for a project",
+    desc="Revert patch/override/commits for a project",
 )
 def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False) -> bool:
     """
-    Revert patch and override for the specified project.
+    Revert patch/override/commits for the specified project.
     Args:
         env (dict): Global environment dict.
         projects_info (dict): All projects info.
@@ -852,6 +1035,77 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
 
     # Use repositories from env
     repositories = env.get("repositories", [])
+
+    def __load_applied_record(repo_root: str, po_name: str) -> Optional[Dict[str, Any]]:
+        record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
+        if not os.path.exists(record_path):
+            return None
+        try:
+            with open(record_path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except (OSError, ValueError) as e:
+            log.warning("Failed to read applied record '%s': %s", record_path, e)
+            return None
+
+    def __revert_commits(po_name: str) -> bool:
+        """Revert commits applied by PO (git revert)."""
+        for repo_root, repo_name in repositories or []:
+            record = __load_applied_record(repo_root, po_name)
+            if not record:
+                continue
+            commits = record.get("commits") or []
+            if not commits:
+                continue
+
+            repo_path = record.get("repo_path") or repo_root
+            log.info("reverting commits for po '%s' in repo '%s'", po_name, repo_name)
+
+            for commit_entry in reversed(commits):
+                if commit_entry.get("status") == "already_applied":
+                    continue
+                shas = commit_entry.get("commit_shas") or []
+                if not shas and commit_entry.get("head_after"):
+                    shas = [commit_entry["head_after"]]
+
+                for sha in reversed(shas):
+                    if not sha:
+                        continue
+                    if dry_run:
+                        log.info("DRY-RUN: cd %s && git revert --no-edit %s", repo_path, sha)
+                        continue
+
+                    result = subprocess.run(
+                        ["git", "revert", "--no-edit", sha],
+                        cwd=repo_path,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    log.debug(
+                        "git revert result: returncode: '%s', stdout: '%s', stderr: '%s'",
+                        result.returncode,
+                        result.stdout,
+                        result.stderr,
+                    )
+                    if result.returncode != 0:
+                        log.error(
+                            "Failed to revert commit '%s' for po '%s' in repo '%s': %s",
+                            sha,
+                            po_name,
+                            repo_name,
+                            result.stderr,
+                        )
+                        # Best-effort cleanup of revert state.
+                        subprocess.run(
+                            ["git", "revert", "--abort"],
+                            cwd=repo_path,
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        return False
+
+        return True
 
     def __revert_patch(po_name, po_patch_dir, exclude_files):
         """Revert patches for the specified po."""
@@ -1118,7 +1372,8 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
     # Get po configurations from env
     po_configs = env.get("po_configs", {})
 
-    for po_name in apply_pos:
+    # Stage 1: revert patches/overrides/custom first (these may leave the repo dirty).
+    for po_name in reversed(apply_pos):
         # Always process standard patches and overrides
         po_patch_dir = os.path.join(po_dir, po_name, "patches")
         if not __revert_patch(po_name, po_patch_dir, exclude_files):
@@ -1149,6 +1404,12 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
                             if not __revert_custom_po(po_name, po_custom_dir, po_config_dict):
                                 log.error("po revert aborted due to custom po error in po: '%s'", po_name)
                                 return False
+
+    # Stage 2: revert commit patches (git revert requires clean index).
+    for po_name in reversed(apply_pos):
+        if not __revert_commits(po_name):
+            log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
+            return False
 
         log.info("po '%s' has been reverted", po_name)
         if not dry_run:
@@ -1213,6 +1474,7 @@ def po_new(
 
     # Create the new po directory structure
     po_path = os.path.join(po_dir, po_name)
+    commits_dir = os.path.join(po_path, "commits")
     patches_dir = os.path.join(po_path, "patches")
     overrides_dir = os.path.join(po_path, "overrides")
 
@@ -1859,6 +2121,9 @@ def po_new(
             os.makedirs(po_path, exist_ok=True)
             log.info("Created po directory: '%s'", po_path)
 
+            # Create commits directory (force mode creates empty directories)
+            os.makedirs(commits_dir, exist_ok=True)
+
             # Create patches directory (force mode creates empty directories)
             os.makedirs(patches_dir, exist_ok=True)
 
@@ -2144,7 +2409,7 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         project_name (str): Project name.
         short (bool): If True, only list po names, not details.
     Returns:
-        list: List of dicts with PO info (name, patch_files, override_files)
+        list: List of dicts with PO info (name, commit_files, patch_files, override_files)
     """
     log.info("start po_list for project: '%s'", project_name)
     project_info = projects_info.get(project_name, {})
@@ -2177,10 +2442,19 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
             continue
 
         # Always check standard patches and overrides
+        commits_dir = os.path.join(po_path, "commits")
         patches_dir = os.path.join(po_path, "patches")
         overrides_dir = os.path.join(po_path, "overrides")
+        commit_files = []
         patch_files = []
         override_files = []
+        if os.path.isdir(commits_dir):
+            for root, _, files in os.walk(commits_dir):
+                for f in files:
+                    if f == ".gitkeep":
+                        continue
+                    rel_path = os.path.relpath(os.path.join(root, f), commits_dir)
+                    commit_files.append(rel_path)
         if os.path.isdir(patches_dir):
             for root, _, files in os.walk(patches_dir):
                 for f in files:
@@ -2225,6 +2499,7 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
 
         po_info = {
             "name": po_name,
+            "commit_files": commit_files,
             "patch_files": patch_files,
             "override_files": override_files,
             "custom_dirs": custom_dirs,
@@ -2240,6 +2515,12 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
     else:
         for po in po_infos:
             print(f"\nPO: {po['name']}")
+            print("  commits:")
+            if po.get("commit_files"):
+                for cf in po["commit_files"]:
+                    print(f"    - {cf}")
+            else:
+                print("    (none)")
             print("  patches:")
             if po["patch_files"]:
                 for pf in po["patch_files"]:
