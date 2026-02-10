@@ -382,6 +382,22 @@ def po_apply(
                         result.stderr,
                     )
                     if result.returncode != 0:
+                        already_applied = __execute_command(
+                            ctx,
+                            patch_target,
+                            repo_name,
+                            ["git", "apply", "--reverse", "--check", patch_file],
+                            cwd=patch_target,
+                            description=f"Check patch already applied {os.path.basename(patch_file)} to {repo_name}",
+                        )
+                        if already_applied.returncode == 0:
+                            log.info(
+                                "Patch '%s' already applied for repo '%s' (record missing); skipping.",
+                                rel_path,
+                                repo_name,
+                            )
+                            continue
+
                         log.error(
                             "Failed to apply patch '%s': '%s'",
                             patch_file,

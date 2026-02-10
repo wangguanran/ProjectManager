@@ -495,8 +495,17 @@ class TestProjectPreBuild:
 
         # Assert
         assert result is True
-        mock_project_diff.assert_called_once_with(env, projects_info, project_name)
-        mock_po_apply.assert_called_once_with(env, projects_info, project_name)
+        mock_po_apply.assert_called_once()
+        called_args, called_kwargs = mock_po_apply.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert called_kwargs["dry_run"] is False
+        assert called_kwargs["force"] is False
+
+        mock_project_diff.assert_called_once()
+        called_args, called_kwargs = mock_project_diff.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert called_kwargs["timestamp"] is None
+        assert called_kwargs["dry_run"] is False
 
     @patch("src.plugins.project_builder.po_apply")
     @patch("src.plugins.project_builder.project_diff")
@@ -515,8 +524,17 @@ class TestProjectPreBuild:
         # Assert
         # Note: project_pre_build always returns True regardless of project_diff result
         assert result is True
-        mock_project_diff.assert_called_once_with(env, projects_info, project_name)
-        mock_po_apply.assert_called_once_with(env, projects_info, project_name)
+        mock_po_apply.assert_called_once()
+        called_args, called_kwargs = mock_po_apply.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert called_kwargs["dry_run"] is False
+        assert called_kwargs["force"] is False
+
+        mock_project_diff.assert_called_once()
+        called_args, called_kwargs = mock_project_diff.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert called_kwargs["timestamp"] is None
+        assert called_kwargs["dry_run"] is False
 
 
 class TestProjectDoBuild:
@@ -724,9 +742,30 @@ class TestProjectBuild:
 
         # Assert
         assert result is True
-        mock_pre_build.assert_called_once_with(env, projects_info, project_name)
-        mock_do_build.assert_called_once_with(env, projects_info, project_name)
-        mock_post_build.assert_called_once_with(env, projects_info, project_name)
+        mock_pre_build.assert_called_once()
+        called_args, called_kwargs = mock_pre_build.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert isinstance(called_kwargs.get("timestamp"), str)
+        assert called_kwargs.get("no_po") is False
+        assert called_kwargs.get("no_diff") is False
+        assert called_kwargs.get("dry_run") is False
+        assert called_kwargs.get("force") is False
+
+        mock_do_build.assert_called_once()
+        called_args, called_kwargs = mock_do_build.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert called_kwargs.get("profile") == "full"
+        assert called_kwargs.get("repo") == ""
+        assert called_kwargs.get("target") == ""
+        assert called_kwargs.get("dry_run") is False
+
+        mock_post_build.assert_called_once()
+        called_args, called_kwargs = mock_post_build.call_args
+        assert called_args == (env, projects_info, project_name)
+        assert called_kwargs.get("profile") == "full"
+        assert called_kwargs.get("repo") == ""
+        assert called_kwargs.get("target") == ""
+        assert called_kwargs.get("dry_run") is False
 
     @patch("src.plugins.project_builder.project_pre_build")
     def test_project_build_pre_build_failure(self, mock_pre_build):
@@ -742,7 +781,9 @@ class TestProjectBuild:
 
         # Assert
         assert result is False
-        mock_pre_build.assert_called_once_with(env, projects_info, project_name)
+        mock_pre_build.assert_called_once()
+        called_args, _called_kwargs = mock_pre_build.call_args
+        assert called_args == (env, projects_info, project_name)
 
     @patch("src.plugins.project_builder.project_pre_build")
     @patch("src.plugins.project_builder.project_do_build")
@@ -760,8 +801,13 @@ class TestProjectBuild:
 
         # Assert
         assert result is False
-        mock_pre_build.assert_called_once_with(env, projects_info, project_name)
-        mock_do_build.assert_called_once_with(env, projects_info, project_name)
+        mock_pre_build.assert_called_once()
+        called_args, _called_kwargs = mock_pre_build.call_args
+        assert called_args == (env, projects_info, project_name)
+
+        mock_do_build.assert_called_once()
+        called_args, _called_kwargs = mock_do_build.call_args
+        assert called_args == (env, projects_info, project_name)
 
     @patch("src.plugins.project_builder.project_pre_build")
     @patch("src.plugins.project_builder.project_do_build")
@@ -781,9 +827,17 @@ class TestProjectBuild:
 
         # Assert
         assert result is False
-        mock_pre_build.assert_called_once_with(env, projects_info, project_name)
-        mock_do_build.assert_called_once_with(env, projects_info, project_name)
-        mock_post_build.assert_called_once_with(env, projects_info, project_name)
+        mock_pre_build.assert_called_once()
+        called_args, _called_kwargs = mock_pre_build.call_args
+        assert called_args == (env, projects_info, project_name)
+
+        mock_do_build.assert_called_once()
+        called_args, _called_kwargs = mock_do_build.call_args
+        assert called_args == (env, projects_info, project_name)
+
+        mock_post_build.assert_called_once()
+        called_args, _called_kwargs = mock_post_build.call_args
+        assert called_args == (env, projects_info, project_name)
 
     @patch("src.plugins.project_builder.po_apply")
     def test_project_build_with_platform_config(self, mock_po_apply):

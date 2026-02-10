@@ -31,8 +31,31 @@ import_module("src.plugins.patch_override")
 
 # ===== Migration utility functions =====
 def _strip_comment(val):
-    """Remove inline comments after # or ;"""
-    return val.split("#", 1)[0].split(";", 1)[0].strip()
+    """Remove inline comments after `#` or `;`.
+
+    Notes:
+    - Preserve literal `#` / `;` characters inside single/double quotes.
+    - Treat `#` / `;` as a comment delimiter only when it appears at the start
+      of the value or is preceded by whitespace.
+    """
+
+    text = "" if val is None else str(val)
+    in_single = False
+    in_double = False
+    for idx, ch in enumerate(text):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            continue
+        if in_single or in_double:
+            continue
+        if ch not in {"#", ";"}:
+            continue
+        if idx == 0 or text[idx - 1].isspace():
+            return text[:idx].strip()
+    return text.strip()
 
 
 @func_time

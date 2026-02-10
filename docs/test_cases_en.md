@@ -152,6 +152,9 @@
 | BUILD-005 | Build Flow | Validation hook failure aborts | Register platform VALIDATION hook returning False | 1. Register hook via script.<br>2. Run `python -m src project_build projA`. | Build stops at validation stage and returns False. | P1 | Negative |
 | BUILD-006 | Build Flow | Pre/Build/Post hook failure aborts | Register platform hook returning False | 1. Register PRE_BUILD/BUILD/POST_BUILD hook returning False.<br>2. Run `python -m src project_build projA`. | Build stops at failing stage with error log. | P1 | Negative |
 | BUILD-007 | Build Flow | No platform skips hooks | Use project without PROJECT_PLATFORM | 1. Run `python -m src project_build <proj>` without platform. | No platform hooks executed; pre/do/post functions run. | P2 | Functional |
+| BUILD-008 | Build Flow | Sync runs configured command | Dataset A completed | 1. Set `PROJECT_SYNC_CMD` for `projA`.<br>2. Run `python -m src project_build projA --sync --no-po --no-diff`.<br>3. Check marker/log output. | Sync command executes before build steps; build completes successfully. | P1 | Functional |
+| BUILD-009 | Build Flow | Clean requires `--force` and excludes config | Dataset A completed | 1. Create untracked `junk.txt` and `.cache/po_applied/...` file.<br>2. Run `python -m src project_build projA --clean --no-po --no-diff`.<br>3. Re-run with `--clean --force`. | Without `--force`: command fails fast.<br>With `--force`: untracked junk is removed, but `projects/` and `.cache/po_applied/` remain. | P1 | Safety |
+| BUILD-010 | Build Flow | Profile dispatch chooses full/single command | Dataset A completed | 1. Set `PROJECT_BUILD_FULL_CMD` and `PROJECT_BUILD_SINGLE_CMD` for `projA`.<br>2. Run `python -m src project_build projA --profile full --no-po --no-diff`.<br>3. Run `python -m src project_build projA --profile single --repo r1 --target t1 --no-po --no-diff`. | Runs the expected profile command; `{repo}` and `{target}` placeholders are formatted for single build. | P1 | Functional |
 
 ## 7. PO Parsing & Apply (src/plugins/patch_override.py)
 
@@ -198,7 +201,29 @@
 | LOG-001 | Logging | latest.log symlink created | Dataset A completed | 1. Run any command (e.g., `python -m src --help`).<br>2. Check `.cache/latest.log`. | Symlink exists and points to the latest log file. | P2 | Functional |
 | PROF-001 | Profiler | ENABLE_CPROFILE toggles profiling | Use a script setting `builtins.ENABLE_CPROFILE=True` | 1. Call a function decorated with `@func_cprofile`. | cProfile stats appear in logs; process finishes normally. | P3 | Functional |
 
-## 10. Safety Dry-Run (project_diff / po_apply / po_revert)
+## 10. Artifact Saving Rules (src/plugins/project_builder.py)
+
+### Proposed Rule Syntax
+
+- `path:<src_relpath>:<dest_dir>/` (fixed path, single file or directory)
+- `glob:<glob_pattern>:<dest_dir>/` (glob under workspace root)
+- `regex@<root_relpath>:<regex_pattern>:<dest_dir>/` (regex match under search root)
+- `manifest:<manifest_relpath>:<dest_dir>/` (each line is a relative path)
+
+### Safety Requirements
+
+- Only relative paths are allowed; reject absolute paths and `..` traversal.
+- All saved artifacts use safe relpaths anchored in the project root.
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| ART-001 | Artifact Save | Fixed path rule | Dataset A completed with `out/bin/app.bin` created | 1. Set `PROJECT_BUILD_ARTIFACTS = path:out/bin/app.bin:bin/` for `projA`.<br>2. Run `python -m src project_build projA`.<br>3. Inspect `.cache/build/projA/<timestamp>/artifacts`. | `bin/app.bin` exists under artifacts root. | P1 | Functional |
+| ART-002 | Artifact Save | Glob rule collects multiple files | Dataset A completed with `out/*.whl` created | 1. Set `PROJECT_BUILD_ARTIFACTS = glob:out/*.whl:wheels/` for `projA`.<br>2. Run `python -m src project_build projA`.<br>3. Inspect artifacts root. | All matched wheel files are copied under `wheels/`. | P1 | Functional |
+| ART-003 | Artifact Save | Regex rule with search root | Dataset A completed with `logs/**/*.log` created | 1. Set `PROJECT_BUILD_ARTIFACTS = regex@logs:.*\\.log$:logs/` for `projA`.<br>2. Run `python -m src project_build projA`.<br>3. Inspect artifacts root. | All log files under `logs/` copied to `logs/`, preserving subpaths. | P1 | Functional |
+| ART-004 | Artifact Save | Manifest rule expands paths | Dataset A completed with `artifacts.manifest` listing files | 1. Create `artifacts.manifest` with `out/artifact.txt` and `logs/build.log`.<br>2. Set `PROJECT_BUILD_ARTIFACTS = manifest:artifacts.manifest:bundle/`.<br>3. Run `python -m src project_build projA`. | Manifest entries are copied under `bundle/` with relative paths preserved. | P1 | Functional |
+| ART-005 | Artifact Save | Unsafe relpaths rejected | Dataset A completed with manifest entry `../secret.txt` | 1. Set `PROJECT_BUILD_ARTIFACTS = manifest:artifacts.manifest:bundle/` for `projA`.<br>2. Run `python -m src project_build projA`. | Command fails with error indicating unsafe path. | P1 | Negative |
+
+## 11. Safety Dry-Run (project_diff / po_apply / po_revert)
 
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|

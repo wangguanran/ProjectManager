@@ -105,3 +105,102 @@ def test_build_007_no_platform_skip_hooks(workspace_a: Path) -> None:
         "repositories": [(str(workspace_a), "root")],
     }
     assert project_build(env, projects_info, "projA") is True
+
+
+def _set_project_config(root: Path, project: str, updates: dict[str, str]) -> None:
+    ini_path = root / "projects" / "boardA" / "boardA.ini"
+    lines = ini_path.read_text(encoding="utf-8").splitlines()
+    updated: list[str] = []
+    in_section = False
+    pending = dict(updates)
+    for line in lines:
+        if line.startswith("[") and line.endswith("]"):
+            if in_section and pending:
+                for key, value in pending.items():
+                    updated.append(f"{key} = {value}")
+                pending.clear()
+            in_section = line.strip("[]") == project
+            updated.append(line)
+            continue
+
+        if in_section:
+            replaced = False
+            for key in list(pending.keys()):
+                if line.replace(" ", "").startswith(f"{key}="):
+                    updated.append(f"{key} = {pending.pop(key)}")
+                    replaced = True
+                    break
+            if replaced:
+                continue
+
+        updated.append(line)
+
+    if in_section and pending:
+        for key, value in pending.items():
+            updated.append(f"{key} = {value}")
+
+    ini_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
+
+def test_build_008_sync_runs_project_sync_cmd(workspace_a: Path) -> None:
+    marker = workspace_a / "sync.marker"
+    cmd = "touch sync.marker"
+    _set_project_config(workspace_a, "projA", {"PROJECT_SYNC_CMD": cmd})
+
+    result = run_cli(["project_build", "projA", "--sync", "--no-po", "--no-diff"], cwd=workspace_a, check=False)
+    assert result.returncode == 0
+    assert marker.exists()
+
+
+def test_build_009_clean_requires_force_and_excludes_projects(workspace_a: Path) -> None:
+    junk = workspace_a / "junk.txt"
+    junk.write_text("junk", encoding="utf-8")
+
+    applied_record = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_dummy.json"
+    applied_record.parent.mkdir(parents=True, exist_ok=True)
+    applied_record.write_text("{}", encoding="utf-8")
+
+    fail_result = run_cli(["project_build", "projA", "--clean", "--no-po", "--no-diff"], cwd=workspace_a, check=False)
+    assert fail_result.returncode != 0
+    assert junk.exists()
+
+    ok_result = run_cli(
+        ["project_build", "projA", "--clean", "--force", "--no-po", "--no-diff"],
+        cwd=workspace_a,
+        check=False,
+    )
+    assert ok_result.returncode == 0
+    assert not junk.exists()
+    assert (workspace_a / "projects").exists()
+    assert applied_record.exists()
+
+
+def test_build_010_profile_dispatch(workspace_a: Path) -> None:
+    full_marker = workspace_a / "full.marker"
+    single_marker = workspace_a / "single-r1-t1.marker"
+    full_cmd = "touch full.marker"
+    single_cmd = "touch single-{repo}-{target}.marker"
+    _set_project_config(
+        workspace_a,
+        "projA",
+        {
+            "PROJECT_BUILD_FULL_CMD": full_cmd,
+            "PROJECT_BUILD_SINGLE_CMD": single_cmd,
+        },
+    )
+
+    result_full = run_cli(
+        ["project_build", "projA", "--profile", "full", "--no-po", "--no-diff"], cwd=workspace_a, check=False
+    )
+    assert result_full.returncode == 0
+    assert full_marker.exists()
+    if single_marker.exists():
+        single_marker.unlink()
+
+    result_single = run_cli(
+        ["project_build", "projA", "--profile", "single", "--repo", "r1", "--target", "t1", "--no-po", "--no-diff"],
+        cwd=workspace_a,
+        check=False,
+    )
+    assert result_single.returncode == 0
+    assert single_marker.exists()
