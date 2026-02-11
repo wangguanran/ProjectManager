@@ -4,21 +4,12 @@ on:
   push:
     tags:
       - 'v*'
-    paths:
-      - '**.py'
-      - 'requirements.txt'
-      - 'pyproject.toml'
-      - 'build.sh'
-      - 'setup_venv.sh'
-      - 'install.sh'
-      - 'install.ps1'
-      - 'uninstall.sh'
-      - 'get_latest_release.sh'
   workflow_dispatch:
 
 permissions:
   contents: write
   actions: read
+  packages: write
 
 jobs:
   test:
@@ -93,6 +84,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}
+          if-no-files-found: error
           path: |
             out/binary/projman*
 
@@ -168,3 +160,78 @@ jobs:
         body_path: release/RELEASE_NOTES.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+
+  publish-pypi:
+    name: publish-pypi
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Check PyPI token configured
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "${PYPI_API_TOKEN:-}" ]; then
+            echo "PYPI_API_TOKEN is not configured." >&2
+            exit 1
+          fi
+
+      - name: Build package
+        run: |
+          python scripts/write_build_info.py
+          python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
+
+  publish-docker:
+    name: publish-docker
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha,prefix=sha-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

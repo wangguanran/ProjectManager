@@ -103,13 +103,17 @@ if ! command -v pyinstaller >/dev/null 2>&1; then
     python -m pip install pyinstaller
 fi
 
+IMPORTLIB_METADATA_ARGS=()
+if python -c "import importlib_metadata" >/dev/null 2>&1; then
+    IMPORTLIB_METADATA_ARGS=(--hidden-import=importlib_metadata --collect-all=importlib_metadata)
+fi
+
 pyinstaller \
     --onefile \
     "${PYINSTALLER_STRIP_ARGS[@]}" \
     --hidden-import=git \
     --hidden-import=git.cmd \
     --hidden-import=git.repo \
-    --hidden-import=importlib_metadata \
     --hidden-import=src.plugins.project_manager \
     --hidden-import=src.plugins.project_builder \
     --hidden-import=src.plugins.patch_override \
@@ -119,9 +123,9 @@ pyinstaller \
     --hidden-import=src.profiler \
     --hidden-import=src.utils \
     --hidden-import=src._build_info \
+    "${IMPORTLIB_METADATA_ARGS[@]}" \
     --collect-all=git \
-    --collect-all=importlib_metadata \
-    --add-data "$(pwd)/pyproject.toml${ADD_DATA_SEP}." \
+    --add-data "pyproject.toml${ADD_DATA_SEP}." \
     --distpath "$BINARY_DIR" \
     --workpath "$BINARY_DIR/build" \
     --specpath "$BINARY_DIR" \
@@ -129,6 +133,11 @@ pyinstaller \
     src/__main__.py
 
 BINARY_PATH="$BINARY_DIR/projman${EXE_SUFFIX}"
+if [ ! -f "$BINARY_PATH" ]; then
+    echo "Expected binary not found at $BINARY_PATH" >&2
+    ls -la "$BINARY_DIR" >&2 || true
+    exit 1
+fi
 echo "Binary generated at $BINARY_PATH"
 
 # Apply static linking for better compatibility (Linux-only; staticx does not support macOS/Windows).

@@ -7,14 +7,19 @@ import os
 import re
 from pathlib import Path
 
+import toml
+
 from src.profiler import func_cprofile
 from src.utils import get_filename, get_version, list_file_path
 
 from .conftest import run_cli
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_util_001_version_matches_pyproject(workspace_a: Path) -> None:
-    assert re.fullmatch(r"0\.0\.11(\+g[0-9a-f]{7,})?", get_version())
+    base_version = toml.load(str(REPO_ROOT / "pyproject.toml"))["project"]["version"]
+    assert re.fullmatch(rf"{re.escape(base_version)}(\+g[0-9a-f]{{7,}})?", get_version())
 
 
 def test_util_002_version_fallback(tmp_path: Path) -> None:
