@@ -223,25 +223,25 @@ jobs:
         run: |
           set -euo pipefail
           if python - <<'PY'
-import json
-import urllib.request
-import urllib.error
+          import json
+          import urllib.request
+          import urllib.error
 
-name = "multi-project-manager"
-version = "0.0.12"
-url = f"https://pypi.org/pypi/{name}/json"
+          name = "multi-project-manager"
+          version = "0.0.12"
+          url = f"https://pypi.org/pypi/{name}/json"
 
-try:
-    with urllib.request.urlopen(url, timeout=20) as response:
-        payload = json.load(response)
-except urllib.error.HTTPError as exc:
-    if exc.code == 404:
-        raise SystemExit(1)
-    raise
+          try:
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  raise SystemExit(1)
+              raise
 
-releases = payload.get("releases", {})
-raise SystemExit(0 if version in releases else 1)
-PY
+          releases = payload.get("releases", {})
+          raise SystemExit(0 if version in releases else 1)
+          PY
           then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "PyPI already has ${PACKAGE_NAME} ${PACKAGE_VERSION}; skip upload."
