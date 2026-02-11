@@ -85,7 +85,7 @@ jobs:
         with:
           name: projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}
           if-no-files-found: error
-          path: out
+          path: out/release/projman*
 
   release:
     runs-on: ubuntu-latest

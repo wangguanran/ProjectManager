@@ -190,7 +190,16 @@ if [ "$PLATFORM" != "windows" ]; then
     chmod 755 "$BINARY_PATH" 2>/dev/null || true
 fi
 
+RELEASE_BINARY_DIR="$OUT_DIR/release"
+mkdir -p "$RELEASE_BINARY_DIR"
+RELEASE_BINARY_PATH="$RELEASE_BINARY_DIR/projman${EXE_SUFFIX}"
+cp -L "$BINARY_PATH" "$RELEASE_BINARY_PATH"
+if [ "$PLATFORM" != "windows" ]; then
+    chmod 755 "$RELEASE_BINARY_PATH" 2>/dev/null || true
+fi
+
 echo "Final binary generated at $BINARY_PATH"
+echo "Release binary generated at $RELEASE_BINARY_PATH"
 
 # Clean egg-info in src directory
 rm -rf src/*.egg-info
