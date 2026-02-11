@@ -194,6 +194,7 @@ RELEASE_BINARY_DIR="$OUT_DIR/release"
 mkdir -p "$RELEASE_BINARY_DIR"
 RELEASE_BINARY_PATH="$RELEASE_BINARY_DIR/projman${EXE_SUFFIX}"
 cp -L "$BINARY_PATH" "$RELEASE_BINARY_PATH"
+echo "$RELEASE_BINARY_PATH" > "$OUT_DIR/projman_binary_path.txt"
 if [ "$PLATFORM" != "windows" ]; then
     chmod 755 "$RELEASE_BINARY_PATH" 2>/dev/null || true
 fi
