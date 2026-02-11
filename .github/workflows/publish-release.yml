@@ -80,12 +80,40 @@ jobs:
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
           echo "arch=$arch" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare release binary
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f out/projman_binary_path.txt ]; then
+            echo "Missing out/projman_binary_path.txt" >&2
+            exit 1
+          fi
+
+          binary_path="$(cat out/projman_binary_path.txt)"
+          if [ -z "$binary_path" ] || [ ! -e "$binary_path" ]; then
+            echo "Binary path from manifest is invalid: '$binary_path'" >&2
+            find out -maxdepth 5 \( -type f -o -type l \) | sed 's#^#  - #' >&2 || true
+            exit 1
+          fi
+
+          ext=""
+          case "$binary_path" in
+            *.exe) ext=".exe" ;;
+            *.pkg) ext=".pkg" ;;
+          esac
+
+          out_file="out/release_upload/projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}${ext}"
+          mkdir -p out/release_upload
+          cp -L "$binary_path" "$out_file"
+          echo "upload_path=$out_file" >> "$GITHUB_OUTPUT"
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}
           if-no-files-found: error
-          path: out
+          path: ${{ steps.package.outputs.upload_path }}
 
   release:
     runs-on: ubuntu-latest
@@ -103,89 +131,21 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        python - <<'PY'
-        from __future__ import annotations
+        mkdir -p release
+        copied=0
+        for file in artifacts/projman-*/*; do
+          [ -f "$file" ] || continue
+          name="$(basename "$file")"
+          cp "$file" "release/$name"
+          sha256sum "release/$name" > "release/$name.sha256"
+          copied=$((copied + 1))
+        done
 
-        import hashlib
-        from pathlib import Path
-        import shutil
-        import sys
-
-        artifacts_root = Path("artifacts")
-        release_root = Path("release")
-        release_root.mkdir(parents=True, exist_ok=True)
-
-        def iter_candidates(root: Path):
-            allowed_names = {"projman", "projman.exe", "projman.pkg"}
-            patterns = [
-                "out/release/projman*",
-                "out/binary/projman*",
-                "out/binary/*/projman*",
-                "projman*",
-            ]
-
-            seen: set[Path] = set()
-
-            manifest = root / "out" / "projman_binary_path.txt"
-            if manifest.exists():
-                rel = Path(manifest.read_text(encoding="utf-8").strip())
-                manifest_target = root / rel
-                if manifest_target.exists() or manifest_target.is_symlink():
-                    seen.add(manifest_target)
-                    yield manifest_target
-
-            for pattern in patterns:
-                for matched in sorted(root.glob(pattern)):
-                    if matched.name not in allowed_names:
-                        continue
-                    if matched in seen:
-                        continue
-                    seen.add(matched)
-                    yield matched
-
-        failures: list[str] = []
-        copied = 0
-
-        for artifact_dir in sorted(artifacts_root.glob("projman-*")):
-            if not artifact_dir.is_dir():
-                continue
-
-            selected: Path | None = None
-            for candidate in iter_candidates(artifact_dir):
-                resolved = candidate
-                if candidate.is_symlink():
-                    try:
-                        resolved = candidate.resolve(strict=True)
-                    except FileNotFoundError:
-                        continue
-                if resolved.is_file():
-                    selected = resolved
-                    break
-
-            if selected is None:
-                failures.append(f"No binary found under {artifact_dir}")
-                continue
-
-            ext = Path(selected.name).suffix if Path(selected.name).suffix in {".exe", ".pkg"} else ""
-            dest = release_root / f"{artifact_dir.name}{ext}"
-            shutil.copy2(selected, dest)
-
-            digest = hashlib.sha256(dest.read_bytes()).hexdigest()
-            (release_root / f"{artifact_dir.name}{ext}.sha256").write_text(
-                f"{digest}  {dest.name}\n",
-                encoding="utf-8",
-            )
-            copied += 1
-
-        if failures:
-            for message in failures:
-                print(message, file=sys.stderr)
-            sys.exit(1)
-
-        if copied == 0:
-            print("No release binaries collected", file=sys.stderr)
-            sys.exit(1)
-        PY
+        if [ "$copied" -eq 0 ]; then
+          echo "No release binaries collected from artifacts/" >&2
+          find artifacts -maxdepth 3 -type f | sed 's#^#  - #' >&2 || true
+          exit 1
+        fi
 
         # Create release notes
         cat > release/RELEASE_NOTES.md << EOF
