@@ -140,6 +140,7 @@ if [ ! -f "$BINARY_PATH" ]; then
     ls -la "$BINARY_DIR" >&2 || true
     exit 1
 fi
+echo "$BINARY_PATH" > "$OUT_DIR/projman_binary_path.txt"
 echo "Binary generated at $BINARY_PATH"
 
 # Apply static linking for better compatibility (Linux-only; staticx does not support macOS/Windows).

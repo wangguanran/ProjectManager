@@ -65,7 +65,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary_src="$(find out \( -type f -o -type l \) \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
+          binary_src=""
+          if [ -f out/projman_binary_path.txt ]; then
+            from_manifest="$(cat out/projman_binary_path.txt)"
+            if [ -n "$from_manifest" ] && [ -e "$from_manifest" ]; then
+              binary_src="$from_manifest"
+            fi
+          fi
+          if [ -z "$binary_src" ]; then
+            binary_src="$(find out \( -type f -o -type l \) \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
+          fi
           if [ -z "$binary_src" ]; then
             echo "No projman binary found under out/" >&2
             find out -maxdepth 5 \( -type f -o -type l \) | sed 's#^#  - #' >&2 || true
