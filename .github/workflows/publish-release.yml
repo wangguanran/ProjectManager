@@ -65,13 +65,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t candidates < <(find out -type f \( -name 'projman' -o -name 'projman.exe' \) | sort)
-          if [ "${#candidates[@]}" -eq 0 ]; then
+          binary_src="$(find out -type f \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
+          if [ -z "$binary_src" ]; then
             echo "No projman binary found under out/" >&2
             find out -maxdepth 5 -type f | sed 's#^#  - #' >&2 || true
             exit 1
           fi
-          binary_src="${candidates[0]}"
           mkdir -p out/release
           binary_dst="out/release/$(basename "$binary_src")"
           cp "$binary_src" "$binary_dst"
