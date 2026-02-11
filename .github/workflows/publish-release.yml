@@ -116,22 +116,32 @@ jobs:
         release_root.mkdir(parents=True, exist_ok=True)
 
         def iter_candidates(root: Path):
-            preferred = root / "out" / "release"
-            if preferred.exists():
-                for path in sorted(preferred.rglob("*")):
-                    if path.name in {"projman", "projman.exe"} and (path.is_file() or path.is_symlink()):
-                        yield path
+            allowed_names = {"projman", "projman.exe", "projman.pkg"}
+            patterns = [
+                "out/release/projman*",
+                "out/binary/projman*",
+                "out/binary/*/projman*",
+                "projman*",
+            ]
+
+            seen: set[Path] = set()
 
             manifest = root / "out" / "projman_binary_path.txt"
             if manifest.exists():
                 rel = Path(manifest.read_text(encoding="utf-8").strip())
                 manifest_target = root / rel
                 if manifest_target.exists() or manifest_target.is_symlink():
+                    seen.add(manifest_target)
                     yield manifest_target
 
-            for path in sorted(root.rglob("*")):
-                if path.name in {"projman", "projman.exe"} and (path.is_file() or path.is_symlink()):
-                    yield path
+            for pattern in patterns:
+                for matched in sorted(root.glob(pattern)):
+                    if matched.name not in allowed_names:
+                        continue
+                    if matched in seen:
+                        continue
+                    seen.add(matched)
+                    yield matched
 
         failures: list[str] = []
         copied = 0
@@ -156,7 +166,7 @@ jobs:
                 failures.append(f"No binary found under {artifact_dir}")
                 continue
 
-            ext = ".exe" if selected.name.endswith(".exe") else ""
+            ext = Path(selected.name).suffix if Path(selected.name).suffix in {".exe", ".pkg"} else ""
             dest = release_root / f"{artifact_dir.name}{ext}"
             shutil.copy2(selected, dest)
 
