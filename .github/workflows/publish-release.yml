@@ -65,15 +65,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary_src="$(find out -type f \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
+          binary_src="$(find out \( -type f -o -type l \) \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
           if [ -z "$binary_src" ]; then
             echo "No projman binary found under out/" >&2
-            find out -maxdepth 5 -type f | sed 's#^#  - #' >&2 || true
+            find out -maxdepth 5 \( -type f -o -type l \) | sed 's#^#  - #' >&2 || true
             exit 1
           fi
           mkdir -p out/release
           binary_dst="out/release/$(basename "$binary_src")"
-          cp "$binary_src" "$binary_dst"
+          cp -L "$binary_src" "$binary_dst"
           echo "binary_path=$binary_dst" >> "$GITHUB_OUTPUT"
 
       - name: Compute artifact metadata
