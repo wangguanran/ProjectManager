@@ -60,6 +60,23 @@ jobs:
         shell: bash
         run: bash build.sh
 
+      - name: Collect binary artifact
+        id: binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t candidates < <(find out -type f \( -name 'projman' -o -name 'projman.exe' \) | sort)
+          if [ "${#candidates[@]}" -eq 0 ]; then
+            echo "No projman binary found under out/" >&2
+            find out -maxdepth 5 -type f | sed 's#^#  - #' >&2 || true
+            exit 1
+          fi
+          binary_src="${candidates[0]}"
+          mkdir -p out/release
+          binary_dst="out/release/$(basename "$binary_src")"
+          cp "$binary_src" "$binary_dst"
+          echo "binary_path=$binary_dst" >> "$GITHUB_OUTPUT"
+
       - name: Compute artifact metadata
         id: meta
         shell: bash
@@ -85,8 +102,7 @@ jobs:
         with:
           name: projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}
           if-no-files-found: error
-          path: |
-            out/binary/projman*
+          path: ${{ steps.binary.outputs.binary_path }}
 
   release:
     runs-on: ubuntu-latest
@@ -109,7 +125,7 @@ jobs:
         for dir in artifacts/projman-*; do
           [ -d "$dir" ] || continue
           name="$(basename "$dir")"
-          bin="$(ls "$dir"/out/binary/projman* 2>/dev/null | head -n1 || true)"
+          bin="$(find "$dir" -type f \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
           if [ -z "$bin" ]; then
             echo "No binary found under $dir" >&2
             exit 1
