@@ -108,6 +108,8 @@ if python -c "import importlib_metadata" >/dev/null 2>&1; then
     IMPORTLIB_METADATA_ARGS=(--hidden-import=importlib_metadata --collect-all=importlib_metadata)
 fi
 
+PYPROJECT_ABS_PATH="$(python -c 'import os; print(os.path.abspath("pyproject.toml"))')"
+
 pyinstaller \
     --onefile \
     "${PYINSTALLER_STRIP_ARGS[@]}" \
@@ -125,7 +127,7 @@ pyinstaller \
     --hidden-import=src._build_info \
     "${IMPORTLIB_METADATA_ARGS[@]}" \
     --collect-all=git \
-    --add-data "pyproject.toml${ADD_DATA_SEP}." \
+    --add-data "${PYPROJECT_ABS_PATH}${ADD_DATA_SEP}." \
     --distpath "$BINARY_DIR" \
     --workpath "$BINARY_DIR/build" \
     --specpath "$BINARY_DIR" \
