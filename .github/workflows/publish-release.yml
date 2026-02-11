@@ -85,28 +85,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ ! -f out/projman_binary_path.txt ]; then
-            echo "Missing out/projman_binary_path.txt" >&2
-            exit 1
+          if [ -f out/projman_binary_path.txt ]; then
+            binary_path="$(cat out/projman_binary_path.txt)"
+          else
+            binary_path=""
           fi
 
-          binary_path="$(cat out/projman_binary_path.txt)"
-          if [ -z "$binary_path" ] || [ ! -e "$binary_path" ]; then
-            echo "Binary path from manifest is invalid: '$binary_path'" >&2
-            find out -maxdepth 5 \( -type f -o -type l \) | sed 's#^#  - #' >&2 || true
-            exit 1
+          if [ -n "$binary_path" ] && [ -e "$binary_path" ]; then
+            ext=""
+            case "$binary_path" in
+              *.exe) ext=".exe" ;;
+              *.pkg) ext=".pkg" ;;
+            esac
+            out_file="out/release_upload/projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}${ext}"
+            mkdir -p out/release_upload
+            cp -L "$binary_path" "$out_file"
+            echo "upload_path=$out_file" >> "$GITHUB_OUTPUT"
+          else
+            echo "Warning: stable binary path unavailable, falling back to upload full out/ directory."
+            find out -maxdepth 5 \( -type f -o -type l \) | sed 's#^#  - #' || true
+            echo "upload_path=out" >> "$GITHUB_OUTPUT"
           fi
-
-          ext=""
-          case "$binary_path" in
-            *.exe) ext=".exe" ;;
-            *.pkg) ext=".pkg" ;;
-          esac
-
-          out_file="out/release_upload/projman-${{ steps.meta.outputs.platform }}-${{ steps.meta.outputs.arch }}${ext}"
-          mkdir -p out/release_upload
-          cp -L "$binary_path" "$out_file"
-          echo "upload_path=$out_file" >> "$GITHUB_OUTPUT"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -133,13 +132,12 @@ jobs:
         set -euo pipefail
         mkdir -p release
         copied=0
-        for file in artifacts/projman-*/*; do
-          [ -f "$file" ] || continue
+        while IFS= read -r file; do
           name="$(basename "$file")"
           cp "$file" "release/$name"
           sha256sum "release/$name" > "release/$name.sha256"
           copied=$((copied + 1))
-        done
+        done < <(find artifacts/projman-* -type f -name 'projman-*' | sort)
 
         if [ "$copied" -eq 0 ]; then
           echo "No release binaries collected from artifacts/" >&2
