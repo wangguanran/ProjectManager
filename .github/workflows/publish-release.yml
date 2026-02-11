@@ -65,25 +65,48 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary_src=""
-          if [ -f out/projman_binary_path.txt ]; then
-            from_manifest="$(cat out/projman_binary_path.txt)"
-            if [ -n "$from_manifest" ] && [ -e "$from_manifest" ]; then
-              binary_src="$from_manifest"
-            fi
-          fi
-          if [ -z "$binary_src" ]; then
-            binary_src="$(find out \( -type f -o -type l \) \( -name 'projman' -o -name 'projman.exe' \) | sort | head -n1 || true)"
-          fi
-          if [ -z "$binary_src" ]; then
-            echo "No projman binary found under out/" >&2
-            find out -maxdepth 5 \( -type f -o -type l \) | sed 's#^#  - #' >&2 || true
-            exit 1
-          fi
-          mkdir -p out/release
-          binary_dst="out/release/$(basename "$binary_src")"
-          cp -L "$binary_src" "$binary_dst"
-          echo "binary_path=$binary_dst" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import shutil
+          import sys
+
+          out_dir = Path("out")
+          candidates = []
+
+          manifest = out_dir / "projman_binary_path.txt"
+          if manifest.exists():
+              manifest_path = Path(manifest.read_text(encoding="utf-8").strip())
+              if manifest_path.exists():
+                  candidates.append(manifest_path)
+
+          if not candidates and out_dir.exists():
+              for path in out_dir.rglob("*"):
+                  if path.name in {"projman", "projman.exe"} and (path.is_file() or path.is_symlink()):
+                      candidates.append(path)
+
+          if not candidates:
+              print("No projman binary found under out/", file=sys.stderr)
+              if out_dir.exists():
+                  for path in sorted(out_dir.rglob("*")):
+                      if path.is_file() or path.is_symlink():
+                          print(f"  - {path}", file=sys.stderr)
+              sys.exit(1)
+
+          binary_src = sorted(candidates)[0]
+          if binary_src.is_symlink():
+              binary_src = binary_src.resolve()
+
+          release_dir = out_dir / "release"
+          release_dir.mkdir(parents=True, exist_ok=True)
+          binary_dst = release_dir / binary_src.name
+          shutil.copy2(binary_src, binary_dst)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"binary_path={binary_dst.as_posix()}\n")
+
+          print(f"Collected binary: {binary_src} -> {binary_dst}")
+          PY
 
       - name: Compute artifact metadata
         id: meta
