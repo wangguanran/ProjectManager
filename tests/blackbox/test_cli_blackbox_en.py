@@ -14,7 +14,7 @@ from pathlib import Path
 
 import toml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_min_projects_tree(workdir: Path) -> None:

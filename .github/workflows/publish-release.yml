@@ -3,7 +3,7 @@ name: Publish Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -117,70 +117,255 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [test, build-binaries]
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-    
-    - name: Create release assets
-      shell: bash
-      run: |
-        set -euo pipefail
-        mkdir -p release
-        copied=0
-        while IFS= read -r file; do
-          name="$(basename "$file")"
-          cp "$file" "release/$name"
-          sha256sum "release/$name" > "release/$name.sha256"
-          copied=$((copied + 1))
-        done < <(find artifacts/projman-* -type f -name 'projman-*' | sort)
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        if [ "$copied" -eq 0 ]; then
-          echo "No release binaries collected from artifacts/" >&2
-          find artifacts -maxdepth 3 -type f | sed 's#^#  - #' >&2 || true
-          exit 1
-        fi
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-        # Create release notes
-        cat > release/RELEASE_NOTES.md << EOF
-        # ProjectManager (projman) Release
+      - name: Create release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          copied=0
+          while IFS= read -r file; do
+            name="$(basename "$file")"
+            cp "$file" "release/$name"
+            sha256sum "release/$name" > "release/$name.sha256"
+            copied=$((copied + 1))
+          done < <(find artifacts/projman-* -type f -name 'projman-*' | sort)
 
-        ## Install (Linux/macOS)
+          if [ "$copied" -eq 0 ]; then
+            echo "No release binaries collected from artifacts/" >&2
+            find artifacts -maxdepth 3 -type f | sed 's#^#  - #' >&2 || true
+            exit 1
+          fi
 
-        \`\`\`bash
-        curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/get_latest_release.sh | bash
-        projman --version
-        \`\`\`
+      - name: Collect release commit range
+        id: commit_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          current_tag="${GITHUB_REF_NAME}"
+          current_sha="${GITHUB_SHA}"
+          previous_tag="$(git tag --sort=-v:refname | grep -Fx -v "$current_tag" | head -n1 || true)"
 
-        ## Install (Windows)
+          if [ -n "$previous_tag" ]; then
+            compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${current_tag}"
+            range="${previous_tag}..${current_sha}"
+          else
+            compare_url=""
+            range="${current_sha}"
+          fi
 
-        \`\`\`powershell
-        iwr -useb https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/install.ps1 | iex
-        projman --version
-        \`\`\`
+          git log --pretty=format:'%H%x09%s' ${range} > release/commits.tsv || true
+          if [ ! -s release/commits.tsv ]; then
+            git log -1 --pretty=format:'%H%x09%s' "${current_sha}" > release/commits.tsv
+          fi
 
-        ## Assets
+          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+          echo "compare_url=${compare_url}" >> "$GITHUB_OUTPUT"
 
-        - projman-linux-<arch>
-        - projman-macos-<arch>
-        - projman-windows-<arch>.exe
+      - name: Generate AI feature summary (optional)
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
 
-        ## Checksum
-        Verify the download with the provided SHA256 checksum.
-        EOF
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          release/projman-*
-        body_path: release/RELEASE_NOTES.md
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          commits_file = Path("release/commits.tsv")
+          if not commits_file.exists() or commits_file.stat().st_size == 0:
+              raise SystemExit(0)
+
+          commits = []
+          for line in commits_file.read_text(encoding="utf-8").splitlines():
+              if "\t" not in line:
+                  continue
+              sha, subject = line.split("\t", 1)
+              commits.append(f"- {sha[:7]} {subject.strip()}")
+          if not commits:
+              raise SystemExit(0)
+
+          prompt = (
+              "Summarize this release in 3-5 concise bullet points. "
+              "Focus on user-visible features, stability improvements, and CI/release quality upgrades. "
+              "Keep it technical and professional.\n\n"
+              + "\n".join(commits[:40])
+          )
+
+          payload = {
+              "model": "gpt-4.1-mini",
+              "input": [
+                  {
+                      "role": "system",
+                      "content": "You are a release manager writing concise technical release highlights.",
+                  },
+                  {"role": "user", "content": prompt},
+              ],
+              "temperature": 0.2,
+              "max_output_tokens": 240,
+          }
+          req = urllib.request.Request(
+              "https://api.openai.com/v1/responses",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
+                  "Content-Type": "application/json",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=45) as response:
+              result = json.loads(response.read().decode("utf-8"))
+
+          text = (result.get("output_text") or "").strip()
+          if not text:
+              texts = []
+              for item in result.get("output", []):
+                  for content in item.get("content", []):
+                      candidate = content.get("text")
+                      if isinstance(candidate, str) and candidate.strip():
+                          texts.append(candidate.strip())
+              text = "\n".join(texts).strip()
+
+          if text:
+              Path("release/AI_SUMMARY.md").write_text(text + "\n", encoding="utf-8")
+          PY
+
+      - name: Generate release notes
+        shell: bash
+        env:
+          PREVIOUS_TAG: ${{ steps.commit_meta.outputs.previous_tag }}
+          COMPARE_URL: ${{ steps.commit_meta.outputs.compare_url }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          previous_tag = os.environ.get("PREVIOUS_TAG", "").strip()
+          compare_url = os.environ.get("COMPARE_URL", "").strip()
+
+          commits = []
+          commits_file = Path("release/commits.tsv")
+          if commits_file.exists():
+              for line in commits_file.read_text(encoding="utf-8").splitlines():
+                  if "\t" not in line:
+                      continue
+                  sha, subject = line.split("\t", 1)
+                  subject = subject.strip()
+                  if subject:
+                      commits.append((sha, subject))
+
+          def classify(subject: str) -> str:
+              s = subject.lower()
+              if re.search(r"\b(feat|feature|support|add|introduce|upgrade|implement)\b", s):
+                  return "feature"
+              if re.search(r"\b(fix|bug|harden|correct|stabil|ensure|repair)\b", s):
+                  return "fix"
+              if re.search(r"\b(ci|workflow|release|build|test|lint|qa)\b", s):
+                  return "release"
+              return "other"
+
+          by_type = {"feature": [], "fix": [], "release": [], "other": []}
+          for sha, subject in commits:
+              by_type[classify(subject)].append((sha, subject))
+
+          ai_summary = ""
+          ai_summary_file = Path("release/AI_SUMMARY.md")
+          if ai_summary_file.exists():
+              ai_summary = ai_summary_file.read_text(encoding="utf-8").strip()
+
+          lines = []
+          lines.append(f"# ProjectManager Release {tag}")
+          lines.append("")
+          lines.append("## Overview")
+          lines.append(f"- Release tag: `{tag}`")
+          lines.append(f"- Commit SHA: `{os.environ['GITHUB_SHA'][:12]}`")
+          if previous_tag:
+              lines.append(f"- Previous tag: `{previous_tag}`")
+          if compare_url:
+              lines.append(f"- Compare: {compare_url}")
+          lines.append("")
+          lines.append("## Highlights")
+          if ai_summary:
+              lines.extend(ai_summary.splitlines())
+          else:
+              if by_type["feature"]:
+                  lines.append("- Feature updates:")
+                  for _, subject in by_type["feature"][:4]:
+                      lines.append(f"  - {subject}")
+              if by_type["fix"]:
+                  lines.append("- Stability and fixes:")
+                  for _, subject in by_type["fix"][:4]:
+                      lines.append(f"  - {subject}")
+              if by_type["release"]:
+                  lines.append("- Release and CI improvements:")
+                  for _, subject in by_type["release"][:4]:
+                      lines.append(f"  - {subject}")
+              if not (by_type["feature"] or by_type["fix"] or by_type["release"]):
+                  for _, subject in commits[:6]:
+                      lines.append(f"- {subject}")
+          lines.append("")
+          lines.append("## Key Commits")
+          shown = commits[:30]
+          for sha, subject in shown:
+              lines.append(f"- [`{sha[:7]}`](https://github.com/{repo}/commit/{sha}) {subject}")
+          if len(commits) > len(shown):
+              lines.append(f"- ... and {len(commits) - len(shown)} more commits")
+          lines.append("")
+          lines.append("## Install")
+          lines.append("")
+          lines.append("### Linux/macOS")
+          lines.append("```bash")
+          lines.append(f"curl -fsSL https://raw.githubusercontent.com/{repo}/{tag}/get_latest_release.sh | bash")
+          lines.append("projman --version")
+          lines.append("```")
+          lines.append("")
+          lines.append("### Windows")
+          lines.append("```powershell")
+          lines.append(f"iwr -useb https://raw.githubusercontent.com/{repo}/{tag}/install.ps1 | iex")
+          lines.append("projman --version")
+          lines.append("```")
+          lines.append("")
+          lines.append("## Assets & Checksums")
+          binaries = sorted(p for p in Path("release").glob("projman-*") if p.is_file() and p.suffix != ".sha256")
+          for binary in binaries:
+              sha_file = binary.with_name(binary.name + ".sha256")
+              sha_value = ""
+              if sha_file.exists():
+                  sha_value = sha_file.read_text(encoding="utf-8").split()[0]
+              if sha_value:
+                  lines.append(f"- `{binary.name}` — `{sha_value}`")
+              else:
+                  lines.append(f"- `{binary.name}`")
+
+          Path("release/RELEASE_NOTES.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+          PY
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/projman-*
+          body_path: release/RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-pypi:
     name: publish-pypi
