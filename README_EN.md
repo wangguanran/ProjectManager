@@ -94,7 +94,7 @@ src/
 Start with the following command:
 
 ```bash
-python -m src <operation> <project_or_board_name> [parameters] [--options]
+python -m src <operation> [project_or_board_name] [parameters] [--options]
 ```
 
 ### Global Options
@@ -102,6 +102,13 @@ python -m src <operation> <project_or_board_name> [parameters] [--options]
 - `--version`: Show program version
 - `--help`: Show detailed help for all operations
 - `--perf-analyze`: Enable cProfile performance analysis
+
+#### `upgrade` - Upgrade projman Binary
+**Status**: ✅ Implemented
+
+**Usage**: `python -m src upgrade [--user|--system|--prefix DIR]`
+
+**Description**: Detects current platform/architecture, downloads the latest release binary, and installs it to the selected prefix.
 
 ## Detailed Command Reference
 

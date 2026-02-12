@@ -104,6 +104,7 @@ projects/
 | `po_apply` | 应用PO | `python -m src po_apply proj1` |
 | `po_revert` | 回滚PO | `python -m src po_revert proj1` |
 | `po_list` | 列出PO | `python -m src po_list proj1` |
+| `upgrade` | 升级 projman | `python -m src upgrade --user` |
 
 ## 🤝 贡献
 

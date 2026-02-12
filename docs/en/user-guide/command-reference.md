@@ -7,7 +7,7 @@ This document describes every CLI command provided by ProjectManager, including 
 ## Basic Syntax
 
 ```bash
-python -m src <command> <arguments> [options]
+python -m src <command> [arguments] [options]
 ```
 
 ## Global Options
@@ -19,6 +19,28 @@ All commands accept the following global options:
 | `--version` | Print the current version | `python -m src --version` |
 | `--help` | Show help for the command or the CLI | `python -m src --help` |
 | `--perf-analyze` | Enable performance analysis logs | `python -m src --perf-analyze po_apply proj1` |
+
+---
+
+## Maintenance Commands
+
+### `upgrade` — Upgrade projman binary
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src upgrade [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>]
+```
+
+**Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, and install `projman` to the selected location.
+
+**Examples**
+```bash
+python -m src upgrade --user
+python -m src upgrade --prefix ~/.local/bin
+python -m src upgrade --dry-run
+```
 
 ---
 

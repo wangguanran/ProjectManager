@@ -84,6 +84,7 @@
 | CLI-007 | CLI/Arg Parsing | `--short` parsed as boolean flag | Dataset A completed | 1. Run `python -m src po_list projA --short`.<br>2. Observe output. | Only PO names are printed; no patch/override details. | P1 | Functional |
 | CLI-008 | CLI/Arg Parsing | Unsupported flag triggers TypeError | Dataset A completed | 1. Run `python -m src po_list projA --unknown-flag 1`. | TypeError occurs when calling the operation; process exits with error. | P1 | Negative |
 | CLI-009 | CLI/Arg Parsing | Missing required args show error | Dataset A completed | 1. Run `python -m src project_new`. | Error states missing required arguments and exits non-zero. | P0 | Negative |
+| CLI-010 | CLI/Arg Parsing | `upgrade --dry-run` works without projects dir | Run in an empty non-project workspace | 1. Run `python -m src upgrade --dry-run`.<br>2. Check stderr output. | Command exits 0 and does not print `common config not found` / `projects directory does not exist` warnings. | P1 | Functional |
 
 ## 2. Config Loading & Project Index (src/__main__.py)
 

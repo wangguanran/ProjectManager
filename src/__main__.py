@@ -27,6 +27,7 @@ from src.utils import get_version
 import_module("src.plugins.project_manager")
 import_module("src.plugins.project_builder")
 import_module("src.plugins.patch_override")
+import_module("src.plugins.upgrader")
 
 
 # ===== Migration utility functions =====
@@ -373,7 +374,7 @@ def _import_platform_scripts(projects_path):
 
 @func_time
 def _parse_args_and_plugin_args(builtin_operations):
-    def _extract_plugin_tokens(argv: List[str]) -> List[str]:
+    def _extract_plugin_tokens(argv: List[str], parsed_name: Optional[str]) -> List[str]:
         """
         Extract plugin tokens in original argv order.
 
@@ -381,13 +382,12 @@ def _parse_args_and_plugin_args(builtin_operations):
         - `argparse.parse_known_args()` may split unknown option values into the
           positional `args` bucket, which breaks our later `args + unknown`
           reconstruction (order is lost).
-        - Plugin flags/args are defined as "everything after <operate> <name>".
+        - Plugin flags/args are defined as "everything after <operate> [name]".
         """
 
         # Skip global options before <operate>. Today we only have boolean flags
         # (`--perf-analyze`) plus early-exit flags (`--help/--version`).
         operate_idx = None
-        name_idx = None
         for idx, token in enumerate(argv):
             if token in {"-h", "--help", "--version", "--perf-analyze"}:
                 continue
@@ -397,12 +397,20 @@ def _parse_args_and_plugin_args(builtin_operations):
             if operate_idx is None:
                 operate_idx = idx
                 continue
-            name_idx = idx
-            break
 
-        if name_idx is None:
+        if operate_idx is None:
             return []
-        return argv[name_idx + 1 :]
+
+        start_idx = operate_idx + 1
+        if parsed_name is not None:
+            for idx in range(start_idx, len(argv)):
+                token = argv[idx]
+                if token.startswith("-"):
+                    continue
+                start_idx = idx + 1
+                break
+
+        return argv[start_idx:]
 
     def get_supported_flags(sig):
         return [
@@ -480,14 +488,14 @@ def _parse_args_and_plugin_args(builtin_operations):
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
     parser = FuzzyOperationParser(
         available_operations=choices,
-        usage="__main__.py [options] operations name [args ...]",
+        usage="__main__.py [options] operations [name] [args ...]",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=plugin_options if plugin_options else None,
         add_help=True,
     )
     parser.add_argument("--version", action="version", version=get_version())
     parser.add_argument("operate", help=help_text, metavar="operations")
-    parser.add_argument("name", help="project or board name")
+    parser.add_argument("name", nargs="?", help="project or board name (if operation requires)")
     parser.add_argument("args", nargs="*", help="additional arguments for plugin operations")
     parser.add_argument(
         "--perf-analyze",
@@ -502,7 +510,7 @@ def _parse_args_and_plugin_args(builtin_operations):
     args, _unknown = parser.parse_known_args(argv)
     args_dict = vars(args)
     # Preserve original order; do NOT concatenate `args` + `unknown`.
-    additional_args = _extract_plugin_tokens(argv)
+    additional_args = _extract_plugin_tokens(argv, args_dict.get("name"))
     parsed_args = []
     parsed_kwargs = {}
     i = 0
@@ -885,32 +893,37 @@ def main():
     operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(all_operations)
     builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
 
-    # Load common configurations after CLI args are parsed.
-    # This avoids printing workspace warnings for early-exit flags like --version / --help.
-    common_configs, po_configs = _load_common_config(env["projects_path"])
-    env["po_configs"] = po_configs
-    log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
-    log.debug("Loaded %d po configurations.", len(po_configs))
-    log.debug("Po configurations: %s", list(po_configs.keys()))
-
-    projects_info = _load_all_projects(env["projects_path"], common_configs)
-    log.debug("Loaded %d projects.", len(projects_info))
-    log.debug(
-        "Loaded projects info:\n%s",
-        json.dumps(projects_info, indent=4, ensure_ascii=False),
-    )
-
     # Only execute operations registered through plugins
     if operate in all_operations:
         op_info = all_operations[operate]
         func = op_info["func"]
+        needs_projects = get_operation_meta_flag(func, operate, "needs_projects")
+        if needs_projects:
+            # Load common configurations after CLI args are parsed.
+            # This avoids printing workspace warnings for early-exit flags like --version / --help.
+            common_configs, po_configs = _load_common_config(env["projects_path"])
+            env["po_configs"] = po_configs
+            log.debug("env: \n%s", json.dumps(env, indent=4, ensure_ascii=False))
+            log.debug("Loaded %d po configurations.", len(po_configs))
+            log.debug("Po configurations: %s", list(po_configs.keys()))
+
+            projects_info = _load_all_projects(env["projects_path"], common_configs)
+            log.debug("Loaded %d projects.", len(projects_info))
+            log.debug(
+                "Loaded projects info:\n%s",
+                json.dumps(projects_info, indent=4, ensure_ascii=False),
+            )
+        else:
+            env["po_configs"] = {}
+            projects_info = {}
+
         params = op_info["params"]
         sig = inspect.signature(func)
         # Only count CLI parameters that users need to input (remove env, projects_info)
         cli_params = [p for p in params if p not in ("env", "projects_info")]
         required_cli_params = [p for p in cli_params if sig.parameters[p].default == inspect.Parameter.empty]
         # name + parsed_args are the actual parameters input by the user
-        user_args = [name] + parsed_args
+        user_args = ([name] if name is not None else []) + parsed_args
         if len(user_args) < len(required_cli_params):
             log.error(
                 "Operation '%s' requires %d arguments, but only %d provided",

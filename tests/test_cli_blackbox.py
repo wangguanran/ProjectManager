@@ -88,6 +88,14 @@ def test_cli_version_matches_pyproject(tmp_path: Path) -> None:
     assert cp.stdout.strip().startswith(base_version)
 
 
+def test_cli_upgrade_dry_run_without_projects_tree(tmp_path: Path) -> None:
+    """CLI-010: `upgrade --dry-run` works without `projects/` directory."""
+    cp = _run_cli(tmp_path, "upgrade", "--dry-run")
+    assert cp.returncode == 0
+    assert "common config not found" not in cp.stderr.lower()
+    assert "projects directory does not exist" not in cp.stderr.lower()
+
+
 def test_cli_exact_operation_executes(tmp_path: Path) -> None:
     """CLI-003/CLI-007: exact op match executes; `--short` is parsed as boolean flag."""
     _write_min_projects_tree(tmp_path)
