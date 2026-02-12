@@ -179,10 +179,12 @@ class TestGetVersion:
         """UTIL-001: get_version reads pyproject version."""
         # Create pyproject.toml
         pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text("""
+        pyproject.write_text(
+            """
 [project]
 version = "1.2.3"
-""")
+"""
+        )
         monkeypatch.chdir(tmp_path)
         old_file = utils.__file__
         utils.__file__ = str(pyproject)
