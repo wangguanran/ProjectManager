@@ -130,6 +130,18 @@ detect_arch() {
     esac
 }
 
+is_checksum_asset_name() {
+    local name="${1:-}"
+    case "$name" in
+        *.sha256|*.sha256.txt)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 resolve_install_dir() {
     local mode="$1"
     local prefix="$2"
@@ -307,11 +319,11 @@ download_and_update_bin() {
         fi
     fi
     if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
-        asset_url="$(echo "$release_data" | jq -r '.assets[0].browser_download_url // empty')"
-        asset_name="$(echo "$release_data" | jq -r '.assets[0].name // empty')"
+        asset_url="$(echo "$release_data" | jq -r '.assets[]? | select(.name and (.name | endswith(".sha256") | not)) | .browser_download_url // empty' | head -n1)"
+        asset_name="$(echo "$release_data" | jq -r '.assets[]? | select(.name and (.name | endswith(".sha256") | not)) | .name // empty' | head -n1)"
     fi
-    
-    if [ -z "$asset_url" ] || [ -z "$asset_name" ]; then
+
+    if [ -z "$asset_url" ] || [ -z "$asset_name" ] || is_checksum_asset_name "$asset_name"; then
         echo "No assets found in the latest release. Skipping binary update." >&2
         return 1
     fi
@@ -325,8 +337,13 @@ download_and_update_bin() {
     fi
     
     # 下载 asset 到临时文件
-    local temp_file=$(mktemp)
-    curl -L -o "$temp_file" "$asset_url"
+    local temp_file
+    temp_file="$(mktemp)"
+    if [ -n "$GITHUB_TOKEN" ]; then
+        curl -L -H "Authorization: token ${GITHUB_TOKEN}" -o "$temp_file" "$asset_url"
+    else
+        curl -L -o "$temp_file" "$asset_url"
+    fi
     
     # 赋予可执行权限
     chmod +x "$temp_file"
@@ -365,6 +382,10 @@ main() {
     
     # Display information
     display_release_info "$release_data" "$version"
+
+    if [ "$VERSION_ONLY" = true ]; then
+        return 0
+    fi
 
     # Download and update bin
     download_and_update_bin "$release_data"

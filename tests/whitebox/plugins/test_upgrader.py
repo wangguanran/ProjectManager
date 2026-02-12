@@ -27,6 +27,23 @@ class TestUpgrader:
         assert asset is not None
         assert asset["name"] == "projman-linux-x86_64"
 
+    def test_select_release_asset_skips_checksum_files(self):
+        release_data = {
+            "assets": [
+                {
+                    "name": "projman-linux-x86_64.sha256",
+                    "browser_download_url": "https://example.com/projman-linux-x86_64.sha256",
+                },
+                {
+                    "name": "projman-linux-x86_64",
+                    "browser_download_url": "https://example.com/projman-linux-x86_64",
+                },
+            ]
+        }
+        asset = self.upgrader._select_release_asset(release_data, "linux", "x86_64")
+        assert asset is not None
+        assert asset["name"] == "projman-linux-x86_64"
+
     def test_upgrade_dry_run_succeeds_without_network(self, tmp_path):
         result = self.upgrader.upgrade(
             env={},

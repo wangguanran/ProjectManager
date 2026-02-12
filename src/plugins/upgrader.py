@@ -153,24 +153,35 @@ def _select_release_asset(release_data: Dict[str, Any], platform_name: str, arch
     if platform_name == "linux" and arch == "x86_64":
         exact_candidates.append("multi-project-manager-linux-x64")
 
+    def _is_checksum_asset(name: str) -> bool:
+        lowered = name.lower()
+        return lowered.endswith(".sha256") or lowered.endswith(".sha256.txt")
+
     for candidate in exact_candidates:
         for asset in assets:
-            if asset.get("name") == candidate and asset.get("browser_download_url"):
+            name = str(asset.get("name") or "")
+            if name == candidate and asset.get("browser_download_url"):
                 return asset
 
     for asset in assets:
         name = str(asset.get("name") or "")
+        if _is_checksum_asset(name):
+            continue
         if name.startswith(f"projman-{platform_name}-{arch}") and asset.get("browser_download_url"):
             return asset
 
     for asset in assets:
         name = str(asset.get("name") or "")
+        if _is_checksum_asset(name):
+            continue
         if name.startswith(f"projman-{platform_name}-") and asset.get("browser_download_url"):
             return asset
 
     if platform_name == "windows":
         for asset in assets:
             name = str(asset.get("name") or "")
+            if _is_checksum_asset(name):
+                continue
             if name.endswith(".exe") and asset.get("browser_download_url"):
                 return asset
 

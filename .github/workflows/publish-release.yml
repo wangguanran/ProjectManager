@@ -375,12 +375,45 @@ jobs:
     needs: release
     env:
       PACKAGE_NAME: multi-project-manager
-      PACKAGE_VERSION: "0.0.12"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Resolve package version from release tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "package_version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            echo "Resolved package version: ${BASH_REMATCH[1]}"
+          else
+            echo "Expected a release tag like vX.Y.Z, got '${tag}'." >&2
+            exit 1
+          fi
+
+      - name: Validate pyproject version matches release tag
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          pyproject_version="$(
+            python - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          print(data["project"]["version"])
+          PY
+          )"
+          if [ "$pyproject_version" != "$PACKAGE_VERSION" ]; then
+            echo "Version mismatch: pyproject=${pyproject_version}, tag=${PACKAGE_VERSION}" >&2
+            exit 1
+          fi
 
       - name: Install build dependencies
         run: |
@@ -404,15 +437,18 @@ jobs:
       - name: Check existing version on PyPI
         id: pypi_check
         shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
         run: |
           set -euo pipefail
           if python - <<'PY'
           import json
+          import os
           import urllib.request
           import urllib.error
 
           name = "multi-project-manager"
-          version = "0.0.12"
+          version = os.environ["PACKAGE_VERSION"]
           url = f"https://pypi.org/pypi/{name}/json"
 
           try:

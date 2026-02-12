@@ -718,13 +718,11 @@ class TestProjectNew:
         board_dir = tmp_path / "board01"
         board_dir.mkdir()
         ini_file = board_dir / "board01.ini"
-        ini_file.write_text(
-            """[board01]
+        ini_file.write_text("""[board01]
 [parent_project]
 PROJECT_NAME=parent
 PROJECT_PLATFORM=platform
-"""
-        )
+""")
 
         projects_info = {
             "parent_project": {
