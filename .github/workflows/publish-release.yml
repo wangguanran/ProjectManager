@@ -174,7 +174,6 @@ jobs:
           echo "compare_url=${compare_url}" >> "$GITHUB_OUTPUT"
 
       - name: Generate AI feature summary (optional)
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
         continue-on-error: true
         shell: bash
         env:
@@ -186,6 +185,9 @@ jobs:
           import os
           import urllib.request
           from pathlib import Path
+
+          if not os.environ.get("OPENAI_API_KEY"):
+              raise SystemExit(0)
 
           commits_file = Path("release/commits.tsv")
           if not commits_file.exists() or commits_file.stat().st_size == 0:
