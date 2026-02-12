@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple
 
 import configupdater
 
+import src.plugins.upgrader  # pylint: disable=unused-import
 from src.log_manager import log
 from src.operations.registry import get_registered_operations
 from src.profiler import func_cprofile, func_time
@@ -27,7 +28,6 @@ from src.utils import get_version
 import_module("src.plugins.project_manager")
 import_module("src.plugins.project_builder")
 import_module("src.plugins.patch_override")
-import_module("src.plugins.upgrader")
 
 
 # ===== Migration utility functions =====
