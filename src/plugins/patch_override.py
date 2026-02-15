@@ -1541,7 +1541,14 @@ def po_status(
 
 
 @register("po_list", needs_repositories=False, desc="List configured POs for a project")
-def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = False) -> List[dict]:
+def po_list(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    short: bool = False,
+    po: str = "",
+    json: bool = False,
+) -> List[dict]:
     """
     List all enabled PO (patch/override) directories for the specified project.
     Args:
@@ -1549,6 +1556,8 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         projects_info (dict): All projects info.
         project_name (str): Project name.
         short (bool): If True, only list po names, not details.
+        po (str): Optional PO filter; only list these POs (comma/space separated) from PROJECT_PO_CONFIG.
+        json (bool): If True, print JSON output to stdout.
     Returns:
         list: List of dicts with PO info (name, commit_files, patch_files, override_files)
     """
@@ -1574,6 +1583,11 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
     apply_pos = []
     if po_config:
         apply_pos, _, _ = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        return []
+    apply_pos = filtered
 
     runtime = PoPluginRuntime(
         board_name=board_name,
@@ -1601,6 +1615,17 @@ def po_list(env: Dict, projects_info: Dict, project_name: str, short: bool = Fal
         for plugin in plugins:
             po_info.update(plugin.list_files(po_path, runtime))
         po_infos.append(po_info)
+
+    if json:
+        payload = {
+            "schema_version": 1,
+            "project_name": project_name,
+            "board_name": board_name,
+            "items": po_infos,
+        }
+        print(jsonlib.dumps(payload, indent=2, ensure_ascii=False))
+        return po_infos
+
     # Print summary
     print(f"\nConfigured PO list for project: {project_name} (board: {board_name})")
     if not po_infos:

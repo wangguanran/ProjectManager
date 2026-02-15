@@ -1763,6 +1763,64 @@ class TestPatchOverrideList:
                 assert not result
                 mock_log.info.assert_called_with("start po_list for project: '%s'", project_name)
 
+    def test_po_list_po_filter_limits_pos(self):
+        """po_list --po filters to selected POs from PROJECT_PO_CONFIG."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+
+            po1 = "po1"
+            po2 = "po2"
+            os.makedirs(os.path.join(projects_path, board_name, "po", po1, "patches"), exist_ok=True)
+            os.makedirs(os.path.join(projects_path, board_name, "po", po2, "overrides"), exist_ok=True)
+
+            env = {"projects_path": projects_path, "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": f"{po1} {po2}"},
+                }
+            }
+
+            with patch("builtins.print"):
+                result = self.PatchOverride.po_list(env, projects_info, project_name, po=po1, short=True)
+
+            assert isinstance(result, list)
+            assert [item["name"] for item in result] == [po1]
+
+    def test_po_list_json_prints_payload(self):
+        """po_list --json prints a machine-readable payload."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+            po1 = "po1"
+
+            os.makedirs(os.path.join(projects_path, board_name, "po", po1, "patches"), exist_ok=True)
+
+            env = {"projects_path": projects_path, "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": po1},
+                }
+            }
+
+            with patch("builtins.print") as mock_print:
+                result = self.PatchOverride.po_list(env, projects_info, project_name, json=True)
+
+            assert isinstance(result, list)
+            assert len(result) == 1
+            assert result[0]["name"] == po1
+
+            assert mock_print.call_count == 1
+            payload = json.loads(mock_print.call_args[0][0])
+            assert payload["schema_version"] == 1
+            assert payload["project_name"] == project_name
+            assert payload["board_name"] == board_name
+            assert isinstance(payload["items"], list)
+
 
 class TestPatchOverrideParseConfig:
     """Test cases for parse_po_config method."""
