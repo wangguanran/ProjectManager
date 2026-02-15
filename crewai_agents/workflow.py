@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 from .tools import FileUtils, GitUtils, TaskManager, TestUtils
 
@@ -29,7 +29,7 @@ class Agent:
         self.goal = goal
         self.backstory = backstory
 
-    def execute(self, task: str, context: Dict = None) -> str:
+    def execute(self, task: str, context: Optional[Dict[str, Any]] = None) -> str:
         """执行任务"""
         print(f"\n🤖 {self.name} ({self.role}) 执行任务...")
         print(f"   目标: {self.goal}")
@@ -102,7 +102,7 @@ class RequirementAnalystAgent(Agent):
 
     def _check_conflicts(self, requirements: str) -> List[str]:
         # 检查是否与现有功能冲突
-        conflicts = []
+        conflicts: List[str] = []
         # 实际应该检查现有代码和文档
         return conflicts
 

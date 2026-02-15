@@ -14,8 +14,13 @@ from typing import Optional
 _CREWAI_IMPORT_ERROR: Optional[Exception] = None
 
 try:
-    from crewai import Agent, Crew, Process, Task  # pylint: disable=import-error
-    from crewai.project import (  # pylint: disable=import-error
+    from crewai import (  # pylint: disable=import-error  # type: ignore[import-not-found]
+        Agent,
+        Crew,
+        Process,
+        Task,
+    )
+    from crewai.project import (  # pylint: disable=import-error  # type: ignore[import-not-found]
         CrewBase,
         agent,
         crew,

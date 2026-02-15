@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build release docker-build docker-run
+.PHONY: help install install-dev test test-cov lint format typecheck clean build release docker-build docker-run
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -23,6 +23,9 @@ lint: ## Run linting tools
 	black --check src/ tests/ crewai_agents/
 	isort --check-only src/ tests/ crewai_agents/
 	# mypy src/
+
+typecheck: ## Run mypy (ratcheted baseline)
+	python scripts/mypy_ci.py
 
 format: ## Format code
 	black src/ tests/ crewai_agents/

@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import subprocess
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class FileUtils:
@@ -49,7 +49,7 @@ class GitUtils:
     """Git 操作工具"""
 
     @staticmethod
-    def run_git_command(command: List[str], cwd: str = None) -> Dict[str, Any]:
+    def run_git_command(command: List[str], cwd: Optional[str] = None) -> Dict[str, Any]:
         """执行 Git 命令"""
         try:
             result = subprocess.run(
@@ -70,7 +70,7 @@ class GitUtils:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def get_current_branch(cwd: str = None) -> str:
+    def get_current_branch(cwd: Optional[str] = None) -> str:
         """获取当前分支"""
         result = GitUtils.run_git_command(["branch", "--show-current"], cwd)
         if result["success"]:
@@ -78,32 +78,39 @@ class GitUtils:
         return "master"
 
     @staticmethod
-    def stage_all(cwd: str = None) -> bool:
+    def stage_all(cwd: Optional[str] = None) -> bool:
         """暂存所有文件"""
         result = GitUtils.run_git_command(["add", "."], cwd)
         return result["success"]
 
     @staticmethod
-    def commit(message: str, cwd: str = None) -> bool:
+    def commit(message: str, cwd: Optional[str] = None) -> bool:
         """提交代码"""
         result = GitUtils.run_git_command(["commit", "-m", message], cwd)
         return result["success"]
 
     @staticmethod
-    def push(cwd: str = None) -> bool:
+    def push(cwd: Optional[str] = None) -> bool:
         """推送代码"""
         branch = GitUtils.get_current_branch(cwd)
         result = GitUtils.run_git_command(["push", "origin", branch], cwd)
         return result["success"]
 
     @staticmethod
-    def generate_commit_message(tasks: List[Dict]) -> str:
+    def generate_commit_message(tasks: List[Dict[str, Any]]) -> str:
         """生成 commit message"""
         if not tasks:
             return "chore: 更新项目"
 
         # 按类型分组
-        types = {"feat": [], "fix": [], "docs": [], "refactor": [], "test": [], "chore": []}
+        types: Dict[str, List[str]] = {
+            "feat": [],
+            "fix": [],
+            "docs": [],
+            "refactor": [],
+            "test": [],
+            "chore": [],
+        }
 
         for task in tasks:
             title = task.get("title", "")
@@ -132,7 +139,7 @@ class TestUtils:
     """测试工具"""
 
     @staticmethod
-    def run_pytest(cwd: str = None, verbose: bool = True) -> Dict[str, Any]:
+    def run_pytest(cwd: Optional[str] = None, verbose: bool = True) -> Dict[str, Any]:
         """运行 pytest"""
         cmd = ["python", "-m", "pytest", "-v", "--tb=short"]
         if not verbose:
@@ -156,7 +163,7 @@ class TestUtils:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def check_code_quality(cwd: str = None) -> Dict[str, Any]:
+    def check_code_quality(cwd: Optional[str] = None) -> Dict[str, Any]:
         """检查代码质量 (pylint)"""
         try:
             result = subprocess.run(
