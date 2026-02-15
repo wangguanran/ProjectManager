@@ -268,7 +268,7 @@ python -m src po_apply <project-name> [--dry-run] [--force] [--reapply] [--po <p
 
 **Options**
 - `--dry-run`: Print planned actions without modifying files.
-- `--force`: Allow destructive operations (for example, override `.remove` deletions).
+- `--force`: Allow destructive operations (for example, override `.remove` deletions) and allow custom copy targets outside the workspace/repositories.
 - `--reapply`: Apply a PO even if applied records already exist (ignores existing markers and overwrites them after success).
 - `--po`: Apply only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 

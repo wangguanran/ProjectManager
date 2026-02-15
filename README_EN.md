@@ -197,7 +197,7 @@ projects/<board_name>/
 **Parameters**:
 - `project_name` (required): Name of the project to apply PO to
 - `--dry-run` (optional): Print planned actions without modifying files.
-- `--force` (optional): Allow destructive operations (for example, override `.remove` deletions).
+- `--force` (optional): Allow destructive operations (for example, override `.remove` deletions) and allow custom copy targets outside the workspace/repositories.
 - `--reapply` (optional): Apply POs even if applied records already exist (ignores existing markers and overwrites them after success).
 - `--po` (optional): Apply only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 

@@ -244,7 +244,7 @@ python -m src po_apply <项目名称> [--dry-run] [--force] [--reapply] [--po <p
 
 **选项**:
 - `--dry-run`: 仅打印计划执行的动作，不修改文件。
-- `--force`: 允许执行带破坏性的操作（例如覆盖 `.remove` 删除）。
+- `--force`: 允许执行带破坏性的操作（例如覆盖 `.remove` 删除），并允许 custom copy 目标路径位于工作区/仓库之外。
 - `--reapply`: 即使已存在已应用记录，也强制重新应用（成功后会覆盖对应记录文件）。
 - `--po`: 仅应用指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
 
