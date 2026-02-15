@@ -19,6 +19,7 @@ All commands accept the following global options:
 | `--version` | Print the current version | `python -m src --version` |
 | `--help` | Show help for the command or the CLI | `python -m src --help` |
 | `--perf-analyze` | Enable performance analysis logs | `python -m src --perf-analyze po_apply proj1` |
+| `--load-scripts` | Opt-in: import workspace scripts under `projects/scripts/*.py` (unsafe in untrusted workspaces) | `python -m src --load-scripts project_build proj1` |
 
 ---
 
