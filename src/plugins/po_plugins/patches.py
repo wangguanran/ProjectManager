@@ -8,7 +8,7 @@ import os
 import subprocess
 from typing import Any, Dict, List
 
-from src.log_manager import log
+from src.log_manager import log, summarize_output
 
 from .registry import APPLY_PHASE_PER_PO, REVERT_PHASE_PER_PO, register_simple_plugin
 from .runtime import PoPluginContext, PoPluginRuntime
@@ -85,10 +85,10 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             )
             log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
             log.debug(
-                "git apply result: returncode: '%s', stdout: '%s', stderr: '%s'",
+                "git apply result: returncode=%s stdout=%s stderr=%s",
                 result.returncode,
-                result.stdout,
-                result.stderr,
+                summarize_output(result.stdout),
+                summarize_output(result.stderr),
             )
             if result.returncode != 0:
                 already_applied = runtime.execute_command(
@@ -107,7 +107,7 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     )
                     continue
 
-                log.error("Failed to apply patch '%s': '%s'", patch_file, result.stderr)
+                log.error("Failed to apply patch '%s': %s", patch_file, summarize_output(result.stderr))
                 return False
 
             log.info("patch applied successfully for repo: '%s'", patch_target)
@@ -164,13 +164,13 @@ def _revert_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     check=False,
                 )
                 log.debug(
-                    "git apply --reverse result: returncode: '%s', stdout: '%s', stderr: '%s'",
+                    "git apply --reverse result: returncode=%s stdout=%s stderr=%s",
                     result.returncode,
-                    result.stdout,
-                    result.stderr,
+                    summarize_output(result.stdout),
+                    summarize_output(result.stderr),
                 )
                 if result.returncode != 0:
-                    log.error("Failed to revert patch '%s': '%s'", patch_file, result.stderr)
+                    log.error("Failed to revert patch '%s': %s", patch_file, summarize_output(result.stderr))
                     return False
                 log.info("patch reverted for dir: '%s'", patch_target)
             except subprocess.SubprocessError as e:

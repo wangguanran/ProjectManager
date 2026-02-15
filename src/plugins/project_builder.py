@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.hooks import HookType, execute_hooks_with_fallback
-from src.log_manager import log
+from src.log_manager import log, summarize_output
 from src.operations.registry import register
 
 # from src.profiler import auto_profile  # unused
@@ -446,7 +446,7 @@ def _repo_sync(ctx: BuildContext) -> bool:
         cmd = _format_cmd_template(cmd, ctx)
         result = _run_cmd(shlex.split(cmd), cwd=cwd, dry_run=ctx.dry_run, description="Sync repositories")
         if result.returncode != 0:
-            log.error("Sync command failed (code=%s): %s", result.returncode, (result.stderr or "").strip())
+            log.error("Sync command failed (code=%s): %s", result.returncode, summarize_output(result.stderr))
             return False
         return True
 
@@ -454,7 +454,7 @@ def _repo_sync(ctx: BuildContext) -> bool:
     if os.path.exists(manifest) and shutil.which("repo"):
         result = _run_cmd(["repo", "sync"], cwd=ctx.root_path, dry_run=ctx.dry_run, description="repo sync")
         if result.returncode != 0:
-            log.error("repo sync failed (code=%s): %s", result.returncode, (result.stderr or "").strip())
+            log.error("repo sync failed (code=%s): %s", result.returncode, summarize_output(result.stderr))
             return False
         return True
 
@@ -494,7 +494,10 @@ def _repo_sync(ctx: BuildContext) -> bool:
         )
         if result.returncode != 0:
             log.error(
-                "git pull failed for '%s' (code=%s): %s", repo_name, result.returncode, (result.stderr or "").strip()
+                "git pull failed for '%s' (code=%s): %s",
+                repo_name,
+                result.returncode,
+                summarize_output(result.stderr),
             )
             return False
 
@@ -535,7 +538,7 @@ def _repo_clean(ctx: BuildContext) -> bool:
                 "git reset failed for '%s' (code=%s): %s",
                 repo_name,
                 reset_result.returncode,
-                (reset_result.stderr or "").strip(),
+                summarize_output(reset_result.stderr),
             )
             return False
 
@@ -553,7 +556,7 @@ def _repo_clean(ctx: BuildContext) -> bool:
                 "git clean failed for '%s' (code=%s): %s",
                 repo_name,
                 clean_result.returncode,
-                (clean_result.stderr or "").strip(),
+                summarize_output(clean_result.stderr),
             )
             return False
 

@@ -8,7 +8,7 @@ import os
 import subprocess
 from typing import Any, Dict, List, Tuple
 
-from src.log_manager import log
+from src.log_manager import log, summarize_output
 
 from .registry import (
     APPLY_PHASE_GLOBAL_PRE,
@@ -131,7 +131,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 )
                 continue
 
-            log.error("Failed to apply commit patch '%s': '%s'", patch_file, result.stderr)
+            log.error("Failed to apply commit patch '%s': %s", patch_file, summarize_output(result.stderr))
             return False
 
         head_after = head_before
@@ -210,10 +210,10 @@ def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     check=False,
                 )
                 log.debug(
-                    "git revert result: returncode: '%s', stdout: '%s', stderr: '%s'",
+                    "git revert result: returncode=%s stdout=%s stderr=%s",
                     result.returncode,
-                    result.stdout,
-                    result.stderr,
+                    summarize_output(result.stdout),
+                    summarize_output(result.stderr),
                 )
                 if result.returncode != 0:
                     log.error(
@@ -221,7 +221,7 @@ def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                         sha,
                         ctx.po_name,
                         repo_name,
-                        result.stderr,
+                        summarize_output(result.stderr),
                     )
                     # Best-effort cleanup of revert state.
                     subprocess.run(
