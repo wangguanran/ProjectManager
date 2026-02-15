@@ -251,3 +251,10 @@
 | PLAN-002 | DX/Safety | `po_apply --emit-plan` outputs JSON and does not write | Dataset A completed | 1. Run `python -m src po_apply projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=po_apply`, per-repo actions; no repo files are modified and no applied records are written. | P1 | DX |
 | PLAN-003 | DX/Safety | `po_revert --emit-plan` outputs JSON and does not write | Dataset A completed | 1. Run `python -m src po_revert projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=po_revert`, per-repo actions; no repo files are modified and no applied records are removed. | P1 | DX |
 | PLAN-004 | DX/Safety | `project_build --emit-plan` outputs JSON and does not write | Dataset A completed | 1. Run `python -m src project_build projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=project_build`, step list (including pre-build nested plans); no `.cache` output is created. | P1 | DX |
+
+## 13. Workspace Snapshot (snapshot_create / snapshot_validate)
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| SNAP-001 | Ops | `snapshot_create` outputs deterministic JSON | Dataset A completed | 1. Run `python -m src snapshot_create projA > snapshot.json`.<br>2. Run again and compare with previous snapshot. | Snapshot JSON is deterministic for the same workspace state; includes repo HEAD SHAs and resolved enabled POs. | P1 | Ops |
+| SNAP-002 | Ops | `snapshot_validate` detects drift | SNAP-001 completed | 1. Change repo HEAD (new commit) or change enabled POs in config.<br>2. Run `python -m src snapshot_validate snapshot.json --json`. | JSON report indicates drift and exits non-zero when drift exists. | P1 | Ops |

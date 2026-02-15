@@ -116,6 +116,54 @@ python -m src project_diff myproject --keep-diff-dir
 
 ---
 
+### `snapshot_create` - 生成工作区快照（锁文件）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src snapshot_create <项目名称> [--out <path>]
+```
+
+**描述**: 生成确定性的 JSON 快照，包含各仓库 HEAD SHA 以及指定项目解析后的启用 PO 列表（用于可复现性）。
+
+**参数**:
+- `项目名称`（必需）: 需要记录启用 PO 集合的项目名称
+
+**选项**:
+- `--out`: 将快照写入指定路径（缺省则输出到 stdout）
+
+**示例**:
+```bash
+python -m src snapshot_create myproject --out snapshot.json
+```
+
+---
+
+### `snapshot_validate` - 校验工作区与快照一致性
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src snapshot_validate <快照路径> [--json]
+```
+
+**描述**: 比对当前仓库 HEAD SHA 与启用 PO 集合是否与快照一致；当检测到漂移时以非 0 退出。
+
+**参数**:
+- `快照路径`（必需）: `snapshot_create` 生成的快照 JSON 路径
+
+**选项**:
+- `--json`: 输出机器可读的 JSON 报告到 stdout
+
+**示例**:
+```bash
+python -m src snapshot_validate snapshot.json --json
+```
+
+---
+
 ### `project_pre_build` - 预构建阶段
 
 **状态**: ✅ 已实现

@@ -170,6 +170,54 @@ python -m src project_diff myproject --keep-diff-dir
 
 ---
 
+### `snapshot_create` — Create a workspace snapshot (lockfile)
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src snapshot_create <project-name> [--out <path>]
+```
+
+**Description**: Create a deterministic JSON snapshot of repository HEAD SHAs and the resolved enabled PO list for the given project (useful for reproducibility).
+
+**Arguments**
+- `project-name` (required): Project whose enabled PO set should be captured.
+
+**Options**
+- `--out`: Write snapshot JSON to the given path (when omitted, prints to stdout).
+
+**Example**
+```bash
+python -m src snapshot_create myproject --out snapshot.json
+```
+
+---
+
+### `snapshot_validate` — Validate workspace against a snapshot
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src snapshot_validate <snapshot-path> [--json]
+```
+
+**Description**: Compare current repository HEAD SHAs and enabled POs against a snapshot. Exits non-zero when drift is detected.
+
+**Arguments**
+- `snapshot-path` (required): Path to the snapshot JSON created by `snapshot_create`.
+
+**Options**
+- `--json`: Output a machine-readable JSON report to stdout.
+
+**Example**
+```bash
+python -m src snapshot_validate snapshot.json --json
+```
+
+---
+
 ### `project_pre_build` — Run the pre-build stage
 
 **Status**: ✅ Implemented
