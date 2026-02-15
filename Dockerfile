@@ -6,24 +6,17 @@ WORKDIR /app
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src
+    PYTHONUNBUFFERED=1
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
+# Copy package sources and install runtime deps only (avoids dev tooling in runtime image)
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY pyproject.toml .
-COPY README.md .
+RUN python -m pip install --no-cache-dir .
 
 # Create necessary directories
 RUN mkdir -p /app/projects /app/.cache/logs /app/.cache/cprofile
@@ -32,7 +25,7 @@ RUN mkdir -p /app/projects /app/.cache/logs /app/.cache/cprofile
 VOLUME ["/app/projects", "/app/.cache"]
 
 # Set default command
-ENTRYPOINT ["python", "-m", "src"]
+ENTRYPOINT ["projman"]
 
 # Default command (can be overridden)
 CMD ["--help"] 
