@@ -890,6 +890,7 @@ def po_new(
     project_name: str,
     po_name: str,
     force: bool = False,
+    tui: bool = False,
     po_check_exists: bool = False,
 ) -> bool:
     """
@@ -1560,6 +1561,16 @@ def po_new(
     try:
         # Interactive file selection first
         if not force:
+            if tui:
+                from src.tui_utils import tui_available
+
+                ok, msg = tui_available()
+                if not ok:
+                    log.error("%s", msg)
+                    print(msg)
+                    return False
+                print("NOTE: --tui is enabled, but TUI UI is not implemented yet; falling back to prompt-based flow.")
+
             # Pass env["repositories"] and project_cfg for interactive selection.
             __interactive_file_selection(po_path, env.get("repositories", []), project_cfg)
 
@@ -1585,12 +1596,14 @@ def po_new(
 
 
 @register("po_update", needs_repositories=True, desc="Update an existing PO for a project")
-def po_update(env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False) -> bool:
+def po_update(
+    env: Dict, projects_info: Dict, project_name: str, po_name: str, force: bool = False, tui: bool = False
+) -> bool:
     """
     Update an existing PO directory structure (must already exist).
     Reuses po_new with po_update=True to leverage the same workflow.
     """
-    return po_new(env, projects_info, project_name, po_name, force=force, po_check_exists=True)
+    return po_new(env, projects_info, project_name, po_name, force=force, tui=tui, po_check_exists=True)
 
 
 @register("po_del", needs_repositories=True, desc="Delete a PO for a project")
