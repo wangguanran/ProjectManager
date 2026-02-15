@@ -111,3 +111,10 @@ def test_cfg_010_projects_json_written(workspace_a: Path) -> None:
     _ = run_cli(["po_list", "projA"], cwd=workspace_a)
     projects_json = workspace_a / "projects" / "boardA" / "projects.json"
     assert projects_json.exists()
+    data = json.loads(projects_json.read_text(encoding="utf-8"))
+    assert Path(data["board_path"]).is_absolute() is False
+    assert data["board_path"] == str(Path("projects") / "boardA")
+    for project in data.get("projects", []):
+        ini_file = project.get("ini_file")
+        if ini_file:
+            assert Path(ini_file).is_absolute() is False

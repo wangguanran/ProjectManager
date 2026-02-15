@@ -247,9 +247,10 @@ python -m src po_list myproject --short
 ### Debug tips
 
 1. Inspect `.cache/latest.log` (or `.cache/logs/Log_*.log`) for detailed debug logs.
-2. Inspect INI syntax manually when editing files.
-3. Use `po_list` to preview PO selection results.
-4. Review project naming to ensure inheritance mapping.
+2. `projects/<board>/projects.json` and `projects/repositories.json` store **relative paths only** and are generally safe to share for troubleshooting (they may still reveal board/project names).
+3. Inspect INI syntax manually when editing files.
+4. Use `po_list` to preview PO selection results.
+5. Review project naming to ensure inheritance mapping.
 
 ---
 
