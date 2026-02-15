@@ -33,6 +33,25 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         """
         log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
 
+        allowed_roots = [os.path.realpath(runtime.workspace_root)] + [
+            os.path.realpath(repo_path) for repo_path, _repo_name in (runtime.repositories or [])
+        ]
+
+        def _resolve_target_abs(path: str) -> str:
+            abs_path = path
+            if not os.path.isabs(abs_path):
+                abs_path = os.path.abspath(os.path.join(runtime.workspace_root, abs_path))
+            return os.path.realpath(abs_path)
+
+        def _is_under_allowed_roots(abs_target: str) -> bool:
+            for root in allowed_roots:
+                try:
+                    if os.path.commonpath([root, abs_target]) == root:
+                        return True
+                except ValueError:
+                    continue
+            return False
+
         abs_pattern = os.path.join(section_custom_dir, source_pattern)
         record_repo = runtime.resolve_repo_for_target_path(target_path)
         if record_repo is None:
@@ -83,6 +102,20 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
 
             # Determine if target should be treated as a directory.
             target_is_dir = target_path.endswith(os.sep) or os.path.isdir(target_path) or len(matches) > 1
+            if target_is_dir:
+                abs_target_dir = _resolve_target_abs(target_path.rstrip(os.sep))
+                if not _is_under_allowed_roots(abs_target_dir):
+                    if not ctx.force:
+                        log.error(
+                            "Refusing to copy to target outside workspace/repositories without --force: %s",
+                            target_path,
+                        )
+                        return False
+                    log.warning(
+                        "Copying to target outside workspace/repositories due to --force: %s",
+                        target_path,
+                    )
+
             if not ctx.dry_run and target_is_dir and not os.path.exists(target_path):
                 os.makedirs(target_path.rstrip(os.sep), exist_ok=True)
 
@@ -92,6 +125,19 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     dest = os.path.join(target_path, rel)
                 else:
                     dest = target_path
+
+                abs_dest = _resolve_target_abs(dest)
+                if not _is_under_allowed_roots(abs_dest):
+                    if not ctx.force:
+                        log.error(
+                            "Refusing to copy to target outside workspace/repositories without --force: %s",
+                            dest,
+                        )
+                        return False
+                    log.warning(
+                        "Copying to target outside workspace/repositories due to --force: %s",
+                        dest,
+                    )
 
                 dest_dir = os.path.dirname(dest)
                 if not ctx.dry_run and dest_dir:

@@ -347,6 +347,46 @@ class TestPatchOverrideApply:
             # Custom copy target not created.
             assert not os.path.exists(os.path.join(tmpdir, "custom_dest.txt"))
 
+    def test_po_apply_custom_copy_outside_workspace_requires_force(self):
+        """Custom copy refuses targets outside workspace/repositories unless --force is set."""
+        with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as outside_dir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            custom_dir = os.path.join(projects_path, board_name, "po", po_name, "custom")
+            os.makedirs(custom_dir, exist_ok=True)
+            with open(os.path.join(custom_dir, "test_custom.txt"), "w", encoding="utf-8") as f:
+                f.write("custom\n")
+
+            outside_target = os.path.join(outside_dir, "custom_dest.txt")
+            env = {
+                "projects_path": projects_path,
+                "repositories": [],
+                "po_configs": {
+                    f"po-{po_name}": {
+                        "PROJECT_PO_DIR": "custom",
+                        "PROJECT_PO_FILE_COPY": f"test_custom.txt:{outside_target}",
+                    }
+                },
+            }
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                assert self.PatchOverride.po_apply(env, projects_info, project_name) is False
+                assert not os.path.exists(outside_target)
+
+                assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+            finally:
+                os.chdir(old_cwd)
+
+            assert os.path.exists(outside_target)
+            with open(outside_target, "r", encoding="utf-8") as f:
+                assert f.read() == "custom\n"
+
     def test_po_revert_dry_run_has_no_side_effects(self):
         """DRY-003: po_revert --dry-run prints plan and does not write."""
         with tempfile.TemporaryDirectory() as tmpdir:
