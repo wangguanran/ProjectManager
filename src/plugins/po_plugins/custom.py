@@ -8,7 +8,7 @@ import glob
 import os
 from typing import Any, Dict, List
 
-from src.log_manager import log
+from src.log_manager import log, summarize_output
 
 from .registry import APPLY_PHASE_PER_PO, REVERT_PHASE_PER_PO, register_simple_plugin
 from .runtime import PoPluginContext, PoPluginRuntime
@@ -152,7 +152,7 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     shell=False,
                 )
                 if result.returncode != 0:
-                    log.error("Failed to copy '%s' to '%s': %s", src, dest, result.stderr)
+                    log.error("Failed to copy '%s' to '%s': %s", src, dest, summarize_output(result.stderr))
                     return False
 
             return True

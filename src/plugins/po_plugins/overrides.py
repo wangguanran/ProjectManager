@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Tuple
 
-from src.log_manager import log
+from src.log_manager import log, summarize_output
 
 from .registry import APPLY_PHASE_PER_PO, REVERT_PHASE_PER_PO, register_simple_plugin
 from .runtime import PoPluginContext, PoPluginRuntime
@@ -146,7 +146,7 @@ def _apply_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                         )
 
                         if result.returncode != 0:
-                            log.error("Failed to remove file '%s': %s", dest_rel, result.stderr)
+                            log.error("Failed to remove file '%s': %s", dest_rel, summarize_output(result.stderr))
                             return False
 
                         log.info("Removed file '%s' (repo_root=%s)", dest_rel, repo_root)
@@ -172,7 +172,12 @@ def _apply_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     )
 
                     if result.returncode != 0:
-                        log.error("Failed to copy override file '%s' to '%s': %s", src_file, dest_rel, result.stderr)
+                        log.error(
+                            "Failed to copy override file '%s' to '%s': %s",
+                            src_file,
+                            dest_rel,
+                            summarize_output(result.stderr),
+                        )
                         return False
 
                     log.info("Copied override file '%s' to '%s' (repo_root=%s)", src_file, dest_rel, repo_root)
@@ -283,13 +288,13 @@ def _revert_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                         check=False,
                     )
                     log.debug(
-                        "git checkout result: returncode: '%s', stdout: '%s', stderr: '%s'",
+                        "git checkout result: returncode=%s stdout=%s stderr=%s",
                         result.returncode,
-                        result.stdout,
-                        result.stderr,
+                        summarize_output(result.stdout),
+                        summarize_output(result.stderr),
                     )
                     if result.returncode != 0:
-                        log.error("Failed to revert override file '%s': '%s'", dest_rel, result.stderr)
+                        log.error("Failed to revert override file '%s': %s", dest_rel, summarize_output(result.stderr))
                         return False
                 elif os.path.exists(dest_abs):
                     log.debug("File '%s' is not tracked by git, deleting directly", dest_rel)
