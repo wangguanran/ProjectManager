@@ -3,6 +3,7 @@ Patch and override operations for project management.
 """
 
 import fnmatch
+import json as jsonlib
 import os
 import re
 import shutil
@@ -1357,6 +1358,186 @@ def po_del(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
 
     log.info("po_del finished for project: '%s', po_name: '%s'", project_name, po_name)
     return True
+
+
+@register("po_status", needs_repositories=True, desc="Show applied record status for a project")
+def po_status(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    po: str = "",
+    short: bool = False,
+    json: bool = False,
+) -> List[dict]:
+    """
+    Show applied record status for configured POs of the specified project.
+
+    Args:
+        env (dict): Global environment dict.
+        projects_info (dict): All projects info.
+        project_name (str): Project name.
+        po (str): Optional PO filter; only show these POs (comma/space separated) from PROJECT_PO_CONFIG.
+        short (bool): If True, only print per-PO summary.
+        json (bool): If True, print JSON output to stdout.
+    Returns:
+        list: List of dicts with per-PO applied record status.
+    """
+    log.info("start po_status for project: '%s'", project_name)
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    board_name = project_info.get("board_name") if isinstance(project_info, dict) else None
+    if not board_name:
+        log.error("Cannot find board name for project: '%s'", project_name)
+        return []
+
+    board_path = os.path.join(env["projects_path"], board_name)
+    po_dir = os.path.join(board_path, "po")
+    if not os.path.isdir(po_dir):
+        log.warning("No po directory found for '%s'", project_name)
+        return []
+
+    po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
+    if not po_config:
+        log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
+        return []
+
+    apply_pos, _, _ = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        return []
+    apply_pos = filtered
+    if not apply_pos:
+        log.warning("No POs selected for '%s' after --po filter; nothing to do.", project_name)
+        return []
+
+    runtime = PoPluginRuntime(
+        board_name=board_name,
+        project_name=project_name,
+        repositories=env.get("repositories", []),
+        workspace_root=os.getcwd(),
+        po_configs=env.get("po_configs", {}),
+    )
+
+    repo_entries = sorted(runtime.repositories, key=lambda item: (item[1] != "root", item[1]))
+
+    items: List[dict] = []
+    for po_name in sorted(apply_pos):
+        rows: List[dict] = []
+        applied_count = 0
+
+        for repo_path, repo_name in repo_entries:
+            record_path = runtime.applied_record_path(repo_path, po_name)
+            exists = os.path.isfile(record_path)
+            record = runtime.load_applied_record(repo_path, po_name) if exists else None
+
+            row_status = "missing"
+            applied_at = None
+            record_ok = False
+            counts = None
+            if exists:
+                applied_count += 1
+                if record is None:
+                    row_status = "unreadable"
+                else:
+                    record_ok = True
+                    row_status = str(record.get("status") or "applied")
+                    applied_at = record.get("applied_at")
+                    counts = {
+                        "commits": len(record.get("commits") or []),
+                        "patches": len(record.get("patches") or []),
+                        "overrides": len(record.get("overrides") or []),
+                        "custom": len(record.get("custom") or []),
+                        "commands": len(record.get("commands") or []),
+                    }
+
+            rows.append(
+                {
+                    "repo_name": repo_name,
+                    "repo_path": os.path.abspath(repo_path),
+                    "record_path": record_path,
+                    "record_exists": exists,
+                    "record_ok": record_ok,
+                    "status": row_status,
+                    "applied_at": applied_at,
+                    "counts": counts,
+                }
+            )
+
+        # Workspace-level record (used by custom copies that don't map into repos).
+        workspace_record_path = runtime.applied_record_path(runtime.workspace_root, po_name)
+        if os.path.isfile(workspace_record_path):
+            record = runtime.load_applied_record(runtime.workspace_root, po_name)
+            row_status = "unreadable" if record is None else str(record.get("status") or "applied")
+            applied_at = None
+            record_ok = False
+            counts = None
+            if record is not None:
+                record_ok = True
+                applied_at = record.get("applied_at")
+                counts = {
+                    "commits": len(record.get("commits") or []),
+                    "patches": len(record.get("patches") or []),
+                    "overrides": len(record.get("overrides") or []),
+                    "custom": len(record.get("custom") or []),
+                    "commands": len(record.get("commands") or []),
+                }
+
+            rows.append(
+                {
+                    "repo_name": "workspace",
+                    "repo_path": runtime.workspace_root,
+                    "record_path": workspace_record_path,
+                    "record_exists": True,
+                    "record_ok": record_ok,
+                    "status": row_status,
+                    "applied_at": applied_at,
+                    "counts": counts,
+                }
+            )
+            applied_count += 1
+
+        items.append(
+            {
+                "name": po_name,
+                "repo_count": len(rows),
+                "applied_record_count": applied_count,
+                "repos": rows,
+            }
+        )
+
+    if json:
+        payload = {
+            "schema_version": 1,
+            "project_name": project_name,
+            "board_name": board_name,
+            "items": items,
+        }
+        print(jsonlib.dumps(payload, indent=2, ensure_ascii=False))
+        return items
+
+    print(f"\nPO status for project: {project_name} (board: {board_name})")
+    print("  Note: missing records may mean the PO was not applied, or it did not target that repo.")
+    for item in items:
+        name = item["name"]
+        applied = item["applied_record_count"]
+        total = item["repo_count"]
+        print(f"\nPO: {name}  applied records: {applied}/{total}")
+        if short:
+            continue
+        for row in item["repos"]:
+            repo_name = row["repo_name"]
+            if not row["record_exists"]:
+                print(f"  - {repo_name}: not applied")
+                continue
+            applied_at = row.get("applied_at") or ""
+            status = row.get("status") or "applied"
+            if applied_at:
+                print(f"  - {repo_name}: {status} (applied_at={applied_at})")
+            else:
+                print(f"  - {repo_name}: {status}")
+
+    return items
 
 
 @register("po_list", needs_repositories=False, desc="List configured POs for a project")

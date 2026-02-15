@@ -241,6 +241,59 @@ class TestPatchOverrideApply:
 
             assert self.PatchOverride.po_apply(env, projects_info, "proj", po="po_unknown") is False
 
+    def test_po_status_reports_applied_records(self):
+        """po_status shows applied record markers for configured POs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            target_rel = "target.txt"
+            target_abs = os.path.join(repo_root, target_rel)
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("base\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "base")
+
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, target_rel), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+            record_path = self.PatchOverride._po_applied_record_path(repo_root, board_name, project_name, po_name)
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+            assert os.path.exists(record_path)
+
+            with patch("builtins.print"):
+                items = self.PatchOverride.po_status(env, projects_info, project_name, short=True)
+
+            assert isinstance(items, list)
+            assert len(items) == 1
+            assert items[0]["name"] == po_name
+            assert items[0]["applied_record_count"] == 1
+
+            repos = items[0]["repos"]
+            root_row = next(r for r in repos if r["repo_name"] == "root")
+            assert root_row["record_exists"] is True
+            assert root_row["record_ok"] is True
+            assert root_row["status"] == "applied"
+
     def test_po_apply_dry_run_has_no_side_effects(self):
         """DRY-002: po_apply --dry-run prints plan and does not write."""
         with tempfile.TemporaryDirectory() as tmpdir:
