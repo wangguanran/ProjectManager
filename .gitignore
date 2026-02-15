@@ -145,3 +145,6 @@ projects/repositories.json
 
 # Build-time metadata (generated)
 src/_build_info.py
+
+# Local agent artifacts (audit outputs, plans, logs)
+.agent_artifacts/
