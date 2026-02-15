@@ -28,6 +28,7 @@ from src.utils import get_version
 import_module("src.plugins.project_manager")
 import_module("src.plugins.project_builder")
 import_module("src.plugins.patch_override")
+import_module("src.plugins.doctor")
 
 
 # ===== Migration utility functions =====

@@ -46,6 +46,30 @@ python -m src upgrade --require-checksum
 
 ---
 
+### `doctor` — Workspace diagnostics
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src doctor [--json] [--strict]
+```
+
+**Description**: Validate the current workspace layout/config and print remediation hints before running build/PO operations.
+
+**Options**
+- `--json`: Print a machine-readable JSON report to stdout.
+- `--strict`: Treat warnings as errors (non-zero exit).
+
+**Examples**
+```bash
+python -m src doctor
+python -m src doctor --json
+python -m src doctor --strict
+```
+
+---
+
 ## Project Management Commands
 
 ### `project_new` — Create a project

@@ -7,6 +7,7 @@ workspace (cwd), with PYTHONPATH pointing to the repo source tree.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -140,3 +141,22 @@ def test_cli_missing_required_args_is_error(tmp_path: Path) -> None:
     _write_min_projects_tree(tmp_path)
     cp = _run_cli(tmp_path, "project_new")
     assert cp.returncode != 0
+
+
+def test_cli_doctor_ok_with_projects_tree(tmp_path: Path) -> None:
+    """CLI-011: `doctor` validates workspace (JSON output)."""
+    _write_min_projects_tree(tmp_path)
+    cp = _run_cli(tmp_path, "doctor", "--json")
+    assert cp.returncode == 0
+    report = json.loads(cp.stdout)
+    checks = {c["id"]: c for c in report.get("checks", [])}
+    assert checks["projects_dir_exists"]["severity"] == "ok"
+
+
+def test_cli_doctor_errors_without_projects_tree(tmp_path: Path) -> None:
+    """CLI-012: `doctor` errors in empty workspace."""
+    cp = _run_cli(tmp_path, "doctor", "--json")
+    assert cp.returncode != 0
+    report = json.loads(cp.stdout)
+    checks = {c["id"]: c for c in report.get("checks", [])}
+    assert checks["projects_dir_exists"]["severity"] == "error"
