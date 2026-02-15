@@ -92,6 +92,7 @@
 | CLI-015 | CLI/Security | `--safe-mode` works with `--help` / `--version` | Dataset A completed | 1. Run `python -m src --safe-mode --help`.<br>2. Run `python -m src --safe-mode --version`. | Both commands exit 0 and print expected output; no operation executed. | P1 | Security |
 | CLI-016 | CLI/Security | Safe mode blocks destructive ops without explicit opt-in | Dataset A completed | 1. Run `python -m src --safe-mode po_apply projA`.<br>2. Run `python -m src --safe-mode project_build projA`. | Each exits non-zero and prints an error requiring `--dry-run` or `--yes`. No destructive action is executed. | P1 | Security |
 | CLI-017 | CLI/Security | Safe mode ignores env-based script loading | Dataset A completed + `projects/scripts/*.py` present | 1. Create `projects/scripts/marker.py` that writes a marker file at import time.<br>2. Run `PROJMAN_LOAD_SCRIPTS=1 python -m src --safe-mode upgrade --dry-run`.<br>3. Check marker file does not exist. | Marker file is not created because safe mode ignores `PROJMAN_LOAD_SCRIPTS` unless `--load-scripts` is explicitly provided. | P1 | Security |
+| CLI-018 | CLI/Arg Parsing | `--no-fuzzy` requires exact operation match | Dataset A completed | 1. Run `python -m src --no-fuzzy buil projA`.<br>2. Run `python -m src --no-fuzzy po projA`. | Each exits non-zero without executing any operation; error indicates fuzzy matching is disabled. | P2 | Safety |
 
 ## 2. Config Loading & Project Index (src/__main__.py)
 
