@@ -1219,11 +1219,12 @@ class TestPatchOverrideRevert:
             }
             projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
 
-            with patch("src.plugins.patch_override.log") as mock_log:
+            with patch("src.plugins.po_plugins.custom.log") as mock_log:
                 assert self.PatchOverride.po_revert(env, projects_info, project_name) is True
                 assert any(
                     "Manual cleanup may be required" in str(call.args[0]) for call in mock_log.warning.call_args_list
                 )
+
 
 class TestPatchOverrideNew:
     """Test cases for po_new method."""
@@ -1496,6 +1497,7 @@ class TestPatchOverrideDelete:
             with open(ini_file, "r", encoding="utf-8") as f:
                 after = f.read()
             assert after == before
+
 
 class TestPatchOverrideList:
     """Test cases for po_list method."""
