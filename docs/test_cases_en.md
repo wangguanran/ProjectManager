@@ -241,3 +241,12 @@
 | DRY-001 | Safety | `project_diff --dry-run` prints plan and does not write | Dataset A or B completed | 1. Run `python -m src project_diff projA --dry-run`.<br>2. Check filesystem for `.cache/build/.../diff`. | Logs show planned diff root/repositories; no `.cache/build/.../diff` directories are created. | P1 | Safety |
 | DRY-002 | Safety | `po_apply --dry-run` prints plan and does not write | Dataset A completed with patches/overrides/custom configured | 1. Run `python -m src po_apply projA --dry-run`.<br>2. Check that repo files are unchanged. | Logs show planned `git apply`/copy/remove actions; no repo writes occur; no `po_applied` flag is created. | P0 | Safety |
 | DRY-003 | Safety | `po_revert --dry-run` prints plan and does not write | Dataset A completed with applyable PO | 1. Run `python -m src po_revert projA --dry-run`.<br>2. Check that repo files are unchanged. | Logs show planned `git apply --reverse`/checkout/remove actions; no repo writes occur. | P0 | Safety |
+
+## 12. Execution Plan Export (--emit-plan)
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| PLAN-001 | DX/Safety | `project_diff --emit-plan` outputs JSON and does not write | Dataset A or B completed | 1. Run `python -m src project_diff projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=project_diff`, per-repo file lists; no `.cache` output is created. | P1 | DX |
+| PLAN-002 | DX/Safety | `po_apply --emit-plan` outputs JSON and does not write | Dataset A completed | 1. Run `python -m src po_apply projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=po_apply`, per-repo actions; no repo files are modified and no applied records are written. | P1 | DX |
+| PLAN-003 | DX/Safety | `po_revert --emit-plan` outputs JSON and does not write | Dataset A completed | 1. Run `python -m src po_revert projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=po_revert`, per-repo actions; no repo files are modified and no applied records are removed. | P1 | DX |
+| PLAN-004 | DX/Safety | `project_build --emit-plan` outputs JSON and does not write | Dataset A completed | 1. Run `python -m src project_build projA --emit-plan`.<br>2. Parse stdout as JSON. | JSON contains `schema_version`, `operation=project_build`, step list (including pre-build nested plans); no `.cache` output is created. | P1 | DX |

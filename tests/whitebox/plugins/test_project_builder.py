@@ -2,6 +2,7 @@
 Tests for project_builder functions.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -77,6 +78,37 @@ class TestProjectDiff:
         projects_info = {}
         result = self.project_diff(env, projects_info, "test_project", keep_diff_dir=False, dry_run=True)
         assert result is True
+        assert not (tmp_path / ".cache").exists()
+
+    def test_project_diff_emit_plan_outputs_json_and_does_not_write(self, tmp_path, monkeypatch, capsys):
+        """PLAN-001: project_diff --emit-plan emits JSON and does not write."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        def _git(*args: str) -> None:
+            subprocess.run(
+                ["git", *args], cwd=str(repo_root), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+
+        _git("init")
+        _git("config", "user.email", "test@example.com")
+        _git("config", "user.name", "Test User")
+        (repo_root / "a.txt").write_text("base\n", encoding="utf-8")
+        _git("add", "a.txt")
+        _git("commit", "-m", "base")
+
+        monkeypatch.chdir(tmp_path)
+        env = {"root_path": str(tmp_path), "repositories": [(str(repo_root), "root")]}
+        projects_info = {}
+        result = self.project_diff(env, projects_info, "projA", emit_plan=True)
+        assert result is True
+
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["schema_version"] == 1
+        assert payload["operation"] == "project_diff"
+        assert payload["project_name"] == "projA"
+        assert payload["dry_run"] is True
+
         assert not (tmp_path / ".cache").exists()
 
     def test_project_diff_empty_project_name(self):
@@ -766,6 +798,58 @@ class TestProjectBuild:
         assert called_kwargs.get("repo") == ""
         assert called_kwargs.get("target") == ""
         assert called_kwargs.get("dry_run") is False
+
+    @patch("src.plugins.project_builder.project_pre_build")
+    @patch("src.plugins.project_builder.project_do_build")
+    @patch("src.plugins.project_builder.project_post_build")
+    def test_project_build_emit_plan_outputs_json_and_does_not_write(
+        self, mock_post_build, mock_do_build, mock_pre_build, tmp_path, monkeypatch, capsys
+    ):
+        """PLAN-004: project_build --emit-plan emits JSON and does not write."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init"], cwd=str(repo_root), check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=str(repo_root), check=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=str(repo_root), check=True)
+        (repo_root / "a.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "a.txt"], cwd=str(repo_root), check=True)
+        subprocess.run(["git", "commit", "-m", "base"], cwd=str(repo_root), check=True)
+
+        projects_root = tmp_path / "projects"
+        projects_root.mkdir(parents=True, exist_ok=True)
+
+        monkeypatch.chdir(tmp_path)
+        env = {
+            "root_path": str(tmp_path),
+            "projects_path": str(projects_root),
+            "repositories": [(str(repo_root), "root")],
+            "po_configs": {},
+        }
+        projects_info = {
+            "projA": {
+                "board_name": "boardA",
+                "config": {
+                    "PROJECT_PLATFORM": "platA",
+                    "PROJECT_PO_CONFIG": "po1",
+                },
+            }
+        }
+
+        result = self.project_build(env, projects_info, "projA", emit_plan=True)
+        assert result is True
+
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["schema_version"] == 1
+        assert payload["operation"] == "project_build"
+        assert payload["project_name"] == "projA"
+        assert payload["dry_run"] is True
+
+        # In plan mode, do not execute stages.
+        mock_pre_build.assert_not_called()
+        mock_do_build.assert_not_called()
+        mock_post_build.assert_not_called()
+
+        assert not (tmp_path / ".cache").exists()
 
     @patch("src.plugins.project_builder.project_pre_build")
     def test_project_build_pre_build_failure(self, mock_pre_build):

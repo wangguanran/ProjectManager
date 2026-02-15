@@ -392,6 +392,54 @@ class TestPatchOverrideApply:
             # Custom copy target not created.
             assert not os.path.exists(os.path.join(tmpdir, "custom_dest.txt"))
 
+    def test_po_apply_emit_plan_outputs_json_and_no_side_effects(self, capsys):
+        """PLAN-002: po_apply --emit-plan emits JSON and does not write."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+            target_file = os.path.join(repo_root, "target.txt")
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write("original\n")
+
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "target.txt"), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo_root, "root")],
+                "po_configs": {},
+            }
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_apply(env, projects_info, project_name, emit_plan=True)
+            finally:
+                os.chdir(old_cwd)
+
+            assert result is True
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["schema_version"] == 1
+            assert payload["operation"] == "po_apply"
+            assert payload["project_name"] == project_name
+            assert payload["dry_run"] is True
+            assert payload["per_repo_actions"][0]["repo"] == "root"
+
+            # No applied record written.
+            record_path = self.PatchOverride._po_applied_record_path(repo_root, board_name, project_name, po_name)
+            assert not os.path.exists(record_path)
+            # Repository content unchanged.
+            with open(target_file, "r", encoding="utf-8") as f:
+                assert f.read() == "original\n"
+
     def test_po_apply_custom_copy_outside_workspace_requires_force(self):
         """Custom copy refuses targets outside workspace/repositories unless --force is set."""
         with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as outside_dir:
@@ -466,6 +514,55 @@ class TestPatchOverrideApply:
 
             result = self.PatchOverride.po_revert(env, projects_info, project_name, dry_run=True)
             assert result is True
+            with open(tracked, "r", encoding="utf-8") as f:
+                assert f.read() == "modified\n"
+
+    def test_po_revert_emit_plan_outputs_json_and_no_side_effects(self, capsys):
+        """PLAN-003: po_revert --emit-plan emits JSON and does not write."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+            subprocess.run(["git", "init"], cwd=repo_root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_root, check=True)
+
+            tracked = os.path.join(repo_root, "tracked.txt")
+            with open(tracked, "w", encoding="utf-8") as f:
+                f.write("base\n")
+            subprocess.run(["git", "add", "tracked.txt"], cwd=repo_root, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=repo_root, check=True)
+
+            # Modify tracked file (should remain modified).
+            with open(tracked, "w", encoding="utf-8") as f:
+                f.write("modified\n")
+
+            overrides_dir = os.path.join(projects_path, board_name, "po", po_name, "overrides")
+            os.makedirs(overrides_dir, exist_ok=True)
+            with open(os.path.join(overrides_dir, "tracked.txt"), "w", encoding="utf-8") as f:
+                f.write("override\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_revert(env, projects_info, project_name, emit_plan=True)
+            finally:
+                os.chdir(old_cwd)
+
+            assert result is True
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["schema_version"] == 1
+            assert payload["operation"] == "po_revert"
+            assert payload["project_name"] == project_name
+            assert payload["dry_run"] is True
+
             with open(tracked, "r", encoding="utf-8") as f:
                 assert f.read() == "modified\n"
 
