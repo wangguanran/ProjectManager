@@ -1540,7 +1540,45 @@ def po_new(
             return True
 
         selected_files = [all_modified_files[i] for i in selected]
-        __process_multiple_files(selected_files, po_path)
+        has_deleted_files = any("deleted" in status for _repo, _path, status in selected_files)
+
+        action_choices = [
+            {"name": "Create patches", "value": "patches"},
+            {"name": "Create overrides", "value": "overrides"},
+        ]
+        if has_deleted_files:
+            action_choices.append({"name": "Create remove files (deleted only)", "value": "remove"})
+        action_choices.append({"name": "Skip", "value": "skip"})
+
+        action = questionary.select("Choose action for selected files:", choices=action_choices).ask()
+        if not action or action == "skip":
+            print("Skipped selected files.")
+            return True
+
+        print("\n=== TUI Preview ===")
+        print(f"Action: {action}")
+        print(f"PO Path: {po_path}")
+        print(f"Files: {len(selected_files)}")
+        for repo_name, file_path, status in selected_files:
+            print(f"- [{repo_name}] {file_path} ({status})")
+
+        proceed = questionary.confirm("Proceed to write changes to the PO directory?", default=False).ask()
+        if not proceed:
+            print("Cancelled.")
+            return True
+
+        os.makedirs(po_path, exist_ok=True)
+        log.info("Created po directory: '%s'", po_path)
+
+        if action == "patches":
+            __batch_create_patches(selected_files, po_path)
+        elif action == "overrides":
+            __batch_create_overrides(selected_files, po_path)
+        elif action == "remove":
+            __batch_create_remove_files(selected_files, po_path)
+        else:  # pragma: no cover
+            log.error("Unknown TUI action: %s", action)
+            return False
         return True
 
     def __load_ignore_patterns(project_cfg):
