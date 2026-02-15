@@ -1492,6 +1492,57 @@ def po_new(
             except ValueError:
                 print("Invalid input. Please enter a number, 'all', or 'q'.")
 
+    def __tui_file_selection(po_path, repositories, project_cfg) -> bool:
+        """TUI file selection for PO creation."""
+        print("\n=== TUI File Selection for PO ===")
+        print("Scanning for modified files in repositories...")
+
+        if not repositories:
+            print("No git repositories found.")
+            return True
+
+        project_config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
+        ignore_patterns = __load_ignore_patterns(project_config)
+
+        all_modified_files = []
+        for repo_path, repo_name in repositories:
+            modified_files = __get_modified_files(repo_path, repo_name, ignore_patterns)
+            if modified_files is None:
+                return False
+            if modified_files:
+                all_modified_files.extend(modified_files)
+
+        if not all_modified_files:
+            print("No modified files found in any repository.")
+            return True
+
+        try:
+            from src.tui_utils import TuiUnavailable, get_questionary
+
+            questionary = get_questionary()
+        except TuiUnavailable as exc:
+            log.error("%s", exc)
+            print(str(exc))
+            return False
+
+        # Use stable indexes as values to keep choices simple.
+        choices = [
+            {"name": f"[{repo_name}] {file_path} ({status})", "value": i}
+            for i, (repo_name, file_path, status) in enumerate(all_modified_files)
+        ]
+        selected = questionary.checkbox(
+            "Select files to include in the PO (space to toggle, enter to confirm):",
+            choices=choices,
+        ).ask()
+
+        if not selected:
+            print("No files selected.")
+            return True
+
+        selected_files = [all_modified_files[i] for i in selected]
+        __process_multiple_files(selected_files, po_path)
+        return True
+
     def __load_ignore_patterns(project_cfg):
         """Load ignore patterns from project configuration or .gitignore."""
         patterns = []
@@ -1562,17 +1613,11 @@ def po_new(
         # Interactive file selection first
         if not force:
             if tui:
-                from src.tui_utils import tui_available
-
-                ok, msg = tui_available()
-                if not ok:
-                    log.error("%s", msg)
-                    print(msg)
+                if not __tui_file_selection(po_path, env.get("repositories", []), project_cfg):
                     return False
-                print("NOTE: --tui is enabled, but TUI UI is not implemented yet; falling back to prompt-based flow.")
-
-            # Pass env["repositories"] and project_cfg for interactive selection.
-            __interactive_file_selection(po_path, env.get("repositories", []), project_cfg)
+            else:
+                # Pass env["repositories"] and project_cfg for interactive selection.
+                __interactive_file_selection(po_path, env.get("repositories", []), project_cfg)
 
         # In force mode, create empty directory structure
         if force:
