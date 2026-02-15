@@ -19,5 +19,8 @@ types-toml>=0.10.8
 # Optional: for better development experience
 pre-commit>=3.3.0
 
+# Optional TUI support (install via `pip install -e ".[tui]"`)
+questionary>=2.1.0
+
 # CrewAI support is optional. Install with:
 #   pip install -e ".[crewai]"
