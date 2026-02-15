@@ -173,18 +173,27 @@ jobs:
           echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
           echo "compare_url=${compare_url}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate AI feature summary (optional)
+      - name: Generate AI feature summary (opt-in)
         continue-on-error: true
         shell: bash
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ENABLE_AI_RELEASE_SUMMARY: ${{ vars.ENABLE_AI_RELEASE_SUMMARY }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
           import os
+          import re
           import urllib.request
           from pathlib import Path
+
+          def truthy(val: str) -> bool:
+              return str(val or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+          # Explicit opt-in to avoid accidentally exfiltrating commit messages to a third-party service.
+          if not truthy(os.environ.get("ENABLE_AI_RELEASE_SUMMARY", "")):
+              raise SystemExit(0)
 
           if not os.environ.get("OPENAI_API_KEY"):
               raise SystemExit(0)
@@ -198,15 +207,36 @@ jobs:
               if "\t" not in line:
                   continue
               sha, subject = line.split("\t", 1)
-              commits.append(f"- {sha[:7]} {subject.strip()}")
+              subject = subject.strip().replace("\r", " ").replace("\n", " ")
+              subject = re.sub(r"[\x00-\x1f\x7f]", " ", subject)
+              subject = re.sub(r"\s+", " ", subject).strip()
+              # Best-effort redaction for common secret-shaped patterns.
+              subject = re.sub(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*\S+", r"\1=***", subject)
+              subject = re.sub(r"(?i)\bbearer\s+[A-Za-z0-9._-]+", "Bearer ***", subject)
+              subject = subject[:120]
+              if not subject:
+                  continue
+              commits.append(f"- {sha[:7]} {subject}")
           if not commits:
               raise SystemExit(0)
+
+          max_commits = 20
+          max_commit_chars = 3500
+          selected = []
+          total_chars = 0
+          for item in commits:
+              if len(selected) >= max_commits:
+                  break
+              if total_chars + len(item) + 1 > max_commit_chars:
+                  break
+              selected.append(item)
+              total_chars += len(item) + 1
 
           prompt = (
               "Summarize this release in 3-5 concise bullet points. "
               "Focus on user-visible features, stability improvements, and CI/release quality upgrades. "
               "Keep it technical and professional.\n\n"
-              + "\n".join(commits[:40])
+              + "\n".join(selected)
           )
 
           payload = {
