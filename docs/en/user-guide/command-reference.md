@@ -427,7 +427,7 @@ python -m src po_analyze myproject --json --strict
 
 **Syntax**
 ```bash
-python -m src po_new <project-name> <po-name> [--force]
+python -m src po_new <project-name> <po-name> [--force] [--tui]
 ```
 
 **Description**: Create a new PO directory for the project and interactively choose files to include.
@@ -438,6 +438,8 @@ python -m src po_new <project-name> <po-name> [--force]
 
 **Options**
 - `--force`: Skip confirmation prompts and create an empty directory structure.
+- `--tui`: Use an interactive TUI (checkbox file picker + action preview) instead of the prompt-based selection flow.
+  - Requires: `questionary` (install with `pip install -e ".[tui]"`).
 
 **Generated structure**
 ```
@@ -459,7 +461,7 @@ python -m src po_new myproject po_feature_fix
 
 **Syntax**
 ```bash
-python -m src po_update <project-name> <po-name> [--force]
+python -m src po_update <project-name> <po-name> [--force] [--tui]
 ```
 
 **Description**: Update an existing PO by re-running the `po_new` workflow (the PO directory must already exist).
@@ -470,6 +472,7 @@ python -m src po_update <project-name> <po-name> [--force]
 
 **Options**
 - `--force`: Skip confirmation prompts.
+- `--tui`: Use an interactive TUI (checkbox file picker + action preview). Requires `questionary` (`pip install -e ".[tui]"`).
 
 **Example**
 ```bash
