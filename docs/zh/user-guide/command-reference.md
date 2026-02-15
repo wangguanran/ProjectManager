@@ -307,6 +307,32 @@ python -m src po_revert myproject
 
 ---
 
+### `po_analyze` - 分析 PO 冲突
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src po_analyze <项目名称> [--json] [--strict] [--po <po1,po2>]
+```
+
+**描述**: 分析启用的 PO 是否存在补丁目标或覆盖目标的重叠（适用于 CI gate 和评审前检查）。
+
+**参数**:
+- `项目名称`（必需）: 要分析 PO 的项目名称
+
+**选项**:
+- `--json`: 输出机器可读的 JSON 报告到 stdout
+- `--strict`: 当检测到冲突时以非 0 退出
+- `--po`: 仅分析指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）
+
+**示例**:
+```bash
+python -m src po_analyze myproject --json --strict
+```
+
+---
+
 ### `po_new` - 创建新PO目录
 
 **状态**: ✅ 已实现

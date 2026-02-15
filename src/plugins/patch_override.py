@@ -775,6 +775,114 @@ def po_revert(
     return True
 
 
+@register(
+    "po_analyze",
+    needs_repositories=True,
+    desc="Analyze PO conflicts (overlapping patch/override targets) for a project.",
+)
+def po_analyze(
+    env: Dict[str, Any],
+    projects_info: Dict[str, Any],
+    project_name: str,
+    po: str = "",
+    json: bool = False,
+    strict: bool = False,
+) -> bool:
+    """
+    Analyze enabled POs for conflicts (overlapping patch targets and override targets).
+
+    po (str): Optional PO filter; only analyze these POs (comma/space separated) from PROJECT_PO_CONFIG.
+    json (bool): Output machine-readable JSON to stdout.
+    strict (bool): Exit non-zero (return False) when conflicts are detected.
+    """
+
+    try:
+        plan = build_po_apply_plan(env, projects_info, project_name, po=po)
+    except ValueError as exc:
+        log.error("Failed to build PO plan for analysis: %s", exc)
+        return False
+
+    per_repo = plan.get("per_repo_actions") or []
+
+    override_map: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+    patch_map: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+
+    def _key(repo_name: str, path_in_repo: str) -> str:
+        repo_name = str(repo_name or "root")
+        path_in_repo = str(path_in_repo or "").lstrip("/\\")
+        if not path_in_repo:
+            return ""
+        return path_in_repo if repo_name == "root" else f"{repo_name}/{path_in_repo}"
+
+    for repo_entry in per_repo:
+        repo_name = repo_entry.get("repo") or "root"
+        for action in repo_entry.get("actions") or []:
+            action_type = str(action.get("type") or "")
+            po_name = str(action.get("po") or "")
+            if not po_name or not action_type:
+                continue
+
+            if action_type.startswith("override_"):
+                key = _key(repo_name, action.get("path_in_repo") or "")
+                if not key:
+                    continue
+                override_map.setdefault(key, {}).setdefault(po_name, []).append(action)
+                continue
+
+            if action_type in {"patch_apply", "commit_apply"}:
+                for target in action.get("targets") or []:
+                    key = _key(repo_name, target)
+                    if not key:
+                        continue
+                    patch_map.setdefault(key, {}).setdefault(po_name, []).append(action)
+
+    override_conflicts = [
+        {"path": path, "pos": sorted(po_map.keys())}
+        for path, po_map in sorted(override_map.items(), key=lambda item: item[0])
+        if len(po_map) > 1
+    ]
+    patch_conflicts = [
+        {"path": path, "pos": sorted(po_map.keys())}
+        for path, po_map in sorted(patch_map.items(), key=lambda item: item[0])
+        if len(po_map) > 1
+    ]
+
+    has_conflicts = bool(override_conflicts or patch_conflicts)
+    payload = {
+        "schema_version": 1,
+        "generated_at": datetime.now().isoformat(),
+        "operation": "po_analyze",
+        "project_name": project_name,
+        "board_name": plan.get("board_name") or "",
+        "pos": [item.get("po") for item in (plan.get("pos") or []) if item.get("po")],
+        "conflicts": {
+            "overrides": override_conflicts,
+            "patches": patch_conflicts,
+        },
+        "summary": {
+            "override_conflict_count": len(override_conflicts),
+            "patch_conflict_count": len(patch_conflicts),
+            "has_conflicts": has_conflicts,
+        },
+    }
+
+    if json:
+        print(jsonlib.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        if not has_conflicts:
+            print("No PO conflicts detected.")
+        else:
+            print("PO conflicts detected:")
+            for item in override_conflicts:
+                print(f"- override conflict: {item['path']} (POs: {', '.join(item['pos'])})")
+            for item in patch_conflicts:
+                print(f"- patch conflict: {item['path']} (POs: {', '.join(item['pos'])})")
+
+    if strict and has_conflicts:
+        return False
+    return True
+
+
 @register("po_new", needs_repositories=True, desc="Create a new PO for a project")
 def po_new(
     env: Dict,

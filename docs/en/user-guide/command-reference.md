@@ -347,6 +347,32 @@ python -m src po_revert myproject
 
 ---
 
+### `po_analyze` — Analyze PO conflicts
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src po_analyze <project-name> [--json] [--strict] [--po <po1,po2>]
+```
+
+**Description**: Analyze enabled POs for overlapping patch targets and override targets (useful for CI gating and reviews).
+
+**Arguments**
+- `project-name` (required): Project whose PO set should be analyzed.
+
+**Options**
+- `--json`: Output a machine-readable JSON report to stdout.
+- `--strict`: Exit non-zero when conflicts are detected.
+- `--po`: Analyze only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+
+**Example**
+```bash
+python -m src po_analyze myproject --json --strict
+```
+
+---
+
 ### `po_new` — Create a PO directory
 
 **Status**: ✅ Implemented

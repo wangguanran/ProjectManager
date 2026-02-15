@@ -566,6 +566,90 @@ class TestPatchOverrideApply:
             with open(tracked, "r", encoding="utf-8") as f:
                 assert f.read() == "modified\n"
 
+    def test_po_analyze_detects_patch_and_override_conflicts(self, capsys):
+        """po_analyze reports overlapping override targets and patch targets (including repo prefixes)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            repo1_root = os.path.join(tmpdir, "repo1")
+            os.makedirs(repo_root, exist_ok=True)
+            os.makedirs(repo1_root, exist_ok=True)
+
+            def _write(path: str, content: str) -> None:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+            patch_text_root = (
+                "diff --git a/src/shared.txt b/src/shared.txt\n"
+                "--- a/src/shared.txt\n"
+                "+++ b/src/shared.txt\n"
+                "@@ -1 +1 @@\n"
+                "-base\n"
+                "+changed\n"
+            )
+            patch_text_repo1 = (
+                "diff --git a/dir/shared.txt b/dir/shared.txt\n"
+                "--- a/dir/shared.txt\n"
+                "+++ b/dir/shared.txt\n"
+                "@@ -1 +1 @@\n"
+                "-base\n"
+                "+changed\n"
+            )
+
+            for po_name in ("po1", "po2"):
+                po_path = os.path.join(projects_path, board_name, "po", po_name)
+                _write(os.path.join(po_path, "overrides", "src", "shared.txt"), f"{po_name}-override\n")
+                _write(
+                    os.path.join(po_path, "overrides", "repo1", "dir", "shared.txt"),
+                    f"{po_name}-override-repo1\n",
+                )
+                _write(os.path.join(po_path, "patches", "shared.patch"), patch_text_root)
+                _write(os.path.join(po_path, "patches", "repo1", "shared.patch"), patch_text_repo1)
+
+            env = {
+                "projects_path": projects_path,
+                "repositories": [(repo_root, "root"), (repo1_root, "repo1")],
+                "po_configs": {},
+            }
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": "po1 po2"},
+                }
+            }
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = self.PatchOverride.po_analyze(env, projects_info, project_name, json=True)
+            finally:
+                os.chdir(old_cwd)
+
+            assert result is True
+            payload = json.loads(capsys.readouterr().out)
+            assert payload["operation"] == "po_analyze"
+            assert payload["summary"]["has_conflicts"] is True
+
+            override_paths = {item["path"] for item in payload["conflicts"]["overrides"]}
+            patch_paths = {item["path"] for item in payload["conflicts"]["patches"]}
+            assert "src/shared.txt" in override_paths
+            assert "repo1/dir/shared.txt" in override_paths
+            assert "src/shared.txt" in patch_paths
+            assert "repo1/dir/shared.txt" in patch_paths
+
+            # strict mode should fail when conflicts exist
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                strict_result = self.PatchOverride.po_analyze(env, projects_info, project_name, json=True, strict=True)
+            finally:
+                os.chdir(old_cwd)
+            assert strict_result is False
+
     def test_po_apply_with_excluded_po(self):
         """Test po_apply when PO is excluded in config."""
         # Arrange
