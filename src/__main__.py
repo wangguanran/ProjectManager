@@ -124,7 +124,11 @@ def _load_all_projects(projects_path, common_configs):
         if not ini_files:
             log.warning("No ini file found in board directory: '%s'", board_path)
             continue
-        assert len(ini_files) == 1, f"Multiple ini files found in {board_path}: {ini_files}"
+        if len(ini_files) > 1:
+            ini_files = sorted(ini_files)
+            msg = f"Multiple ini files found in {board_path}: {ini_files}"
+            log.error(msg)
+            raise ValueError(msg)
         ini_file = os.path.join(board_path, ini_files[0])
         has_duplicate = False
         with open(ini_file, "r", encoding="utf-8") as f:
@@ -933,7 +937,11 @@ def main():
             log.debug("Loaded %d po configurations.", len(po_configs))
             log.debug("Po configurations: %s", list(po_configs.keys()))
 
-            projects_info = _load_all_projects(env["projects_path"], common_configs)
+            try:
+                projects_info = _load_all_projects(env["projects_path"], common_configs)
+            except ValueError as err:
+                log.error("Failed to scan projects: %s", err)
+                sys.exit(1)
             log.debug("Loaded %d projects.", len(projects_info))
             log.debug(
                 "Loaded projects info:\n%s",
