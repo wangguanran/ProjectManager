@@ -445,6 +445,31 @@ python -m src po_status myproject --po po_base,po_fix --short
 
 ---
 
+### `po_clear` — Clear applied record markers
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src po_clear <project-name> [--po <po1,po2>] [--dry-run]
+```
+
+**Description**: Remove applied record markers (without reverting any file changes).
+
+**Arguments**
+- `project-name` (required): Project whose PO applied records should be cleared.
+
+**Options**
+- `--po`: Clear only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+- `--dry-run`: Print planned deletions without removing files.
+
+**Example**
+```bash
+python -m src po_clear myproject --po po_base --dry-run
+```
+
+---
+
 ## Related Documentation
 
 - [Getting Started Guide](getting-started.md)

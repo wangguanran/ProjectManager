@@ -336,6 +336,20 @@ projects/<board_name>/po/<po_name>/
 
 ---
 
+#### `po_clear` - Clear Applied Record Markers
+**Status**: ✅ Implemented
+
+**Usage**: `python -m src po_clear <project_name> [--po <po1,po2>] [--dry-run]`
+
+**Description**: Clears applied record markers without reverting any file changes.
+
+**Parameters**:
+- `project_name` (required): Name of the project
+- `--po` (optional): Clear only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+- `--dry-run` (optional): Print planned deletions without removing files.
+
+---
+
 ## Configuration Files
 
 ### Board Configuration (.ini files)

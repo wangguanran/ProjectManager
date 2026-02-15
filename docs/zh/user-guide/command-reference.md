@@ -472,6 +472,31 @@ python -m src po_status myproject --po po_base,po_fix --short
 
 ---
 
+### `po_clear` - 清理 PO 已应用记录标记
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src po_clear <项目名称> [--po <po1,po2>] [--dry-run]
+```
+
+**描述**: 清理已应用记录标记（不会回滚任何文件变更）。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+
+**选项**:
+- `--po`: 仅清理指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
+- `--dry-run`: 仅打印计划删除项，不实际删除文件。
+
+**示例**:
+```bash
+python -m src po_clear myproject --po po_base --dry-run
+```
+
+---
+
 ## 命令状态说明
 
 | 状态 | 含义 | 说明 |
