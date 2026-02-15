@@ -190,19 +190,22 @@ projects/<board_name>/
 #### `po_apply` - Apply Patches and Overrides
 **Status**: ✅ Implemented
 
-**Usage**: `python -m src po_apply <project_name>`
+**Usage**: `python -m src po_apply <project_name> [--dry-run] [--force] [--reapply]`
 
 **Description**: Applies all configured patches and overrides for the specified project.
 
 **Parameters**:
 - `project_name` (required): Name of the project to apply PO to
+- `--dry-run` (optional): Print planned actions without modifying files.
+- `--force` (optional): Allow destructive operations (for example, override `.remove` deletions).
+- `--reapply` (optional): Apply POs even if applied records already exist (ignores existing markers and overwrites them after success).
 
 **Process**:
 1. Reads `PROJECT_PO_CONFIG` from project configuration
 2. Parses PO configuration (supports inclusion/exclusion)
 3. Applies patches using `git apply`
 4. Copies override files to target locations
-5. Creates flag files (`.patch_applied`, `.override_applied`) to track applied POs
+5. Writes an applied record under each target repository root to track applied state (for example: `<repo>/.cache/po_applied/<board>/<project>/<po>.json`)
 
 **Configuration Format**:
 ```
@@ -217,18 +220,19 @@ PROJECT_PO_CONFIG=po_test01 po_test02 -po_test03 po_test04[file1 file2]
 #### `po_revert` - Revert Patches and Overrides
 **Status**: ✅ Implemented
 
-**Usage**: `python -m src po_revert <project_name>`
+**Usage**: `python -m src po_revert <project_name> [--dry-run]`
 
 **Description**: Reverts all applied patches and overrides for the specified project.
 
 **Parameters**:
 - `project_name` (required): Name of the project to revert PO from
+- `--dry-run` (optional): Print planned actions without modifying files.
 
 **Process**:
 1. Reads `PROJECT_PO_CONFIG` from project configuration
 2. Reverts patches using `git apply --reverse`
 3. Removes override files (restores from git if tracked)
-4. Updates flag files to remove PO references
+4. Removes the applied record under each target repository root so the PO can be applied again
 
 ---
 
@@ -370,7 +374,7 @@ BOARD_NAME=board01
 ### File Types
 - **Patches**: Git patch files (`.patch`)
 - **Overrides**: Direct file copies
-- **Flags**: `.patch_applied`, `.override_applied` (tracking files)
+- **Applied records**: `<repo>/.cache/po_applied/<board>/<project>/<po>.json` (tracking file + operation log under each repository root)
 
 ### Ignore Patterns
 - `.gitignore` file patterns

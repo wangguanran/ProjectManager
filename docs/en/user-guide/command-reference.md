@@ -111,6 +111,94 @@ python -m src project_build myproject
 
 ---
 
+### `project_diff` — Generate a repository diff snapshot
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src project_diff <project-name> [--keep-diff-dir] [--dry-run]
+```
+
+**Description**: Generate a timestamped diff directory under `.cache/build/<project-name>/<timestamp>/diff` and archive it as `diff_<project>_<timestamp>.tar.gz`.
+
+**Arguments**
+- `project-name` (required): Name of the project to diff.
+
+**Options**
+- `--keep-diff-dir`: Preserve the diff directory after creating the tar.gz archive.
+- `--dry-run`: Print planned actions without creating files/directories.
+
+**Example**
+```bash
+python -m src project_diff myproject --keep-diff-dir
+```
+
+---
+
+### `project_pre_build` — Run the pre-build stage
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src project_pre_build <project-name>
+```
+
+**Description**: Pre-build stage used by `project_build` (applies POs and generates a diff snapshot).
+
+**Arguments**
+- `project-name` (required): Name of the project.
+
+**Example**
+```bash
+python -m src project_pre_build myproject
+```
+
+---
+
+### `project_do_build` — Run the build stage
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src project_do_build <project-name>
+```
+
+**Description**: Build stage used by `project_build` (runs the configured `PROJECT_BUILD_CMD` when present).
+
+**Arguments**
+- `project-name` (required): Name of the project.
+
+**Example**
+```bash
+python -m src project_do_build myproject
+```
+
+---
+
+### `project_post_build` — Run the post-build stage
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src project_post_build <project-name>
+```
+
+**Description**: Post-build stage used by `project_build` (runs the configured `PROJECT_POST_BUILD_CMD` when present).
+
+**Arguments**
+- `project-name` (required): Name of the project.
+
+**Example**
+```bash
+python -m src project_post_build myproject
+```
+
+---
+
 ## Board Management Commands
 
 ### `board_new` — Create a board
@@ -170,7 +258,7 @@ python -m src board_del myboard
 
 **Syntax**
 ```bash
-python -m src po_apply <project-name>
+python -m src po_apply <project-name> [--dry-run] [--force] [--reapply]
 ```
 
 **Description**: Apply all configured patches and overrides for the target project.
@@ -178,12 +266,17 @@ python -m src po_apply <project-name>
 **Arguments**
 - `project-name` (required): Project whose PO set should be applied.
 
+**Options**
+- `--dry-run`: Print planned actions without modifying files.
+- `--force`: Allow destructive operations (for example, override `.remove` deletions).
+- `--reapply`: Apply a PO even if applied records already exist (ignores existing markers and overwrites them after success).
+
 **Workflow**
 1. Read `PROJECT_PO_CONFIG` from the project configuration.
 2. Resolve the PO definitions (including includes/excludes).
 3. Apply patch files via `git apply`.
 4. Copy overrides into the project workspace.
-5. Generate logs under the PO directory for auditing.
+5. Write an applied record under each target repository root to track applied state (for example: `<repo>/.cache/po_applied/<board>/<project>/<po>.json`).
 
 **Example**
 ```bash
@@ -198,13 +291,16 @@ python -m src po_apply myproject
 
 **Syntax**
 ```bash
-python -m src po_revert <project-name>
+python -m src po_revert <project-name> [--dry-run]
 ```
 
-**Description**: Revert the previously applied patches and overrides for the project.
+**Description**: Revert the previously applied patches and overrides for the project, and remove applied record markers so the PO can be applied again.
 
 **Arguments**
 - `project-name` (required): Project whose PO set should be reverted.
+
+**Options**
+- `--dry-run`: Print planned actions without modifying files.
 
 **Example**
 ```bash
@@ -219,7 +315,7 @@ python -m src po_revert myproject
 
 **Syntax**
 ```bash
-python -m src po_new <project-name> <po-name>
+python -m src po_new <project-name> <po-name> [--force]
 ```
 
 **Description**: Create a new PO directory for the project and interactively choose files to include.
@@ -228,16 +324,44 @@ python -m src po_new <project-name> <po-name>
 - `project-name` (required): Project that owns the PO.
 - `po-name` (required): Name of the PO directory to create.
 
+**Options**
+- `--force`: Skip confirmation prompts and create an empty directory structure.
+
 **Generated structure**
 ```
-projects/<board>/<project>/po/<po-name>/
+projects/<board>/po/<po-name>/
   patches/
   overrides/
 ```
 
 **Example**
 ```bash
-python -m src po_new myproject feature_fix
+python -m src po_new myproject po_feature_fix
+```
+
+---
+
+### `po_update` — Update an existing PO directory
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src po_update <project-name> <po-name> [--force]
+```
+
+**Description**: Update an existing PO by re-running the `po_new` workflow (the PO directory must already exist).
+
+**Arguments**
+- `project-name` (required): Project that owns the PO.
+- `po-name` (required): PO directory to update.
+
+**Options**
+- `--force`: Skip confirmation prompts.
+
+**Example**
+```bash
+python -m src po_update myproject po_feature_fix --force
 ```
 
 ---
@@ -248,7 +372,7 @@ python -m src po_new myproject feature_fix
 
 **Syntax**
 ```bash
-python -m src po_del <project-name> <po-name>
+python -m src po_del <project-name> <po-name> [--force]
 ```
 
 **Description**: Delete the specified PO directory and clean up associated metadata.
@@ -257,9 +381,12 @@ python -m src po_del <project-name> <po-name>
 - `project-name` (required): Project that owns the PO.
 - `po-name` (required): PO directory to remove.
 
+**Options**
+- `--force`: Skip confirmation prompts.
+
 **Example**
 ```bash
-python -m src po_del myproject feature_fix
+python -m src po_del myproject po_feature_fix
 ```
 
 ---

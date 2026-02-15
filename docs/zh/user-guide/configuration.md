@@ -266,7 +266,7 @@ python -m src po_list myproject --short
 
 ### 调试技巧
 
-1. **启用详细日志**: 使用 `--verbose` 选项
+1. **查看调试日志**: 打开 `.cache/latest.log`（或 `.cache/logs/Log_*.log`）查看详细日志
 2. **检查配置文件**: 验证INI文件格式
 3. **测试PO配置**: 使用 `po_list` 命令验证
 4. **查看继承关系**: 检查项目命名规范

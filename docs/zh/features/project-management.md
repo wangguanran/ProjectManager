@@ -182,6 +182,9 @@ python -m src po_new myproject my_po_name --force
 # 将PO应用到项目
 python -m src po_apply myproject
 
+# 即使已标记为已应用，也强制重新应用
+python -m src po_apply myproject --reapply
+
 # 从项目回滚PO
 python -m src po_revert myproject
 
@@ -195,14 +198,14 @@ python -m src po_del myproject my_po_name
 ### 项目管理
 
 ```bash
-# 列出所有项目
-python -m src list
+# 构建项目（包含 pre-build、build、post-build 阶段）
+python -m src project_build myproject
 
-# 显示项目详情
-python -m src show myproject
+# 生成仓库 diff 快照到带时间戳的目录下
+python -m src project_diff myproject
 
-# 为所有项目应用所有PO
-python -m src apply_all
+# 在归档后保留 diff 目录
+python -m src project_diff myproject --keep-diff-dir
 ```
 
 ## 最佳实践
@@ -222,14 +225,10 @@ python -m src apply_all
 3. **PO应用失败**: 验证补丁与当前仓库状态兼容
 4. **配置错误**: 验证项目配置文件是否存在语法错误
 
-### 调试模式
+### 调试
 
-启用调试日志记录以进行详细故障排除：
-
-```bash
-export LOG_LEVEL=DEBUG
-python -m src po_apply myproject
-```
+- 查看 `.cache/latest.log`（指向最近一次运行日志的软链接）定位问题。
+- 使用 `--perf-analyze` 在 `.cache/cprofile/` 生成性能分析输出。
 
 ---
 

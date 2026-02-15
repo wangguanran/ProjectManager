@@ -182,6 +182,9 @@ python -m src po_new myproject my_po_name --force
 # Apply POs to a project
 python -m src po_apply myproject
 
+# Reapply POs even if already marked as applied
+python -m src po_apply myproject --reapply
+
 # Revert POs from a project
 python -m src po_revert myproject
 
@@ -195,14 +198,14 @@ python -m src po_del myproject my_po_name
 ### Project Management
 
 ```bash
-# List all projects
-python -m src list
+# Build a project (includes pre-build, build, and post-build stages)
+python -m src project_build myproject
 
-# Show project details
-python -m src show myproject
+# Generate a repository diff snapshot under a timestamped directory
+python -m src project_diff myproject
 
-# Apply all POs for all projects
-python -m src apply_all
+# Preserve the diff directory after archiving
+python -m src project_diff myproject --keep-diff-dir
 ```
 
 ## Best Practices
@@ -222,11 +225,7 @@ python -m src apply_all
 3. **PO Application Failed**: Verify that patches are compatible with current repository state
 4. **Configuration Errors**: Validate project configuration files for syntax errors
 
-### Debug Mode
+### Debugging
 
-Enable debug logging for detailed troubleshooting:
-
-```bash
-export LOG_LEVEL=DEBUG
-python -m src po_apply myproject
-``` 
+- Inspect `.cache/latest.log` (symlink to the most recent run log) for detailed troubleshooting.
+- Use `--perf-analyze` to generate profiling output under `.cache/cprofile/`.

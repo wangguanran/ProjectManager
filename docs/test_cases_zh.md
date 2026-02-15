@@ -23,9 +23,8 @@ pytest
 ### PO（Patch/Override）
 
 - PO-005: patch 应用成功（真实 `git apply`）
-- PO-006: patch 应用失败应中止且不遗留 `po_applied`（避免重试被错误跳过）
+- PO-006: patch 应用失败应中止且不遗留已应用记录（例如 `.cache/po_applied/...json`，避免重试被错误跳过）
 
 ### Diff
 
 - BUILD-001/002: `project_diff` 单仓/多仓打包结构正确（详细结构以英文用例为准）
-

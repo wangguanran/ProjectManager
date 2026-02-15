@@ -246,7 +246,7 @@ python -m src po_list myproject --short
 
 ### Debug tips
 
-1. Enable verbose logs with `--verbose`.
+1. Inspect `.cache/latest.log` (or `.cache/logs/Log_*.log`) for detailed debug logs.
 2. Inspect INI syntax manually when editing files.
 3. Use `po_list` to preview PO selection results.
 4. Review project naming to ensure inheritance mapping.

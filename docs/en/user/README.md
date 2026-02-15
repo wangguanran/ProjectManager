@@ -46,7 +46,7 @@ python -m src board_new myboard
 python -m src project_new myproject
 
 # Create a PO package
-python -m src po_new myproject feature_fix
+python -m src po_new myproject po_feature_fix
 
 # Apply PO changes
 python -m src po_apply myproject

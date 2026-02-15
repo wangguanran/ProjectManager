@@ -87,6 +87,94 @@ python -m src project_build myproject
 
 ---
 
+### `project_diff` - 生成仓库 diff 快照
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src project_diff <项目名称> [--keep-diff-dir] [--dry-run]
+```
+
+**描述**: 在 `.cache/build/<项目名称>/<时间戳>/diff` 生成 diff 目录，并归档为 `diff_<项目>_<时间戳>.tar.gz`。
+
+**参数**:
+- `项目名称`（必需）: 要生成 diff 的项目名称
+
+**选项**:
+- `--keep-diff-dir`: 创建 tar.gz 后保留 diff 目录。
+- `--dry-run`: 仅打印计划执行的动作，不创建文件/目录。
+
+**示例**:
+```bash
+python -m src project_diff myproject --keep-diff-dir
+```
+
+---
+
+### `project_pre_build` - 预构建阶段
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src project_pre_build <项目名称>
+```
+
+**描述**: `project_build` 的预构建阶段（应用 PO 并生成 diff 快照）。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+
+**示例**:
+```bash
+python -m src project_pre_build myproject
+```
+
+---
+
+### `project_do_build` - 构建阶段
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src project_do_build <项目名称>
+```
+
+**描述**: `project_build` 的构建阶段（当配置了 `PROJECT_BUILD_CMD` 时执行）。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+
+**示例**:
+```bash
+python -m src project_do_build myproject
+```
+
+---
+
+### `project_post_build` - 后构建阶段
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src project_post_build <项目名称>
+```
+
+**描述**: `project_build` 的后构建阶段（当配置了 `PROJECT_POST_BUILD_CMD` 时执行）。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+
+**示例**:
+```bash
+python -m src project_post_build myproject
+```
+
+---
+
 ## 主板管理命令
 
 ### `board_new` - 创建新主板
@@ -146,7 +234,7 @@ python -m src board_del myboard
 
 **语法**:
 ```bash
-python -m src po_apply <项目名称>
+python -m src po_apply <项目名称> [--dry-run] [--force] [--reapply]
 ```
 
 **描述**: 为指定项目应用所有配置的补丁和覆盖。
@@ -154,12 +242,17 @@ python -m src po_apply <项目名称>
 **参数**:
 - `项目名称`（必需）: 要应用PO的项目名称
 
+**选项**:
+- `--dry-run`: 仅打印计划执行的动作，不修改文件。
+- `--force`: 允许执行带破坏性的操作（例如覆盖 `.remove` 删除）。
+- `--reapply`: 即使已存在已应用记录，也强制重新应用（成功后会覆盖对应记录文件）。
+
 **流程**:
 1. 从项目配置读取 `PROJECT_PO_CONFIG`
 2. 解析PO配置（支持包含/排除）
 3. 使用 `git apply` 应用补丁
 4. 将覆盖文件复制到目标位置
-5. 创建标志文件（`.patch_applied`，`.override_applied`）来跟踪已应用的PO
+5. 在每个目标仓库根目录下写入已应用记录来跟踪状态（例如：`<repo>/.cache/po_applied/<board>/<project>/<po>.json`）
 
 **配置格式**:
 ```
@@ -182,19 +275,22 @@ python -m src po_apply myproject
 
 **语法**:
 ```bash
-python -m src po_revert <项目名称>
+python -m src po_revert <项目名称> [--dry-run]
 ```
 
-**描述**: 回滚指定项目的所有已应用补丁和覆盖。
+**描述**: 回滚指定项目的所有已应用补丁和覆盖，并清理已应用记录，使后续可再次应用。
 
 **参数**:
 - `项目名称`（必需）: 要回滚PO的项目名称
+
+**选项**:
+- `--dry-run`: 仅打印计划执行的动作，不修改文件。
 
 **流程**:
 1. 从项目配置读取 `PROJECT_PO_CONFIG`
 2. 使用 `git apply --reverse` 回滚补丁
 3. 删除覆盖文件（如果被git跟踪则从git恢复）
-4. 更新标志文件以移除PO引用
+4. 清理每个目标仓库根目录下的已应用记录（例如：`<repo>/.cache/po_applied/<board>/<project>/<po>.json`），使后续可再次应用
 
 **示例**:
 ```bash
@@ -250,6 +346,29 @@ python -m src po_new myproject po_feature1
 
 # 强制创建空PO目录
 python -m src po_new myproject po_feature1 --force
+```
+
+---
+
+### `po_update` - 更新已有PO
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src po_update <项目名称> <po名称> [--force]
+```
+
+**描述**: 更新一个已存在的 PO（PO 目录必须已存在），复用 `po_new` 的交互流程。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+- `po名称`（必需）: 要更新的 PO 名称
+- `--force`（可选）: 跳过确认提示
+
+**示例**:
+```bash
+python -m src po_update myproject po_feature1 --force
 ```
 
 ---

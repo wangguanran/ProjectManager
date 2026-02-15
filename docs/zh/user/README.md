@@ -46,7 +46,7 @@ python -m src board_new myboard
 python -m src project_new myproject
 
 # 创建 PO
-python -m src po_new myproject feature_fix
+python -m src po_new myproject po_feature_fix
 
 # 应用 PO
 python -m src po_apply myproject
