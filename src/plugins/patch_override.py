@@ -1540,6 +1540,90 @@ def po_status(
     return items
 
 
+@register("po_clear", needs_repositories=True, desc="Clear applied record markers for a project")
+def po_clear(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    po: str = "",
+    dry_run: bool = False,
+) -> bool:
+    """
+    Clear applied record markers for configured POs of the specified project.
+
+    Notes:
+    - This does NOT revert any file changes. It only removes applied record markers.
+    - Use `po_revert` if you want to revert changes.
+
+    Args:
+        env (dict): Global environment dict.
+        projects_info (dict): All projects info.
+        project_name (str): Project name.
+        po (str): Optional PO filter; only clear these POs (comma/space separated) from PROJECT_PO_CONFIG.
+        dry_run (bool): If True, only print planned actions without deleting files.
+    Returns:
+        bool: True if success, otherwise False.
+    """
+    log.info("start po_clear for project: '%s'", project_name)
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    board_name = project_info.get("board_name") if isinstance(project_info, dict) else None
+    if not board_name:
+        log.error("Cannot find board name for project: '%s'", project_name)
+        return False
+
+    projects_path = env["projects_path"]
+    board_path = os.path.join(projects_path, board_name)
+    po_dir = os.path.join(board_path, "po")
+
+    po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
+    if not po_config:
+        log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
+        return True
+
+    apply_pos, _, _ = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        return False
+    apply_pos = filtered
+    if not apply_pos:
+        log.warning("No POs selected for '%s' after --po filter; nothing to do.", project_name)
+        return True
+
+    repositories = env.get("repositories", []) or []
+    roots = {os.path.abspath(repo_path) for repo_path, _repo_name in repositories}
+    roots.add(os.path.abspath(os.getcwd()))
+
+    for po_name in apply_pos:
+        legacy_flag = os.path.join(po_dir, po_name, "po_applied")
+        if os.path.isfile(legacy_flag):
+            if dry_run:
+                log.info("DRY-RUN: would remove legacy marker: %s", legacy_flag)
+            else:
+                try:
+                    os.remove(legacy_flag)
+                    log.info("Removed legacy marker: %s", legacy_flag)
+                except OSError as exc:
+                    log.warning("Failed to remove legacy marker '%s': %s", legacy_flag, exc)
+
+        for root in sorted(roots):
+            record_path = _po_applied_record_path(root, board_name, project_name, po_name)
+            if not os.path.exists(record_path):
+                continue
+            if dry_run:
+                log.info("DRY-RUN: would remove applied record: %s", record_path)
+                continue
+            try:
+                os.remove(record_path)
+                log.info("Removed applied record: %s", record_path)
+            except OSError as exc:
+                log.warning("Failed to remove applied record '%s': %s", record_path, exc)
+
+    log.info("po_clear finished for project: '%s'", project_name)
+    return True
+
+
 @register("po_list", needs_repositories=False, desc="List configured POs for a project")
 def po_list(
     env: Dict,
