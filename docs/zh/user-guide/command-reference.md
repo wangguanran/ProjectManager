@@ -444,6 +444,32 @@ python -m src po_list myproject --short
 
 ---
 
+### `po_status` - 查看 PO 已应用记录状态
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src po_status <项目名称> [--po <po1,po2>] [--short] [--json]
+```
+
+**描述**: 查看每个目标仓库根目录下的 PO 已应用记录（applied record）状态。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+
+**选项**:
+- `--po`: 仅查看指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
+- `--short`: 只输出每个 PO 的汇总，不输出按仓库拆分的明细。
+- `--json`: 输出 JSON（便于脚本解析）。
+
+**示例**:
+```bash
+python -m src po_status myproject --po po_base,po_fix --short
+```
+
+---
+
 ## 命令状态说明
 
 | 状态 | 含义 | 说明 |

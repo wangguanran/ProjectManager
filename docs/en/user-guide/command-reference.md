@@ -414,6 +414,32 @@ python -m src po_list myproject
 
 ---
 
+### `po_status` — Show applied record status
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src po_status <project-name> [--po <po1,po2>] [--short] [--json]
+```
+
+**Description**: Show applied record markers for POs under each target repository root.
+
+**Arguments**
+- `project-name` (required): Project whose PO set should be inspected.
+
+**Options**
+- `--po`: Inspect only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+- `--short`: Print per-PO summary only.
+- `--json`: Print a machine-readable JSON payload to stdout.
+
+**Example**
+```bash
+python -m src po_status myproject --po po_base,po_fix --short
+```
+
+---
+
 ## Related Documentation
 
 - [Getting Started Guide](getting-started.md)

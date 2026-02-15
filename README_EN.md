@@ -319,6 +319,21 @@ projects/<board_name>/po/<po_name>/
 
 ---
 
+#### `po_status` - Show PO Applied Record Status
+**Status**: ✅ Implemented
+
+**Usage**: `python -m src po_status <project_name> [--po <po1,po2>] [--short] [--json]`
+
+**Description**: Shows applied record markers for configured POs under each target repository root.
+
+**Parameters**:
+- `project_name` (required): Name of the project
+- `--po` (optional): Inspect only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+- `--short` (optional): Print per-PO summary only.
+- `--json` (optional): Print a machine-readable JSON payload.
+
+---
+
 ## Configuration Files
 
 ### Board Configuration (.ini files)
