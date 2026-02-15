@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 import subprocess
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from src.log_manager import log
 from src.operations.registry import register
@@ -76,6 +76,45 @@ def parse_po_config(po_config):
     return apply_pos, exclude_pos, exclude_files
 
 
+def _parse_po_filter(po_filter: str) -> List[str]:
+    """
+    Parse `--po` filter input into a list of PO names.
+
+    Accepts comma and/or whitespace separated values, for example:
+    - "po_a"
+    - "po_a,po_b"
+    - "po_a po_b"
+    """
+    text = str(po_filter or "").strip()
+    if not text:
+        return []
+    tokens = [t.strip() for t in re.split(r"[,\s]+", text) if t.strip()]
+    seen = set()
+    out: List[str] = []
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
+def _filter_pos_from_config(apply_pos: List[str], requested_pos: List[str]) -> Optional[List[str]]:
+    """Filter apply_pos based on requested_pos; return None on invalid request."""
+    if not requested_pos:
+        return list(apply_pos)
+    allowed = set(apply_pos)
+    unknown = sorted(set(requested_pos) - allowed)
+    if unknown:
+        log.error(
+            "Unknown PO(s) requested via --po (not enabled by PROJECT_PO_CONFIG): %s",
+            ", ".join(unknown),
+        )
+        return None
+    requested = set(requested_pos)
+    return [po_name for po_name in apply_pos if po_name in requested]
+
+
 @register("po_apply", needs_repositories=True, desc="Apply patch and override for a project")
 def po_apply(
     env: Dict,
@@ -84,6 +123,7 @@ def po_apply(
     dry_run: bool = False,
     force: bool = False,
     reapply: bool = False,
+    po: str = "",
 ) -> bool:
     """
     Apply patch/override/commits for the specified project.
@@ -93,7 +133,8 @@ def po_apply(
         project_name (str): Project name.
         dry_run (bool): If True, only print planned actions without modifying files.
         force (bool): If True, allow destructive operations like override .remove deletions.
-        reapply (bool): If True, apply POs even if already marked as applied (overwrites po_applied log).
+        reapply (bool): If True, apply POs even if applied records already exist (overwrites them after success).
+        po (str): Optional PO filter; only apply these POs (comma/space separated) from PROJECT_PO_CONFIG.
     Returns:
         bool: True if success, otherwise False.
     """
@@ -114,6 +155,20 @@ def po_apply(
         return True
 
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        return False
+    if requested_pos:
+        log.info(
+            "Applying selected POs for project '%s': %s",
+            project_name,
+            ", ".join(filtered) if filtered else "(none)",
+        )
+    apply_pos = filtered
+    if not apply_pos:
+        log.warning("No POs selected for '%s' after --po filter; nothing to do.", project_name)
+        return True
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:
         log.debug("apply_pos: %s", str(apply_pos))
@@ -205,13 +260,14 @@ def po_apply(
     needs_repositories=True,
     desc="Revert patch/override/commits for a project",
 )
-def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False) -> bool:
+def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False, po: str = "") -> bool:
     """
     Revert patch/override/commits for the specified project.
     Args:
         env (dict): Global environment dict.
         projects_info (dict): All projects info.
         project_name (str): Project name.
+        po (str): Optional PO filter; only revert these POs (comma/space separated) from PROJECT_PO_CONFIG.
     Returns:
         bool: True if success, otherwise False.
     """
@@ -232,6 +288,20 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
         return True
 
     apply_pos, exclude_pos, exclude_files = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        return False
+    if requested_pos:
+        log.info(
+            "Reverting selected POs for project '%s': %s",
+            project_name,
+            ", ".join(filtered) if filtered else "(none)",
+        )
+    apply_pos = filtered
+    if not apply_pos:
+        log.warning("No POs selected for '%s' after --po filter; nothing to do.", project_name)
+        return True
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:

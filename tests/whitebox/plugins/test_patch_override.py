@@ -154,6 +154,93 @@ class TestPatchOverrideApply:
             with open(target_abs, "r", encoding="utf-8") as f:
                 assert f.read() == "override2\n"
 
+    def test_po_apply_po_filter_applies_only_selected_pos(self):
+        """po_apply/po_revert --po applies/reverts only selected POs from PROJECT_PO_CONFIG."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str) -> None:
+                subprocess.run(
+                    ["git", *args], cwd=repo_root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            file1_rel = "file1.txt"
+            file2_rel = "file2.txt"
+            file1_abs = os.path.join(repo_root, file1_rel)
+            file2_abs = os.path.join(repo_root, file2_rel)
+            with open(file1_abs, "w", encoding="utf-8") as f:
+                f.write("base1\n")
+            with open(file2_abs, "w", encoding="utf-8") as f:
+                f.write("base2\n")
+            _git("add", file1_rel, file2_rel)
+            _git("commit", "-m", "base")
+
+            po1 = "po1"
+            po2 = "po2"
+            overrides1_dir = os.path.join(projects_path, board_name, "po", po1, "overrides")
+            overrides2_dir = os.path.join(projects_path, board_name, "po", po2, "overrides")
+            os.makedirs(overrides1_dir, exist_ok=True)
+            os.makedirs(overrides2_dir, exist_ok=True)
+            with open(os.path.join(overrides1_dir, file1_rel), "w", encoding="utf-8") as f:
+                f.write("po1\n")
+            with open(os.path.join(overrides2_dir, file2_rel), "w", encoding="utf-8") as f:
+                f.write("po2\n")
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {
+                project_name: {
+                    "board_name": board_name,
+                    "config": {"PROJECT_PO_CONFIG": f"{po1} {po2}"},
+                }
+            }
+            record1 = self.PatchOverride._po_applied_record_path(repo_root, board_name, project_name, po1)
+            record2 = self.PatchOverride._po_applied_record_path(repo_root, board_name, project_name, po2)
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, po=po1) is True
+            assert os.path.exists(record1)
+            assert not os.path.exists(record2)
+            with open(file1_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "po1\n"
+            with open(file2_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "base2\n"
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, po=po2) is True
+            assert os.path.exists(record2)
+            with open(file1_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "po1\n"
+            with open(file2_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "po2\n"
+
+            assert self.PatchOverride.po_revert(env, projects_info, project_name, po=po2) is True
+            assert os.path.exists(record1)
+            assert not os.path.exists(record2)
+            with open(file1_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "po1\n"
+            with open(file2_abs, "r", encoding="utf-8") as f:
+                assert f.read() == "base2\n"
+
+    def test_po_apply_po_filter_rejects_unknown_po(self):
+        """po_apply --po rejects PO names not enabled by PROJECT_PO_CONFIG."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env = {"projects_path": os.path.join(tmpdir, "projects")}
+            projects_info = {
+                "proj": {
+                    "board_name": "board",
+                    "config": {"PROJECT_PO_CONFIG": "po1"},
+                }
+            }
+
+            assert self.PatchOverride.po_apply(env, projects_info, "proj", po="po_unknown") is False
+
     def test_po_apply_dry_run_has_no_side_effects(self):
         """DRY-002: po_apply --dry-run prints plan and does not write."""
         with tempfile.TemporaryDirectory() as tmpdir:
