@@ -120,6 +120,7 @@ pyinstaller \
     --hidden-import=src.plugins.project_builder \
     --hidden-import=src.plugins.patch_override \
     --hidden-import=src.plugins.doctor \
+    --hidden-import=src.plugins.snapshot \
     --hidden-import=src.plugins.po_plugins \
     --hidden-import=src.operations.registry \
     --hidden-import=src.log_manager \
