@@ -190,7 +190,7 @@ projects/<board_name>/
 #### `po_apply` - Apply Patches and Overrides
 **Status**: ✅ Implemented
 
-**Usage**: `python -m src po_apply <project_name> [--dry-run] [--force] [--reapply]`
+**Usage**: `python -m src po_apply <project_name> [--dry-run] [--force] [--reapply] [--po <po1,po2>]`
 
 **Description**: Applies all configured patches and overrides for the specified project.
 
@@ -199,6 +199,7 @@ projects/<board_name>/
 - `--dry-run` (optional): Print planned actions without modifying files.
 - `--force` (optional): Allow destructive operations (for example, override `.remove` deletions).
 - `--reapply` (optional): Apply POs even if applied records already exist (ignores existing markers and overwrites them after success).
+- `--po` (optional): Apply only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 
 **Process**:
 1. Reads `PROJECT_PO_CONFIG` from project configuration
@@ -220,13 +221,14 @@ PROJECT_PO_CONFIG=po_test01 po_test02 -po_test03 po_test04[file1 file2]
 #### `po_revert` - Revert Patches and Overrides
 **Status**: ✅ Implemented
 
-**Usage**: `python -m src po_revert <project_name> [--dry-run]`
+**Usage**: `python -m src po_revert <project_name> [--dry-run] [--po <po1,po2>]`
 
 **Description**: Reverts all applied patches and overrides for the specified project.
 
 **Parameters**:
 - `project_name` (required): Name of the project to revert PO from
 - `--dry-run` (optional): Print planned actions without modifying files.
+- `--po` (optional): Revert only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 
 **Process**:
 1. Reads `PROJECT_PO_CONFIG` from project configuration

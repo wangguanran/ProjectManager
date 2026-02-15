@@ -258,7 +258,7 @@ python -m src board_del myboard
 
 **Syntax**
 ```bash
-python -m src po_apply <project-name> [--dry-run] [--force] [--reapply]
+python -m src po_apply <project-name> [--dry-run] [--force] [--reapply] [--po <po1,po2>]
 ```
 
 **Description**: Apply all configured patches and overrides for the target project.
@@ -270,6 +270,7 @@ python -m src po_apply <project-name> [--dry-run] [--force] [--reapply]
 - `--dry-run`: Print planned actions without modifying files.
 - `--force`: Allow destructive operations (for example, override `.remove` deletions).
 - `--reapply`: Apply a PO even if applied records already exist (ignores existing markers and overwrites them after success).
+- `--po`: Apply only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 
 **Workflow**
 1. Read `PROJECT_PO_CONFIG` from the project configuration.
@@ -291,7 +292,7 @@ python -m src po_apply myproject
 
 **Syntax**
 ```bash
-python -m src po_revert <project-name> [--dry-run]
+python -m src po_revert <project-name> [--dry-run] [--po <po1,po2>]
 ```
 
 **Description**: Revert the previously applied patches and overrides for the project, and remove applied record markers so the PO can be applied again.
@@ -301,6 +302,7 @@ python -m src po_revert <project-name> [--dry-run]
 
 **Options**
 - `--dry-run`: Print planned actions without modifying files.
+- `--po`: Revert only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 
 **Example**
 ```bash
