@@ -126,13 +126,16 @@ python -m src project_del myproject
 
 **Syntax**
 ```bash
-python -m src project_build <project-name>
+python -m src project_build <project-name> [--emit-plan [<path>]]
 ```
 
 **Description**: Build the specified project according to its configuration.
 
 **Arguments**
 - `project-name` (required): Name of the project to build.
+
+**Options**
+- `--emit-plan`: Emit a machine-readable JSON execution plan to stdout (or to `<path>` when provided) without executing any build steps.
 
 **Example**
 ```bash
@@ -147,7 +150,7 @@ python -m src project_build myproject
 
 **Syntax**
 ```bash
-python -m src project_diff <project-name> [--keep-diff-dir] [--dry-run]
+python -m src project_diff <project-name> [--keep-diff-dir] [--dry-run] [--emit-plan [<path>]]
 ```
 
 **Description**: Generate a timestamped diff directory under `.cache/build/<project-name>/<timestamp>/diff` and archive it as `diff_<project>_<timestamp>.tar.gz`.
@@ -158,6 +161,7 @@ python -m src project_diff <project-name> [--keep-diff-dir] [--dry-run]
 **Options**
 - `--keep-diff-dir`: Preserve the diff directory after creating the tar.gz archive.
 - `--dry-run`: Print planned actions without creating files/directories.
+- `--emit-plan`: Emit a machine-readable JSON execution plan to stdout (or to `<path>` when provided) without writing any diff output.
 
 **Example**
 ```bash
@@ -288,7 +292,7 @@ python -m src board_del myboard
 
 **Syntax**
 ```bash
-python -m src po_apply <project-name> [--dry-run] [--force] [--reapply] [--po <po1,po2>]
+python -m src po_apply <project-name> [--dry-run] [--emit-plan [<path>]] [--force] [--reapply] [--po <po1,po2>]
 ```
 
 **Description**: Apply all configured patches and overrides for the target project.
@@ -298,6 +302,7 @@ python -m src po_apply <project-name> [--dry-run] [--force] [--reapply] [--po <p
 
 **Options**
 - `--dry-run`: Print planned actions without modifying files.
+- `--emit-plan`: Emit a machine-readable JSON execution plan to stdout (or to `<path>` when provided) without modifying repositories.
 - `--force`: Allow destructive operations (for example, override `.remove` deletions) and allow custom copy targets outside the workspace/repositories.
 - `--reapply`: Apply a PO even if applied records already exist (ignores existing markers and overwrites them after success).
 - `--po`: Apply only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
@@ -322,7 +327,7 @@ python -m src po_apply myproject
 
 **Syntax**
 ```bash
-python -m src po_revert <project-name> [--dry-run] [--po <po1,po2>]
+python -m src po_revert <project-name> [--dry-run] [--emit-plan [<path>]] [--po <po1,po2>]
 ```
 
 **Description**: Revert the previously applied patches and overrides for the project, and remove applied record markers so the PO can be applied again.
@@ -332,6 +337,7 @@ python -m src po_revert <project-name> [--dry-run] [--po <po1,po2>]
 
 **Options**
 - `--dry-run`: Print planned actions without modifying files.
+- `--emit-plan`: Emit a machine-readable JSON execution plan to stdout (or to `<path>` when provided) without modifying repositories.
 - `--po`: Revert only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 
 **Example**

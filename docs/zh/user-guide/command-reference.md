@@ -72,13 +72,16 @@ python -m src project_del myproject
 
 **语法**:
 ```bash
-python -m src project_build <项目名称>
+python -m src project_build <项目名称> [--emit-plan [<path>]]
 ```
 
 **描述**: 根据配置构建指定项目。
 
 **参数**:
 - `项目名称`（必需）: 要构建的项目名称
+
+**选项**:
+- `--emit-plan`: 输出机器可读的 JSON 执行计划到 stdout（或写入 `<path>`），且不会真正执行构建步骤。
 
 **示例**:
 ```bash
@@ -93,7 +96,7 @@ python -m src project_build myproject
 
 **语法**:
 ```bash
-python -m src project_diff <项目名称> [--keep-diff-dir] [--dry-run]
+python -m src project_diff <项目名称> [--keep-diff-dir] [--dry-run] [--emit-plan [<path>]]
 ```
 
 **描述**: 在 `.cache/build/<项目名称>/<时间戳>/diff` 生成 diff 目录，并归档为 `diff_<项目>_<时间戳>.tar.gz`。
@@ -104,6 +107,7 @@ python -m src project_diff <项目名称> [--keep-diff-dir] [--dry-run]
 **选项**:
 - `--keep-diff-dir`: 创建 tar.gz 后保留 diff 目录。
 - `--dry-run`: 仅打印计划执行的动作，不创建文件/目录。
+- `--emit-plan`: 输出机器可读的 JSON 执行计划到 stdout（或写入 `<path>`），且不会写入任何 diff 输出。
 
 **示例**:
 ```bash
@@ -234,7 +238,7 @@ python -m src board_del myboard
 
 **语法**:
 ```bash
-python -m src po_apply <项目名称> [--dry-run] [--force] [--reapply] [--po <po1,po2>]
+python -m src po_apply <项目名称> [--dry-run] [--emit-plan [<path>]] [--force] [--reapply] [--po <po1,po2>]
 ```
 
 **描述**: 为指定项目应用所有配置的补丁和覆盖。
@@ -244,6 +248,7 @@ python -m src po_apply <项目名称> [--dry-run] [--force] [--reapply] [--po <p
 
 **选项**:
 - `--dry-run`: 仅打印计划执行的动作，不修改文件。
+- `--emit-plan`: 输出机器可读的 JSON 执行计划到 stdout（或写入 `<path>`），且不会修改仓库内容。
 - `--force`: 允许执行带破坏性的操作（例如覆盖 `.remove` 删除），并允许 custom copy 目标路径位于工作区/仓库之外。
 - `--reapply`: 即使已存在已应用记录，也强制重新应用（成功后会覆盖对应记录文件）。
 - `--po`: 仅应用指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
@@ -276,7 +281,7 @@ python -m src po_apply myproject
 
 **语法**:
 ```bash
-python -m src po_revert <项目名称> [--dry-run] [--po <po1,po2>]
+python -m src po_revert <项目名称> [--dry-run] [--emit-plan [<path>]] [--po <po1,po2>]
 ```
 
 **描述**: 回滚指定项目的所有已应用补丁和覆盖，并清理已应用记录，使后续可再次应用。
@@ -286,6 +291,7 @@ python -m src po_revert <项目名称> [--dry-run] [--po <po1,po2>]
 
 **选项**:
 - `--dry-run`: 仅打印计划执行的动作，不修改文件。
+- `--emit-plan`: 输出机器可读的 JSON 执行计划到 stdout（或写入 `<path>`），且不会修改仓库内容。
 - `--po`: 仅回滚指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
 
 **流程**:

@@ -8,10 +8,12 @@ import os
 import re
 import shutil
 import subprocess
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.log_manager import log
 from src.operations.registry import register
+from src.plan_utils import emit_plan_json, parse_emit_plan
 from src.plugins.po_plugins.registry import (
     APPLY_PHASE_GLOBAL_PRE,
     APPLY_PHASE_PER_PO,
@@ -20,6 +22,7 @@ from src.plugins.po_plugins.registry import (
     get_po_plugins,
 )
 from src.plugins.po_plugins.runtime import PoPluginContext, PoPluginRuntime
+from src.plugins.po_plugins.utils import extract_patch_targets
 from src.plugins.po_plugins.utils import (
     po_applied_record_path as _po_applied_record_path,
 )
@@ -116,6 +119,344 @@ def _filter_pos_from_config(apply_pos: List[str], requested_pos: List[str]) -> O
     return [po_name for po_name in apply_pos if po_name in requested]
 
 
+def _repo_name_from_po_relpath(rel_path: str) -> str:
+    parts = rel_path.split(os.sep)
+    if len(parts) <= 1:
+        return "root"
+    return os.path.join(*parts[:-1])
+
+
+def _read_patch_targets_best_effort(abs_patch_path: str) -> List[str]:
+    try:
+        with open(abs_patch_path, "r", encoding="utf-8") as handle:
+            return extract_patch_targets(handle.read())
+    except OSError:
+        return []
+
+
+def _split_override_repo_prefix(rel_path: str, repo_names: List[str]) -> Tuple[str, str]:
+    """Return (repo_name, dest_rel_in_repo) for an overrides rel_path."""
+    root_prefix = f"root{os.sep}"
+    if rel_path.startswith(root_prefix):
+        return "root", rel_path[len(root_prefix) :]
+
+    for repo_name in repo_names:
+        prefix = f"{repo_name}{os.sep}"
+        if rel_path.startswith(prefix):
+            return repo_name, rel_path[len(prefix) :]
+        if rel_path == repo_name:
+            return repo_name, ""
+
+    return "root", rel_path
+
+
+def build_po_apply_plan(
+    env: Dict[str, Any],
+    projects_info: Dict[str, Any],
+    project_name: str,
+    *,
+    force: bool = False,
+    reapply: bool = False,
+    po: str = "",
+) -> Dict[str, Any]:
+    """Build a machine-readable plan for po_apply without mutating repositories."""
+    projects_path = env["projects_path"]
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    board_name = project_info.get("board_name") if isinstance(project_info, dict) else None
+    if not board_name:
+        raise ValueError(f"Cannot find board name for project: {project_name}")
+
+    board_path = os.path.join(projects_path, board_name)
+    po_dir = os.path.join(board_path, "po")
+    po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
+    apply_pos, _exclude_pos, exclude_files = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        raise ValueError(f"Unknown PO(s) requested via --po: {po}")
+    apply_pos = filtered
+
+    repositories = env.get("repositories", [])
+    runtime = PoPluginRuntime(
+        board_name=board_name,
+        project_name=project_name,
+        repositories=repositories,
+        workspace_root=os.getcwd(),
+        po_configs=env.get("po_configs", {}),
+    )
+
+    plugins = get_po_plugins()
+    plugins = sorted(plugins, key=lambda plugin: (plugin.apply_phase, plugin.apply_order, plugin.name))
+
+    repo_names = sorted(
+        [name for name in runtime.repo_map.keys() if name != "root"], key=lambda x: len(x), reverse=True
+    )
+    repo_entries = sorted(runtime.repositories or [], key=lambda item: item[1])
+    workspace_root = os.path.abspath(runtime.workspace_root)
+
+    actions_by_repo: Dict[str, List[Dict[str, Any]]] = {repo_name: [] for _repo_path, repo_name in repo_entries}
+    if "root" not in actions_by_repo:
+        actions_by_repo["root"] = []
+
+    po_items: List[Dict[str, Any]] = []
+    for po_name in apply_pos:
+        po_path = os.path.join(po_dir, po_name)
+        plugin_files: Dict[str, Any] = {}
+
+        for plugin in plugins:
+            files = plugin.list_files(po_path, runtime) or {}
+            # Filter excluded files for this PO, matching plugin relpaths.
+            excluded = exclude_files.get(po_name, set())
+            if excluded:
+                if "commit_files" in files:
+                    files["commit_files"] = [p for p in files["commit_files"] if p not in excluded]
+                if "patch_files" in files:
+                    files["patch_files"] = [p for p in files["patch_files"] if p not in excluded]
+                if "override_files" in files:
+                    files["override_files"] = [p for p in files["override_files"] if p not in excluded]
+            plugin_files[plugin.name] = files
+
+        # commits -> per-repo actions
+        for rel_path in plugin_files.get("commits", {}).get("commit_files", []) or []:
+            repo_name = _repo_name_from_po_relpath(rel_path)
+            patch_abs = os.path.join(po_path, "commits", rel_path)
+            actions_by_repo.setdefault(repo_name, []).append(
+                {
+                    "type": "commit_apply",
+                    "po": po_name,
+                    "source": f"commits/{rel_path}",
+                    "targets": _read_patch_targets_best_effort(patch_abs),
+                }
+            )
+
+        # patches -> per-repo actions
+        for rel_path in plugin_files.get("patches", {}).get("patch_files", []) or []:
+            repo_name = _repo_name_from_po_relpath(rel_path)
+            patch_abs = os.path.join(po_path, "patches", rel_path)
+            actions_by_repo.setdefault(repo_name, []).append(
+                {
+                    "type": "patch_apply",
+                    "po": po_name,
+                    "source": f"patches/{rel_path}",
+                    "targets": _read_patch_targets_best_effort(patch_abs),
+                }
+            )
+
+        # overrides -> per-repo actions
+        for rel_path in plugin_files.get("overrides", {}).get("override_files", []) or []:
+            repo_name, dest_rel = _split_override_repo_prefix(rel_path, repo_names)
+            is_remove = rel_path.endswith(".remove")
+            if is_remove and dest_rel.endswith(".remove"):
+                dest_rel = dest_rel[: -len(".remove")]
+            actions_by_repo.setdefault(repo_name, []).append(
+                {
+                    "type": "override_remove" if is_remove else "override_copy",
+                    "po": po_name,
+                    "source": f"overrides/{rel_path}",
+                    "path_in_repo": dest_rel,
+                }
+            )
+
+        po_items.append(
+            {
+                "po": po_name,
+                "path": os.path.relpath(po_path, start=workspace_root),
+                "plugins": plugin_files,
+            }
+        )
+
+    # Stable ordering for per-repo actions.
+    for repo_name, actions in list(actions_by_repo.items()):
+        actions_by_repo[repo_name] = sorted(
+            actions,
+            key=lambda item: (str(item.get("po", "")), str(item.get("type", "")), str(item.get("source", ""))),
+        )
+
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now().isoformat(),
+        "operation": "po_apply",
+        "project_name": project_name,
+        "board_name": board_name,
+        "dry_run": True,
+        "flags": {
+            "force": bool(force),
+            "reapply": bool(reapply),
+            "po": str(po or ""),
+        },
+        "repositories": [
+            {"name": repo_name, "path": os.path.relpath(repo_path, start=workspace_root)}
+            for repo_path, repo_name in repo_entries
+        ],
+        "pos": po_items,
+        "per_repo_actions": [
+            {"repo": repo_name, "actions": actions_by_repo.get(repo_name, [])} for _repo_path, repo_name in repo_entries
+        ]
+        + ([{"repo": "root", "actions": actions_by_repo.get("root", [])}] if not repo_entries else []),
+    }
+
+
+def build_po_revert_plan(
+    env: Dict[str, Any],
+    projects_info: Dict[str, Any],
+    project_name: str,
+    *,
+    po: str = "",
+) -> Dict[str, Any]:
+    """Build a machine-readable plan for po_revert without mutating repositories."""
+    projects_path = env["projects_path"]
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    board_name = project_info.get("board_name") if isinstance(project_info, dict) else None
+    if not board_name:
+        raise ValueError(f"Cannot find board name for project: {project_name}")
+
+    board_path = os.path.join(projects_path, board_name)
+    po_dir = os.path.join(board_path, "po")
+    po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
+    apply_pos, _exclude_pos, exclude_files = parse_po_config(po_config)
+    requested_pos = _parse_po_filter(po)
+    filtered = _filter_pos_from_config(apply_pos, requested_pos)
+    if filtered is None:
+        raise ValueError(f"Unknown PO(s) requested via --po: {po}")
+    apply_pos = filtered
+
+    repositories = env.get("repositories", [])
+    runtime = PoPluginRuntime(
+        board_name=board_name,
+        project_name=project_name,
+        repositories=repositories,
+        workspace_root=os.getcwd(),
+        po_configs=env.get("po_configs", {}),
+    )
+
+    plugins = get_po_plugins()
+    plugins = sorted(plugins, key=lambda plugin: (plugin.revert_phase, plugin.revert_order, plugin.name))
+
+    repo_names = sorted(
+        [name for name in runtime.repo_map.keys() if name != "root"], key=lambda x: len(x), reverse=True
+    )
+    repo_entries = sorted(runtime.repositories or [], key=lambda item: item[1])
+    workspace_root = os.path.abspath(runtime.workspace_root)
+
+    actions_by_repo: Dict[str, List[Dict[str, Any]]] = {repo_name: [] for _repo_path, repo_name in repo_entries}
+    if "root" not in actions_by_repo:
+        actions_by_repo["root"] = []
+
+    po_items: List[Dict[str, Any]] = []
+    for po_name in reversed(apply_pos):
+        po_path = os.path.join(po_dir, po_name)
+        plugin_files: Dict[str, Any] = {}
+
+        for plugin in plugins:
+            files = plugin.list_files(po_path, runtime) or {}
+            excluded = exclude_files.get(po_name, set())
+            if excluded and "override_files" in files:
+                files["override_files"] = [p for p in files["override_files"] if p not in excluded]
+            if excluded and "patch_files" in files:
+                files["patch_files"] = [p for p in files["patch_files"] if p not in excluded]
+            plugin_files[plugin.name] = files
+
+        # patches revert
+        for rel_path in plugin_files.get("patches", {}).get("patch_files", []) or []:
+            repo_name = _repo_name_from_po_relpath(rel_path)
+            actions_by_repo.setdefault(repo_name, []).append(
+                {
+                    "type": "patch_reverse",
+                    "po": po_name,
+                    "source": f"patches/{rel_path}",
+                }
+            )
+
+        # overrides revert
+        for rel_path in plugin_files.get("overrides", {}).get("override_files", []) or []:
+            repo_name, dest_rel = _split_override_repo_prefix(rel_path, repo_names)
+            if rel_path.endswith(".remove") and dest_rel.endswith(".remove"):
+                dest_rel = dest_rel[: -len(".remove")]
+            actions_by_repo.setdefault(repo_name, []).append(
+                {
+                    "type": "override_revert",
+                    "po": po_name,
+                    "source": f"overrides/{rel_path}",
+                    "path_in_repo": dest_rel,
+                }
+            )
+
+        po_items.append(
+            {
+                "po": po_name,
+                "path": os.path.relpath(po_path, start=workspace_root),
+                "plugins": plugin_files,
+            }
+        )
+
+    # commits revert uses applied records, not PO directory listing.
+    for repo_root, repo_name in repo_entries:
+        for po_name in reversed(apply_pos):
+            record = runtime.load_applied_record(repo_root, po_name)
+            commits = (record or {}).get("commits") or []
+            for entry in reversed(commits):
+                if entry.get("status") == "already_applied":
+                    continue
+                shas = entry.get("commit_shas") or []
+                if not shas and entry.get("head_after"):
+                    shas = [entry["head_after"]]
+                for sha in reversed([s for s in shas if s]):
+                    actions_by_repo.setdefault(repo_name, []).append(
+                        {
+                            "type": "commit_revert",
+                            "po": po_name,
+                            "sha": sha,
+                        }
+                    )
+
+    # Cleanup actions (what po_revert would remove when not in dry-run).
+    for repo_root, repo_name in repo_entries:
+        for po_name in reversed(apply_pos):
+            record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
+            actions_by_repo.setdefault(repo_name, []).append(
+                {
+                    "type": "remove_applied_record",
+                    "po": po_name,
+                    "path": os.path.relpath(record_path, start=workspace_root),
+                }
+            )
+
+    # Stable ordering for per-repo actions.
+    for repo_name, actions in list(actions_by_repo.items()):
+        actions_by_repo[repo_name] = sorted(
+            actions,
+            key=lambda item: (
+                str(item.get("po", "")),
+                str(item.get("type", "")),
+                str(item.get("source", "")),
+                str(item.get("sha", "")),
+            ),
+        )
+
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now().isoformat(),
+        "operation": "po_revert",
+        "project_name": project_name,
+        "board_name": board_name,
+        "dry_run": True,
+        "flags": {
+            "po": str(po or ""),
+        },
+        "repositories": [
+            {"name": repo_name, "path": os.path.relpath(repo_path, start=workspace_root)}
+            for repo_path, repo_name in repo_entries
+        ],
+        "pos": po_items,
+        "per_repo_actions": [
+            {"repo": repo_name, "actions": actions_by_repo.get(repo_name, [])} for _repo_path, repo_name in repo_entries
+        ]
+        + ([{"repo": "root", "actions": actions_by_repo.get("root", [])}] if not repo_entries else []),
+    }
+
+
 @register("po_apply", needs_repositories=True, desc="Apply patch and override for a project")
 def po_apply(
     env: Dict,
@@ -125,6 +466,7 @@ def po_apply(
     force: bool = False,
     reapply: bool = False,
     po: str = "",
+    emit_plan: Any = False,
 ) -> bool:
     """
     Apply patch/override/commits for the specified project.
@@ -133,6 +475,7 @@ def po_apply(
         projects_info (dict): All projects info.
         project_name (str): Project name.
         dry_run (bool): If True, only print planned actions without modifying files.
+        emit_plan (bool|str): Emit a machine-readable JSON plan to stdout (true) or to the given path.
         force (bool): If True, allow destructive operations like override .remove deletions.
         reapply (bool): If True, apply POs even if applied records already exist (overwrites them after success).
         po (str): Optional PO filter; only apply these POs (comma/space separated) from PROJECT_PO_CONFIG.
@@ -151,7 +494,12 @@ def po_apply(
     board_path = os.path.join(projects_path, board_name)
     po_dir = os.path.join(board_path, "po")
     po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
+    emit_enabled, _ = parse_emit_plan(emit_plan)
     if not po_config:
+        if emit_enabled:
+            payload = build_po_apply_plan(env, projects_info, project_name, force=force, reapply=reapply, po=po)
+            emit_plan_json(payload, emit_plan)
+            return True
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
 
@@ -167,9 +515,15 @@ def po_apply(
             ", ".join(filtered) if filtered else "(none)",
         )
     apply_pos = filtered
+    if emit_enabled:
+        payload = build_po_apply_plan(env, projects_info, project_name, force=force, reapply=reapply, po=po)
+        emit_plan_json(payload, emit_plan)
+        return True
+
     if not apply_pos:
         log.warning("No POs selected for '%s' after --po filter; nothing to do.", project_name)
         return True
+
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:
         log.debug("apply_pos: %s", str(apply_pos))
@@ -261,13 +615,22 @@ def po_apply(
     needs_repositories=True,
     desc="Revert patch/override/commits for a project",
 )
-def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool = False, po: str = "") -> bool:
+def po_revert(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    dry_run: bool = False,
+    po: str = "",
+    emit_plan: Any = False,
+) -> bool:
     """
     Revert patch/override/commits for the specified project.
     Args:
         env (dict): Global environment dict.
         projects_info (dict): All projects info.
         project_name (str): Project name.
+        dry_run (bool): If True, only print planned actions without modifying files.
+        emit_plan (bool|str): Emit a machine-readable JSON plan to stdout (true) or to the given path.
         po (str): Optional PO filter; only revert these POs (comma/space separated) from PROJECT_PO_CONFIG.
     Returns:
         bool: True if success, otherwise False.
@@ -284,7 +647,12 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
     board_path = os.path.join(projects_path, board_name)
     po_dir = os.path.join(board_path, "po")
     po_config = str(project_cfg.get("PROJECT_PO_CONFIG", "") or "").strip()
+    emit_enabled, _ = parse_emit_plan(emit_plan)
     if not po_config:
+        if emit_enabled:
+            payload = build_po_revert_plan(env, projects_info, project_name, po=po)
+            emit_plan_json(payload, emit_plan)
+            return True
         log.warning("No PROJECT_PO_CONFIG found for '%s'", project_name)
         return True
 
@@ -300,9 +668,15 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
             ", ".join(filtered) if filtered else "(none)",
         )
     apply_pos = filtered
+    if emit_enabled:
+        payload = build_po_revert_plan(env, projects_info, project_name, po=po)
+        emit_plan_json(payload, emit_plan)
+        return True
+
     if not apply_pos:
         log.warning("No POs selected for '%s' after --po filter; nothing to do.", project_name)
         return True
+
     log.debug("projects_info: %s", str(projects_info.get(project_name, {})))
     log.debug("po_dir: '%s'", po_dir)
     if apply_pos:

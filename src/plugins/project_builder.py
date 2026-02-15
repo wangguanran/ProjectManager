@@ -17,9 +17,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.hooks import HookType, execute_hooks_with_fallback
 from src.log_manager import log, summarize_output
 from src.operations.registry import register
+from src.plan_utils import emit_plan_json, parse_emit_plan
 
 # from src.profiler import auto_profile  # unused
-from src.plugins.patch_override import po_apply
+from src.plugins.patch_override import build_po_apply_plan, po_apply
 
 
 def _coerce_bool(value: Any, default: bool = False) -> bool:
@@ -159,6 +160,81 @@ def _format_cmd_template(cmd: str, ctx: BuildContext) -> str:
         return cmd
 
 
+def build_project_diff_plan(
+    env: Dict[str, Any],
+    project_name: str,
+    *,
+    keep_diff_dir: bool = False,
+    timestamp: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a machine-readable plan for project_diff without writing files/directories."""
+    ts = str(timestamp).strip() if timestamp else datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = re.sub(r"[^0-9A-Za-z_-]+", "_", ts) or datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_project_name = _safe_project_name(project_name)
+
+    root_dir = os.path.abspath(str(env.get("root_path") or os.getcwd()))
+    diff_root = os.path.join(root_dir, ".cache", "build", safe_project_name, ts, "diff")
+    timestamp_dir = os.path.dirname(diff_root)
+    archive_name = f"diff_{safe_project_name}_{ts}.tar.gz"
+    archive_path = os.path.join(timestamp_dir, archive_name)
+
+    repositories = sorted(_normalise_repositories(env.get("repositories", [])), key=lambda item: item[1])
+
+    repo_plans: List[Dict[str, Any]] = []
+    for repo_path, repo_name in repositories:
+        staged_files: List[str] = []
+        working_files: List[str] = []
+        errors: List[str] = []
+
+        staged = subprocess.run(
+            ["git", "diff", "--name-only", "--cached"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if staged.returncode == 0 and staged.stdout.strip():
+            staged_files = sorted({line.strip() for line in staged.stdout.splitlines() if line.strip()})
+        elif staged.returncode != 0:
+            errors.append(f"staged_files_error: {summarize_output(staged.stderr)}")
+
+        working = subprocess.run(
+            ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if working.returncode == 0 and working.stdout.strip():
+            working_files = sorted({line.strip() for line in working.stdout.splitlines() if line.strip()})
+        elif working.returncode != 0:
+            errors.append(f"working_files_error: {summarize_output(working.stderr)}")
+
+        all_files = sorted(set(staged_files) | set(working_files))
+        repo_plans.append(
+            {
+                "repo": repo_name,
+                "path": os.path.relpath(os.path.abspath(repo_path), start=root_dir),
+                "staged_files": staged_files,
+                "working_files": working_files,
+                "all_files": all_files,
+                "errors": errors,
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now().isoformat(),
+        "operation": "project_diff",
+        "project_name": project_name,
+        "dry_run": True,
+        "diff_root": os.path.relpath(diff_root, start=root_dir),
+        "archive_path": os.path.relpath(archive_path, start=root_dir),
+        "keep_diff_dir": bool(keep_diff_dir),
+        "repositories": repo_plans,
+    }
+
+
 @register(
     "project_diff",
     needs_repositories=True,
@@ -170,6 +246,7 @@ def project_diff(
     project_name: str,
     keep_diff_dir: bool = False,
     dry_run: bool = False,
+    emit_plan: Any = False,
     timestamp: Optional[str] = None,
 ) -> bool:
     """
@@ -185,8 +262,15 @@ def project_diff(
         timestamp (str): Override timestamp directory name (default: now)
         keep_diff_dir (bool): If True, preserve the diff directory after creating tar.gz archive (default: False)
         dry_run (bool): If True, only print planned actions without creating files/directories (default: False)
+        emit_plan (bool|str): Emit a machine-readable JSON plan to stdout (true) or to the given path.
     """
     _ = projects_info  # Mark as intentionally unused
+
+    emit_enabled, _ = parse_emit_plan(emit_plan)
+    if emit_enabled:
+        payload = build_project_diff_plan(env, project_name, keep_diff_dir=keep_diff_dir, timestamp=timestamp)
+        emit_plan_json(payload, emit_plan)
+        return True
 
     ts = str(timestamp).strip() if timestamp else datetime.now().strftime("%Y%m%d_%H%M%S")
     ts = re.sub(r"[^0-9A-Za-z_-]+", "_", ts) or datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1065,6 +1149,233 @@ def project_post_build(
     return True
 
 
+def build_project_build_plan(
+    env: Dict[str, Any],
+    projects_info: Dict[str, Any],
+    project_name: str,
+    *,
+    sync: bool = False,
+    clean: bool = False,
+    profile: str = "full",
+    repo: str = "",
+    target: str = "",
+    force: bool = False,
+    no_po: bool = False,
+    no_diff: bool = False,
+) -> Dict[str, Any]:
+    """Build a machine-readable plan for project_build without executing hooks/commands."""
+    project_info = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    project_cfg = project_info.get("config", {}) if isinstance(project_info, dict) else {}
+    platform = str(project_cfg.get("PROJECT_PLATFORM", "")).strip() or None
+
+    root_path = os.path.abspath(str(env.get("root_path") or os.getcwd()))
+    build_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_project_name = _safe_project_name(project_name)
+    build_root = os.path.join(root_path, ".cache", "build", safe_project_name, build_ts)
+
+    ctx = BuildContext(
+        env=dict(env),
+        projects_info=dict(projects_info) if isinstance(projects_info, dict) else {},
+        project_name=project_name,
+        project_cfg=project_cfg,
+        platform=platform,
+        repositories=sorted(_normalise_repositories(env.get("repositories", [])), key=lambda item: item[1]),
+        root_path=root_path,
+        build_ts=build_ts,
+        build_root=build_root,
+        dry_run=True,
+        force=_coerce_bool(force, False),
+        profile=_normalise_profile(profile),
+        repo=str(repo or ""),
+        target=str(target or ""),
+    )
+
+    steps: List[Dict[str, Any]] = []
+
+    # Clean plan
+    if _coerce_bool(clean, False):
+        excludes = [
+            "projects",
+            ".repo",
+            os.path.join(".cache", "po_applied"),
+        ]
+        excludes.extend(_split_multiline_rules(str(project_cfg.get("PROJECT_CLEAN_EXCLUDE", ""))))
+        excludes = [e for e in excludes if e]
+
+        per_repo: List[Dict[str, Any]] = []
+        for repo_path, repo_name in ctx.repositories:
+            is_git = os.path.isdir(os.path.join(repo_path, ".git"))
+            per_repo.append(
+                {
+                    "repo": repo_name,
+                    "path": os.path.relpath(os.path.abspath(repo_path), start=root_path),
+                    "is_git": bool(is_git),
+                    "commands": (
+                        []
+                        if not is_git
+                        else [
+                            {"cmd": "git reset --hard HEAD"},
+                            {"cmd": "git clean -fdx " + " ".join(f"-e {p}" for p in excludes)},
+                        ]
+                    ),
+                }
+            )
+        steps.append(
+            {
+                "name": "repo_clean",
+                "requires_force": True,
+                "force_enabled": bool(_coerce_bool(force, False)),
+                "excludes": excludes,
+                "repositories": per_repo,
+            }
+        )
+
+    # Sync plan
+    if _coerce_bool(sync, False):
+        sync_cmd = str(project_cfg.get("PROJECT_SYNC_CMD", "")).strip()
+        if sync_cmd:
+            cwd = _resolve_cwd(ctx.root_path, project_cfg.get("PROJECT_SYNC_CWD", ""))
+            formatted = _format_cmd_template(sync_cmd, ctx)
+            steps.append(
+                {
+                    "name": "repo_sync",
+                    "mode": "command",
+                    "cwd": os.path.relpath(os.path.abspath(cwd), start=root_path),
+                    "cmd": formatted,
+                }
+            )
+        else:
+            manifest = os.path.join(ctx.root_path, ".repo", "manifest.xml")
+            if os.path.exists(manifest) and shutil.which("repo"):
+                steps.append({"name": "repo_sync", "mode": "repo", "cwd": ".", "cmd": "repo sync"})
+            else:
+                per_repo = []
+                for repo_path, repo_name in ctx.repositories:
+                    if not os.path.isdir(os.path.join(repo_path, ".git")):
+                        continue
+                    upstream = subprocess.run(
+                        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+                        cwd=repo_path,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    has_upstream = upstream.returncode == 0 and upstream.stdout.strip()
+                    per_repo.append(
+                        {
+                            "repo": repo_name,
+                            "path": os.path.relpath(os.path.abspath(repo_path), start=root_path),
+                            "has_upstream": bool(has_upstream),
+                            "cmd": "git pull --rebase" if has_upstream else "(skip: no upstream)",
+                        }
+                    )
+                steps.append({"name": "repo_sync", "mode": "git", "repositories": per_repo})
+
+    # Pre-build plan (po_apply + project_diff)
+    pre_build: Dict[str, Any] = {"name": "pre_build", "timestamp": build_ts, "steps": []}
+    if not _coerce_bool(no_po, False):
+        pre_build["steps"].append(
+            {
+                "operation": "po_apply",
+                "plan": build_po_apply_plan(env, projects_info, project_name, force=_coerce_bool(force, False)),
+            }
+        )
+    else:
+        pre_build["steps"].append({"operation": "po_apply", "skipped": True})
+
+    if not _coerce_bool(no_diff, False):
+        pre_build["steps"].append(
+            {
+                "operation": "project_diff",
+                "plan": build_project_diff_plan(env, project_name, timestamp=build_ts),
+            }
+        )
+    else:
+        pre_build["steps"].append({"operation": "project_diff", "skipped": True})
+
+    steps.append(pre_build)
+
+    # Build stage plan
+    profile_norm = _normalise_profile(profile)
+    cmd = ""
+    if profile_norm == "single":
+        cmd = (
+            str(project_cfg.get("PROJECT_BUILD_SINGLE_CMD", "")).strip()
+            or str(project_cfg.get("PROJECT_BUILD_CMD_SINGLE", "")).strip()
+        )
+    elif profile_norm == "full":
+        cmd = (
+            str(project_cfg.get("PROJECT_BUILD_FULL_CMD", "")).strip()
+            or str(project_cfg.get("PROJECT_BUILD_CMD_FULL", "")).strip()
+        )
+    cmd = cmd or str(project_cfg.get("PROJECT_BUILD_CMD", "")).strip()
+    if cmd:
+        build_cwd = _resolve_cwd(root_path, str(project_cfg.get("PROJECT_BUILD_CWD", "")).strip())
+        steps.append(
+            {
+                "name": "build",
+                "cwd": os.path.relpath(os.path.abspath(build_cwd), start=root_path),
+                "cmd": _format_cmd_template(cmd, ctx),
+                "profile": profile_norm,
+                "repo": str(repo or ""),
+                "target": str(target or ""),
+            }
+        )
+    else:
+        steps.append({"name": "build", "skipped": True, "reason": "PROJECT_BUILD_CMD not configured"})
+
+    # Post-build stage plan
+    post_cmd = str(project_cfg.get("PROJECT_POST_BUILD_CMD", "")).strip()
+    if post_cmd:
+        post_cwd = _resolve_cwd(root_path, str(project_cfg.get("PROJECT_POST_BUILD_CWD", "")).strip())
+        steps.append(
+            {
+                "name": "post_build",
+                "cwd": os.path.relpath(os.path.abspath(post_cwd), start=root_path),
+                "cmd": _format_cmd_template(post_cmd, ctx),
+            }
+        )
+    else:
+        steps.append({"name": "post_build", "skipped": True})
+
+    # Artifact collection plan
+    raw_rules = str(project_cfg.get("PROJECT_BUILD_ARTIFACTS", ""))
+    rules = _split_multiline_rules(raw_rules)
+    steps.append(
+        {
+            "name": "collect_artifacts",
+            "artifacts_root": os.path.relpath(os.path.join(build_root, "artifacts"), start=root_path),
+            "rules": rules,
+        }
+    )
+
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now().isoformat(),
+        "operation": "project_build",
+        "project_name": project_name,
+        "platform": platform,
+        "dry_run": True,
+        "build_root": os.path.relpath(build_root, start=root_path),
+        "timestamp": build_ts,
+        "flags": {
+            "sync": bool(_coerce_bool(sync, False)),
+            "clean": bool(_coerce_bool(clean, False)),
+            "profile": profile_norm,
+            "repo": str(repo or ""),
+            "target": str(target or ""),
+            "force": bool(_coerce_bool(force, False)),
+            "no_po": bool(_coerce_bool(no_po, False)),
+            "no_diff": bool(_coerce_bool(no_diff, False)),
+        },
+        "repositories": [
+            {"name": repo_name, "path": os.path.relpath(os.path.abspath(repo_path), start=root_path)}
+            for repo_path, repo_name in ctx.repositories
+        ],
+        "steps": steps,
+    }
+
+
 @register(
     "project_build",
     needs_repositories=True,
@@ -1080,6 +1391,7 @@ def project_build(
     repo: str = "",
     target: str = "",
     dry_run: bool = False,
+    emit_plan: Any = False,
     force: bool = False,
     no_po: bool = False,
     no_diff: bool = False,
@@ -1098,6 +1410,7 @@ def project_build(
     repo (str): Repo/module for single build (optional).
     target (str): Target for single build (optional).
     dry_run (bool): If True, only print planned actions (default: False).
+    emit_plan (bool|str): Emit a machine-readable JSON plan to stdout (true) or to the given path.
     force (bool): Allow destructive actions (needed for --clean) (default: False).
     no_po (bool): Skip po_apply stage (default: False).
     no_diff (bool): Skip project_diff stage (default: False).
@@ -1127,6 +1440,24 @@ def project_build(
         repo=str(repo or ""),
         target=str(target or ""),
     )
+
+    emit_enabled, _ = parse_emit_plan(emit_plan)
+    if emit_enabled:
+        payload = build_project_build_plan(
+            env,
+            projects_info,
+            project_name,
+            sync=sync,
+            clean=clean,
+            profile=profile,
+            repo=repo,
+            target=target,
+            force=force,
+            no_po=no_po,
+            no_diff=no_diff,
+        )
+        emit_plan_json(payload, emit_plan)
+        return True
 
     # Expose build metadata to hooks/steps via env for this run.
     env["build_ts"] = ctx.build_ts
