@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from difflib import SequenceMatcher
 from importlib import import_module
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import configupdater
 
@@ -381,6 +381,14 @@ def _env_truthy(value: str) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _arg_truthy(value: Any) -> bool:
+    if value is True:
+        return True
+    if value in (False, None):
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def _should_load_platform_scripts(argv: List[str]) -> bool:
     """
     Decide whether to import projects/scripts/*.py.
@@ -388,10 +396,16 @@ def _should_load_platform_scripts(argv: List[str]) -> bool:
     Safety:
     - Never auto-import by default.
     - Never import for early-exit flags like --help / --version.
+    - In --safe-mode, ignore env-based opt-in (PROJMAN_LOAD_SCRIPTS) and only allow explicit CLI opt-in.
     """
 
     if "-h" in argv or "--help" in argv or "--version" in argv:
         return False
+    safe_mode = "--safe-mode" in argv or _env_truthy(os.environ.get("PROJMAN_SAFE_MODE", ""))
+    if safe_mode:
+        if _env_truthy(os.environ.get("PROJMAN_LOAD_SCRIPTS", "")) and "--load-scripts" not in argv:
+            log.warning("Safe mode enabled; ignoring PROJMAN_LOAD_SCRIPTS (use --load-scripts explicitly).")
+        return "--load-scripts" in argv
     if "--load-scripts" in argv:
         return True
     return _env_truthy(os.environ.get("PROJMAN_LOAD_SCRIPTS", ""))
@@ -531,6 +545,22 @@ def _parse_args_and_plugin_args(builtin_operations):
         "--load-scripts",
         action="store_true",
         help="Opt-in: import workspace scripts under projects/scripts/*.py (unsafe in untrusted workspaces).",
+    )
+    parser.add_argument(
+        "--safe-mode",
+        action="store_true",
+        help="Enable safe mode for untrusted workspaces (blocks env-based script loading; requires confirmation for destructive ops; blocks network upgrade unless allowed).",
+    )
+    parser.add_argument(
+        "--allow-network",
+        action="store_true",
+        help="Safe mode: allow network operations such as 'upgrade'.",
+    )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Safe mode: explicitly confirm running destructive operations (non-interactive).",
     )
 
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
@@ -924,8 +954,39 @@ def main():
     operate, name, parsed_args, parsed_kwargs, args_dict = _parse_args_and_plugin_args(all_operations)
     builtins.ENABLE_CPROFILE = args_dict.get("perf_analyze", False)
 
+    safe_mode = bool(args_dict.get("safe_mode"))
+    allow_network = bool(args_dict.get("allow_network"))
+    confirmed = bool(args_dict.get("yes"))
+    env["safe_mode"] = safe_mode
+    env["allow_network"] = allow_network
+    env["confirmed"] = confirmed
+
     # Only execute operations registered through plugins
     if operate in all_operations:
+        if safe_mode:
+            destructive_ops = {
+                "upgrade",
+                "po_apply",
+                "po_revert",
+                "po_new",
+                "po_update",
+                "po_del",
+                "project_build",
+                "project_new",
+                "project_del",
+                "board_new",
+                "board_del",
+            }
+            is_dry_run = _arg_truthy(parsed_kwargs.get("dry_run"))
+            if operate == "upgrade" and not is_dry_run and not allow_network:
+                log.error("Safe mode blocks networked upgrade without --allow-network.")
+                print("Error: --safe-mode blocks 'upgrade' without --allow-network (use --dry-run to preview).")
+                sys.exit(1)
+            if operate in destructive_ops and not is_dry_run and not confirmed:
+                log.error("Safe mode blocks destructive operation '%s' without --dry-run or --yes.", operate)
+                print(f"Error: --safe-mode requires --dry-run or --yes for '{operate}'.")
+                sys.exit(1)
+
         op_info = all_operations[operate]
         func = op_info["func"]
         needs_projects = get_operation_meta_flag(func, operate, "needs_projects")

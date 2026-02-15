@@ -20,6 +20,9 @@ All commands accept the following global options:
 | `--help` | Show help for the command or the CLI | `python -m src --help` |
 | `--perf-analyze` | Enable performance analysis logs | `python -m src --perf-analyze po_apply proj1` |
 | `--load-scripts` | Opt-in: import workspace scripts under `projects/scripts/*.py` (unsafe in untrusted workspaces) | `python -m src --load-scripts project_build proj1` |
+| `--safe-mode` | Safe mode for untrusted workspaces (requires explicit confirmation for destructive ops; blocks env-based script loading) | `python -m src --safe-mode po_apply proj1 --dry-run` |
+| `--allow-network` | Safe mode: allow network operations such as `upgrade` | `python -m src --safe-mode --allow-network upgrade --dry-run` |
+| `-y`, `--yes` | Safe mode: explicitly confirm destructive operations (non-interactive) | `python -m src --safe-mode -y po_apply proj1` |
 
 ---
 
