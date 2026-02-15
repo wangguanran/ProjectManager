@@ -372,6 +372,26 @@ def _import_platform_scripts(projects_path):
     log.debug("Imported %d platform scripts from %s", imported_count, scripts_dir)
 
 
+def _env_truthy(value: str) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _should_load_platform_scripts(argv: List[str]) -> bool:
+    """
+    Decide whether to import projects/scripts/*.py.
+
+    Safety:
+    - Never auto-import by default.
+    - Never import for early-exit flags like --help / --version.
+    """
+
+    if "-h" in argv or "--help" in argv or "--version" in argv:
+        return False
+    if "--load-scripts" in argv:
+        return True
+    return _env_truthy(os.environ.get("PROJMAN_LOAD_SCRIPTS", ""))
+
+
 @func_time
 def _parse_args_and_plugin_args(builtin_operations):
     def _extract_plugin_tokens(argv: List[str], parsed_name: Optional[str]) -> List[str]:
@@ -501,6 +521,11 @@ def _parse_args_and_plugin_args(builtin_operations):
         "--perf-analyze",
         action="store_true",
         help="Enable cProfile performance analysis",
+    )
+    parser.add_argument(
+        "--load-scripts",
+        action="store_true",
+        help="Opt-in: import workspace scripts under projects/scripts/*.py (unsafe in untrusted workspaces).",
     )
 
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
@@ -880,8 +905,9 @@ def main():
         # "repositories": _find_repositories(),  # lazy loading
     }
 
-    # Import platform scripts
-    _import_platform_scripts(env["projects_path"])
+    # Opt-in: import platform scripts (workspace code execution).
+    if _should_load_platform_scripts(sys.argv[1:]):
+        _import_platform_scripts(env["projects_path"])
 
     builtin_operations = _load_builtin_plugin_operations()
     log.debug("Loaded %d builtin operations.", len(builtin_operations))
