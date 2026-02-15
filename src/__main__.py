@@ -521,12 +521,15 @@ def _parse_args_and_plugin_args(builtin_operations):
     else:
         plugin_options = ""
 
+    argv = sys.argv[1:]
+
     # Only generate help/choices through plugin-registered operations
     help_text = "supported operations :\n" + "\n".join(builtin_help_lines)
     choices = list(builtin_operations)
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
     parser = FuzzyOperationParser(
         available_operations=choices,
+        enable_fuzzy="--no-fuzzy" not in argv,
         usage="__main__.py [options] operations [name] [args ...]",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=plugin_options if plugin_options else None,
@@ -545,6 +548,11 @@ def _parse_args_and_plugin_args(builtin_operations):
         "--load-scripts",
         action="store_true",
         help="Opt-in: import workspace scripts under projects/scripts/*.py (unsafe in untrusted workspaces).",
+    )
+    parser.add_argument(
+        "--no-fuzzy",
+        action="store_true",
+        help="Require exact operation match (disable fuzzy matching and fail on ambiguity).",
     )
     parser.add_argument(
         "--safe-mode",
@@ -566,7 +574,6 @@ def _parse_args_and_plugin_args(builtin_operations):
     # Do not add plugin-related parameters to parser, only describe in epilog or help_text
     parser.epilog = plugin_options if plugin_options else None
 
-    argv = sys.argv[1:]
     args, _unknown = parser.parse_known_args(argv)
     args_dict = vars(args)
     # Preserve original order; do NOT concatenate `args` + `unknown`.
@@ -880,8 +887,9 @@ class FuzzyOperationParser(argparse.ArgumentParser):
     Custom ArgumentParser that supports fuzzy matching for operation names.
     """
 
-    def __init__(self, available_operations: List[str], *args, **kwargs):
+    def __init__(self, available_operations: List[str], *args, enable_fuzzy: bool = True, **kwargs):
         self.available_operations = available_operations
+        self.enable_fuzzy = bool(enable_fuzzy)
         super().__init__(*args, **kwargs)
 
     def _get_value(self, action, arg_string):
@@ -892,6 +900,16 @@ class FuzzyOperationParser(argparse.ArgumentParser):
             # Try exact match first
             if arg_string in self.available_operations:
                 return arg_string
+
+            if not self.enable_fuzzy:
+                suggestions = []
+                for op in self.available_operations:
+                    if arg_string.lower() in op.lower() or op.lower().startswith(arg_string.lower()):
+                        suggestions.append(op)
+                suffix = f" Did you mean: {', '.join(suggestions[:5])}?" if suggestions else ""
+                raise argparse.ArgumentTypeError(
+                    f"Unknown operation '{arg_string}' (fuzzy matching disabled by --no-fuzzy).{suffix}"
+                )
 
             # Try fuzzy match
             best_match, all_matches = _find_all_operation_matches(arg_string, self.available_operations)
