@@ -453,9 +453,16 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
         with open(ini_path, "w", encoding="utf-8") as ini_file:
             ini_file.writelines(ini_lines)
 
+        try:
+            board_path_rel = os.path.relpath(board_path, projects_path)
+        except ValueError:
+            board_path_rel = board_name
+        if os.path.isabs(board_path_rel):
+            board_path_rel = board_name
+
         board_metadata = {
             "board_name": board_name,
-            "board_path": board_path,
+            "board_path": board_path_rel,
             "last_updated": datetime.now().isoformat(),
             "projects": [],
         }

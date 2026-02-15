@@ -231,22 +231,37 @@ def _load_all_projects(projects_path, common_configs):
             projects_path (str): Path to projects directory
         """
         try:
+            root_path = os.path.abspath(os.path.join(projects_path, os.pardir))
+
+            def _to_relpath(path_value: Optional[str]) -> Optional[str]:
+                if not path_value:
+                    return path_value
+                try:
+                    rel = os.path.relpath(path_value, root_path)
+                except ValueError:
+                    rel = os.path.basename(path_value)
+                # Fail closed: never persist absolute paths in caches.
+                if os.path.isabs(rel):
+                    rel = os.path.basename(rel)
+                return rel
+
             # Group projects by board_name
             board_projects = {}
             for project_name, project_info in projects_info.items():
                 board_name = project_info.get("board_name")
-                if board_name:
-                    if board_name not in board_projects:
-                        board_projects[board_name] = []
-                    board_projects[board_name].append(
-                        {
-                            "project_name": project_name,
-                            "config": project_info.get("config", {}),
-                            "parent": project_info.get("parent"),
-                            "children": project_info.get("children", []),
-                            "ini_file": project_info.get("ini_file"),
-                        }
-                    )
+                if not board_name:
+                    continue
+                if board_name not in board_projects:
+                    board_projects[board_name] = []
+                board_projects[board_name].append(
+                    {
+                        "project_name": project_name,
+                        "config": project_info.get("config", {}),
+                        "parent": project_info.get("parent"),
+                        "children": project_info.get("children", []),
+                        "ini_file": project_info.get("ini_file"),
+                    }
+                )
 
             # Write project information to each board directory
             for board_name, projects in board_projects.items():
@@ -255,12 +270,18 @@ def _load_all_projects(projects_path, common_configs):
                     log.warning("Board directory does not exist: %s", board_path)
                     continue
 
-                # Prepare project data for JSON output
+                # Prepare project data for JSON output (store relative paths only).
+                board_projects_out = []
+                for project in projects:
+                    item = dict(project)
+                    item["ini_file"] = _to_relpath(item.get("ini_file"))
+                    board_projects_out.append(item)
+
                 project_data = {
                     "board_name": board_name,
-                    "board_path": board_path,
+                    "board_path": _to_relpath(board_path),
                     "last_updated": datetime.now().isoformat(),
-                    "projects": projects,
+                    "projects": board_projects_out,
                 }
 
                 # Write to projects.json in board directory
@@ -686,15 +707,19 @@ def _write_repositories_to_file(repositories, repo_type, current_dir):
         repo_data = {
             "discovery_time": datetime.now().isoformat(),
             "discovery_type": repo_type,
-            "current_directory": current_dir,
+            # Store relative paths only (safe to share).
+            "current_directory": ".",
             "repositories": [],
         }
 
         for repo_path, repo_name in repositories:
+            rel_path = os.path.relpath(repo_path, current_dir) if repo_path != current_dir else "."
+            if os.path.isabs(rel_path):
+                rel_path = os.path.basename(rel_path)
             repo_info = {
                 "name": repo_name,
-                "path": repo_path,
-                "relative_path": os.path.relpath(repo_path, current_dir) if repo_path != current_dir else ".",
+                "path": rel_path,
+                "relative_path": rel_path,
                 "is_git_repo": os.path.exists(os.path.join(repo_path, ".git")),
             }
             repo_data["repositories"].append(repo_info)

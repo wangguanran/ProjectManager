@@ -1363,17 +1363,21 @@ class TestFindRepositories:
             repo_data = json.load(f)
 
         assert repo_data["discovery_type"] == "test"
-        assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
+        assert os.path.realpath(os.path.join(temp_dir, repo_data["current_directory"])) == temp_dir_real
         assert len(repo_data["repositories"]) == 2
 
         # Check individual repository information
         repo1_info = next(repo for repo in repo_data["repositories"] if repo["name"] == "repo1")
-        assert os.path.realpath(repo1_info["path"]) == os.path.realpath(os.path.join(temp_dir, "repo1"))
+        assert os.path.realpath(os.path.join(temp_dir, repo1_info["path"])) == os.path.realpath(
+            os.path.join(temp_dir, "repo1")
+        )
         assert repo1_info["relative_path"] == "repo1"
         assert repo1_info["is_git_repo"] is True
 
         repo2_info = next(repo for repo in repo_data["repositories"] if repo["name"] == "repo2")
-        assert os.path.realpath(repo2_info["path"]) == os.path.realpath(os.path.join(temp_dir, "repo2"))
+        assert os.path.realpath(os.path.join(temp_dir, repo2_info["path"])) == os.path.realpath(
+            os.path.join(temp_dir, "repo2")
+        )
         assert repo2_info["relative_path"] == "repo2"
         assert repo2_info["is_git_repo"] is True
 

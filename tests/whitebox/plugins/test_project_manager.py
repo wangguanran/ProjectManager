@@ -1671,7 +1671,7 @@ class TestBoardNew:
         assert projects_json_path.is_file()
         metadata = json.loads(projects_json_path.read_text(encoding="utf-8"))
         assert metadata["board_name"] == board_name
-        assert metadata["board_path"] == str(board_path)
+        assert metadata["board_path"] == board_name
         assert metadata["projects"] == []
 
     def test_board_new_uses_template_when_available(self, tmp_path):

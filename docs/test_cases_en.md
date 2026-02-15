@@ -113,8 +113,8 @@
 
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|
-| REPO-001 | Repo Discovery | Single repo detects root | Dataset A completed | 1. Run `python -m src project_diff projA`.<br>2. Check `projects/repositories.json`. | `repositories` contains `name=root` with current path; `discovery_type=single`. | P1 | Functional |
-| REPO-002 | Repo Discovery | Manifest multi-repo detection | Dataset B completed | 1. Run `python -m src project_diff projA` in dataset B root.<br>2. Check `projects/repositories.json`. | `repositories` includes manifest projects; `discovery_type=manifest`. | P1 | Functional |
+| REPO-001 | Repo Discovery | Single repo detects root | Dataset A completed | 1. Run `python -m src project_diff projA`.<br>2. Check `projects/repositories.json`. | `repositories` contains `name=root` with `path=.`; `current_directory=.`; `discovery_type=single`. | P1 | Functional |
+| REPO-002 | Repo Discovery | Manifest multi-repo detection | Dataset B completed | 1. Run `python -m src project_diff projA` in dataset B root.<br>2. Check `projects/repositories.json`. | `repositories` includes manifest projects with relative `path` values; `current_directory=.`; `discovery_type=manifest`. | P1 | Functional |
 | REPO-003 | Repo Discovery | Missing include logs warning | Add `<include name="missing.xml"/>` to manifest | 1. Run `python -m src project_diff projA`.<br>2. Check logs. | Warning about missing include; other repos still detected. | P2 | Compatibility |
 | REPO-004 | Repo Discovery | No .repo and no .git | Run in a clean non-git directory | 1. Run `python -m src project_diff projA` in empty dir.<br>2. Check `projects/repositories.json`. | `repositories` empty; `discovery_type` empty; command does not crash. | P2 | Edge |
 

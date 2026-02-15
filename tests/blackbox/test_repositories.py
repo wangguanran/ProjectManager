@@ -11,7 +11,11 @@ from .conftest import run_cli
 def _load_repositories_json(root: Path) -> dict:
     path = root / "projects" / "repositories.json"
     assert path.exists()
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data.get("current_directory") == "."
+    for repo in data.get("repositories", []):
+        assert Path(repo.get("path", "")).is_absolute() is False
+    return data
 
 
 def test_repo_001_single_repo_detected(workspace_a: Path) -> None:
