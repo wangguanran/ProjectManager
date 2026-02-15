@@ -419,7 +419,7 @@ python -m src po_del myproject po_feature1 --force
 
 **语法**:
 ```bash
-python -m src po_list <项目名称> [--short]
+python -m src po_list <项目名称> [--short] [--po <po1,po2>] [--json]
 ```
 
 **描述**: 列出指定项目的所有启用的PO目录。
@@ -427,6 +427,8 @@ python -m src po_list <项目名称> [--short]
 **参数**:
 - `项目名称`（必需）: 项目名称
 - `--short`（可选）: 只显示PO名称，不显示详细文件列表
+- `--po`（可选）: 仅列出指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
+- `--json`（可选）: 输出 JSON（便于脚本解析）。
 
 **输出**:
 - 列出 `PROJECT_PO_CONFIG` 中启用的所有PO

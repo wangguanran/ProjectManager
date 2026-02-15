@@ -399,13 +399,18 @@ python -m src po_del myproject po_feature_fix
 
 **Syntax**
 ```bash
-python -m src po_list <project-name>
+python -m src po_list <project-name> [--short] [--po <po1,po2>] [--json]
 ```
 
 **Description**: Display the POs configured for a project, including status and paths.
 
 **Arguments**
 - `project-name` (required): Project whose POs should be listed.
+
+**Options**
+- `--short`: Print only PO names (no file lists).
+- `--po`: List only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+- `--json`: Print a machine-readable JSON payload to stdout.
 
 **Example**
 ```bash

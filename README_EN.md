@@ -304,13 +304,15 @@ projects/<board_name>/po/<po_name>/
 #### `po_list` - List Configured POs
 **Status**: ✅ Implemented
 
-**Usage**: `python -m src po_list <project_name> [--short]`
+**Usage**: `python -m src po_list <project_name> [--short] [--po <po1,po2>] [--json]`
 
 **Description**: Lists all enabled PO directories for the specified project.
 
 **Parameters**:
 - `project_name` (required): Name of the project
 - `--short` (optional): Show only PO names, not detailed file lists
+- `--po` (optional): List only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
+- `--json` (optional): Print a machine-readable JSON payload.
 
 **Output**:
 - Lists all POs enabled in `PROJECT_PO_CONFIG`
