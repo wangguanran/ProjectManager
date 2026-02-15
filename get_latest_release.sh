@@ -7,8 +7,10 @@ set -euo pipefail
 REPO_OWNER="wangguanran"
 REPO_NAME="ProjectManager"
 GITHUB_API_BASE="https://api.github.com"
-GITHUB_TOKEN=""
+GITHUB_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+TOKEN_SOURCE="env" # env|argv
 VERSION_ONLY=false
+VERIFY_DOWNLOADS=true
 
 # 准备用户本地 bin 目录并加入 PATH（本次会话内生效）
 BIN_DIR="$HOME/.local/bin"
@@ -39,7 +41,8 @@ usage() {
     echo "Options:"
     echo "  -o, --owner OWNER    GitHub repository owner (default: wangguanran)"
     echo "  -r, --repo REPO      GitHub repository name (default: ProjectManager)"
-    echo "  -t, --token TOKEN    GitHub personal access token (optional)"
+    echo "  -t, --token TOKEN    GitHub token (discouraged; prefer env GITHUB_TOKEN/GH_TOKEN)"
+    echo "      --no-verify      Skip checksum verification (insecure; not recommended)"
     echo "      --system         Install to /usr/local/bin (requires root)"
     echo "      --user           Install to ~/.local/bin"
     echo "      --prefix DIR     Install to DIR (overrides --system/--user)"
@@ -65,7 +68,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         -t|--token)
             GITHUB_TOKEN="$2"
+            TOKEN_SOURCE="argv"
             shift 2
+            ;;
+        --no-verify)
+            VERIFY_DOWNLOADS=false
+            shift
             ;;
         --system)
             INSTALL_MODE="system"
@@ -94,6 +102,34 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+warn_if_token_from_argv() {
+    if [ "$TOKEN_SOURCE" = "argv" ] && [ -n "$GITHUB_TOKEN" ]; then
+        echo "Warning: --token provided via argv; prefer env GITHUB_TOKEN/GH_TOKEN to avoid leaking secrets via shell history/process listing." >&2
+    fi
+}
+
+require_cmd() {
+    local name="$1"
+    if ! command -v "$name" >/dev/null 2>&1; then
+        echo "Error: required command not found: $name" >&2
+        return 1
+    fi
+}
+
+sha256_file() {
+    local path="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$path" | awk '{print $1}'
+        return 0
+    fi
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$path" | awk '{print $1}'
+        return 0
+    fi
+    echo "Error: sha256sum/shasum not found; cannot verify downloads." >&2
+    return 1
+}
 
 detect_platform() {
     local uname_s
@@ -182,6 +218,7 @@ check_curl() {
 check_jq() {
     if ! command -v jq &> /dev/null; then
         local platform arch url=""
+        local sha_url="https://github.com/jqlang/jq/releases/download/jq-1.7.1/sha256sum.txt"
         platform="$(detect_platform)"
         arch="$(detect_arch)"
         case "$platform-$arch" in
@@ -203,8 +240,36 @@ check_jq() {
                 ;;
         esac
         echo "Installing jq to $BIN_DIR ..." >&2
-        curl -fsSL "$url" -o "$BIN_DIR/jq"
+        require_cmd curl
+        require_cmd awk
+
+        local jq_tmp
+        jq_tmp="$(mktemp)"
+        curl -fsSL "$sha_url" -o "$jq_tmp.sha256sum.txt"
+        local jq_name expected actual
+        jq_name="$(basename "$url")"
+        expected="$(grep -E "  ${jq_name}\$" "$jq_tmp.sha256sum.txt" | awk '{print $1}' | head -n1 || true)"
+        if [ -z "$expected" ]; then
+            echo "Error: failed to find jq checksum for ${jq_name} in sha256sum.txt; aborting." >&2
+            rm -f "$jq_tmp" "$jq_tmp.sha256sum.txt" 2>/dev/null || true
+            return 1
+        fi
+
+        curl -fsSL "$url" -o "$jq_tmp"
+        if [ "$VERIFY_DOWNLOADS" = true ]; then
+            actual="$(sha256_file "$jq_tmp")"
+            if [ "$actual" != "$expected" ]; then
+                echo "Error: jq checksum mismatch for ${jq_name}; aborting install." >&2
+                rm -f "$jq_tmp" "$jq_tmp.sha256sum.txt" 2>/dev/null || true
+                return 1
+            fi
+        else
+            echo "Warning: download verification disabled (--no-verify). Installing jq without checksum verification." >&2
+        fi
+
+        mv "$jq_tmp" "$BIN_DIR/jq"
         chmod +x "$BIN_DIR/jq"
+        rm -f "$jq_tmp.sha256sum.txt" 2>/dev/null || true
     fi
 }
 
@@ -327,6 +392,13 @@ download_and_update_bin() {
         echo "No assets found in the latest release. Skipping binary update." >&2
         return 1
     fi
+
+    local checksum_url=""
+    local checksum_name="${asset_name}.sha256"
+    checksum_url="$(echo "$release_data" | jq -r --arg name "$checksum_name" '.assets[]? | select(.name==$name) | .browser_download_url // empty' | head -n1)"
+    if [ -z "$checksum_url" ] || [ "$checksum_url" = "null" ]; then
+        checksum_url=""
+    fi
     
     echo "Found asset: $asset_name"
     echo "Downloading from: $asset_url"
@@ -339,11 +411,46 @@ download_and_update_bin() {
     # 下载 asset 到临时文件
     local temp_file
     temp_file="$(mktemp)"
-    if [ -n "$GITHUB_TOKEN" ]; then
-        curl -L -H "Authorization: token ${GITHUB_TOKEN}" -o "$temp_file" "$asset_url"
-    else
-        curl -L -o "$temp_file" "$asset_url"
+    local checksum_file
+    checksum_file="$(mktemp)"
+    if [ "$VERIFY_DOWNLOADS" = true ] && [ -z "$checksum_url" ]; then
+        echo "Error: checksum asset '${checksum_name}' not found; refusing to install without verification." >&2
+        echo "Tip: re-run with --no-verify to bypass (insecure)." >&2
+        rm -f "$temp_file" "$checksum_file" 2>/dev/null || true
+        return 1
     fi
+    if [ -n "$checksum_url" ]; then
+        if [ -n "$GITHUB_TOKEN" ]; then
+            curl -fsSL -L -H "Authorization: token ${GITHUB_TOKEN}" -o "$checksum_file" "$checksum_url"
+        else
+            curl -fsSL -L -o "$checksum_file" "$checksum_url"
+        fi
+    fi
+
+    if [ -n "$GITHUB_TOKEN" ]; then
+        curl -fsSL -L -H "Authorization: token ${GITHUB_TOKEN}" -o "$temp_file" "$asset_url"
+    else
+        curl -fsSL -L -o "$temp_file" "$asset_url"
+    fi
+
+    if [ "$VERIFY_DOWNLOADS" = true ]; then
+        local expected actual
+        expected="$(awk '{print $1}' "$checksum_file" | head -n1 || true)"
+        if [ -z "$expected" ]; then
+            echo "Error: failed to parse checksum file for ${asset_name}; aborting install." >&2
+            rm -f "$temp_file" "$checksum_file" 2>/dev/null || true
+            return 1
+        fi
+        actual="$(sha256_file "$temp_file")"
+        if [ "$actual" != "$expected" ]; then
+            echo "Error: checksum mismatch for ${asset_name}; aborting install." >&2
+            rm -f "$temp_file" "$checksum_file" 2>/dev/null || true
+            return 1
+        fi
+    else
+        echo "Warning: download verification disabled (--no-verify). Installing projman without checksum verification." >&2
+    fi
+    rm -f "$checksum_file" 2>/dev/null || true
     
     # 赋予可执行权限
     chmod +x "$temp_file"
@@ -366,6 +473,7 @@ main() {
     # Check dependencies
     check_curl
     check_jq
+    warn_if_token_from_argv
     
     # Fetch latest release
     local release_data
