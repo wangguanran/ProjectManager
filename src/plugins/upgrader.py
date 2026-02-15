@@ -7,6 +7,7 @@ selected install prefix.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -146,6 +147,51 @@ def _download_file(url: str, token: str) -> str:
         raise
 
 
+def _select_checksum_asset(release_data: Dict[str, Any], asset_name: str) -> Optional[Dict[str, Any]]:
+    assets = [asset for asset in (release_data.get("assets") or []) if isinstance(asset, dict)]
+    candidates = [
+        f"{asset_name}.sha256",
+        f"{asset_name}.sha256.txt",
+    ]
+    for candidate in candidates:
+        for asset in assets:
+            name = str(asset.get("name") or "")
+            if name == candidate and asset.get("browser_download_url"):
+                return asset
+    return None
+
+
+def _sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _parse_sha256sum_file(path: str) -> str:
+    try:
+        text = ""
+        with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+            text = handle.read()
+    except OSError as exc:
+        raise RuntimeError(f"Failed to read checksum file: {exc}") from exc
+
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        token = line.split()[0].strip()
+        if len(token) == 64 and all(ch in "0123456789abcdefABCDEF" for ch in token):
+            return token.lower()
+        raise RuntimeError("Invalid sha256 checksum format.")
+
+    raise RuntimeError("Empty sha256 checksum file.")
+
+
 def _select_release_asset(release_data: Dict[str, Any], platform_name: str, arch: str) -> Optional[Dict[str, Any]]:
     assets = [asset for asset in (release_data.get("assets") or []) if isinstance(asset, dict)]
     ext = ".exe" if platform_name == "windows" else ""
@@ -246,6 +292,7 @@ def upgrade(
     user: bool = False,
     prefix: str = "",
     dry_run: bool = False,
+    require_checksum: bool = False,
 ) -> bool:
     """Upgrade projman from latest GitHub release binary.
 
@@ -257,6 +304,7 @@ def upgrade(
         user (bool): Install to user location.
         prefix (str): Install directory override.
         dry_run (bool): Print planned actions without writing files.
+        require_checksum (bool): If True, require a matching sha256 asset and abort if missing.
     """
 
     _ = env
@@ -331,9 +379,30 @@ def upgrade(
     print(f"Install path: {target_path}")
 
     temp_path = ""
+    checksum_path = ""
     try:
         os.makedirs(install_dir, exist_ok=True)
         temp_path = _download_file(download_url, auth_token)
+
+        checksum_asset = _select_checksum_asset(release_data, asset_name)
+        if checksum_asset:
+            checksum_url = str(checksum_asset.get("browser_download_url") or "").strip()
+            if checksum_url:
+                checksum_path = _download_file(checksum_url, auth_token)
+                expected = _parse_sha256sum_file(checksum_path)
+                actual = _sha256_file(temp_path)
+                if actual.lower() != expected.lower():
+                    raise RuntimeError(
+                        f"sha256 mismatch for '{asset_name}': expected {expected}, got {actual}. "
+                        "Refusing to install."
+                    )
+        else:
+            if bool(require_checksum):
+                raise RuntimeError(f"sha256 checksum asset not found for '{asset_name}'. Refusing to install.")
+            log.warning(
+                "sha256 checksum asset not found for '%s'; proceeding without integrity verification.", asset_name
+            )
+
         os.replace(temp_path, target_path)
         temp_path = ""
         _ensure_executable(target_path, platform_name)
@@ -353,6 +422,11 @@ def upgrade(
         if temp_path and os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
+            except OSError:
+                pass
+        if checksum_path and os.path.exists(checksum_path):
+            try:
+                os.remove(checksum_path)
             except OSError:
                 pass
 

@@ -19,6 +19,7 @@ All commands accept the following global options:
 | `--version` | Print the current version | `python -m src --version` |
 | `--help` | Show help for the command or the CLI | `python -m src --help` |
 | `--perf-analyze` | Enable performance analysis logs | `python -m src --perf-analyze po_apply proj1` |
+| `--load-scripts` | Opt-in: import workspace scripts under `projects/scripts/*.py` (unsafe in untrusted workspaces) | `python -m src --load-scripts project_build proj1` |
 
 ---
 
@@ -30,16 +31,17 @@ All commands accept the following global options:
 
 **Syntax**
 ```bash
-python -m src upgrade [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>]
+python -m src upgrade [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
 ```
 
-**Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, and install `projman` to the selected location.
+**Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, optionally verify sha256 checksum (if published), and install `projman` to the selected location.
 
 **Examples**
 ```bash
 python -m src upgrade --user
 python -m src upgrade --prefix ~/.local/bin
 python -m src upgrade --dry-run
+python -m src upgrade --require-checksum
 ```
 
 ---

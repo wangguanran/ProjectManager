@@ -264,7 +264,7 @@ PROJECT_NAME=test_project
         assert "test-project" in result
 
     def test_load_all_projects_multiple_ini_files_error(self):
-        """CFG-006: multiple ini files in board dir triggers AssertionError."""
+        """CFG-006: multiple ini files in board dir triggers a deterministic error."""
         projects_path = self._create_temp_projects_structure()
         board_path = os.path.join(projects_path, "board01")
         os.makedirs(board_path)
@@ -275,8 +275,8 @@ PROJECT_NAME=test_project
             with open(os.path.join(board_path, ini_file), "w", encoding="utf-8") as f:
                 f.write("[test-project]\nPROJECT_NAME=test_project\n")
 
-        # Should raise AssertionError
-        with self.assert_raises(AssertionError):
+        # Should raise ValueError (asserts can be stripped under -O)
+        with self.assert_raises(ValueError):
             self._load_projects_with_config(projects_path)
 
     def test_load_all_projects_no_ini_file(self):
