@@ -51,7 +51,7 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
 
             patch_file = os.path.join(current_dir, fname)
             log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
-            if runtime.applied_record_exists(patch_target, ctx.po_name):
+            if not ctx.reapply and runtime.applied_record_exists(patch_target, ctx.po_name):
                 log.info(
                     "po '%s' already applied for repo '%s', skipping patch '%s'",
                     ctx.po_name,

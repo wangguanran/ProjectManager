@@ -42,7 +42,7 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         else:
             record_repo_root, record_repo_name, path_in_repo = record_repo
 
-        if runtime.applied_record_exists(record_repo_root, ctx.po_name):
+        if not ctx.reapply and runtime.applied_record_exists(record_repo_root, ctx.po_name):
             log.info(
                 "po '%s' already applied for repo '%s', skipping custom copy to '%s'",
                 ctx.po_name,

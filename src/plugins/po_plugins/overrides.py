@@ -101,7 +101,7 @@ def _apply_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     for repo_root, file_list in repo_to_files.items():
         repo_root_abs = os.path.abspath(repo_root)
         record_repo_name = runtime.repo_path_to_name.get(repo_root_abs, "unknown")
-        if runtime.applied_record_exists(repo_root_abs, ctx.po_name):
+        if not ctx.reapply and runtime.applied_record_exists(repo_root_abs, ctx.po_name):
             log.info("po '%s' already applied for repo '%s', skipping overrides", ctx.po_name, record_repo_name)
             continue
 

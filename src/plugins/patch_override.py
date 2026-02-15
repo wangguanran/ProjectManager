@@ -83,6 +83,7 @@ def po_apply(
     project_name: str,
     dry_run: bool = False,
     force: bool = False,
+    reapply: bool = False,
 ) -> bool:
     """
     Apply patch/override/commits for the specified project.
@@ -90,6 +91,9 @@ def po_apply(
         env (dict): Global environment dict.
         projects_info (dict): All projects info.
         project_name (str): Project name.
+        dry_run (bool): If True, only print planned actions without modifying files.
+        force (bool): If True, allow destructive operations like override .remove deletions.
+        reapply (bool): If True, apply POs even if already marked as applied (overwrites po_applied log).
     Returns:
         bool: True if success, otherwise False.
     """
@@ -137,6 +141,9 @@ def po_apply(
         key=lambda plugin: plugin.apply_order,
     )
 
+    if reapply:
+        log.info("--reapply enabled: ignoring existing applied record markers")
+
     ctxs: List[PoPluginContext] = []
     for po_name in apply_pos:
         po_path = os.path.join(po_dir, po_name)
@@ -152,6 +159,7 @@ def po_apply(
                 po_custom_dir=os.path.join(po_path, "custom"),
                 dry_run=dry_run,
                 force=force,
+                reapply=reapply,
                 exclude_files=exclude_files,
                 applied_records={},
             )
@@ -298,6 +306,15 @@ def po_revert(env: Dict, projects_info: Dict, project_name: str, dry_run: bool =
                 log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
                 return False
 
+        # Clear applied flag so the PO can be applied again after a successful revert.
+        po_applied_flag_path = os.path.join(po_dir, po_name, "po_applied")
+        if not dry_run and os.path.isfile(po_applied_flag_path):
+            try:
+                os.remove(po_applied_flag_path)
+                log.debug("Removed po_applied flag: '%s'", po_applied_flag_path)
+            except OSError as e:
+                log.warning("Failed to remove po_applied flag '%s': %s", po_applied_flag_path, e)
+
         log.info("po '%s' has been reverted", po_name)
         if not dry_run:
             for repo_path, _repo_name in repositories or []:
@@ -397,13 +414,10 @@ def po_new(
         """Get modified files in a repository including staged files, with ignore support."""
         modified_files = []
         try:
-            # Change to repository directory
-            original_cwd = os.getcwd()
-            os.chdir(repo_path)
-
             # Get staged files (files in index)
             staged_result = subprocess.run(
                 ["git", "diff", "--name-only", "--cached"],
+                cwd=repo_path,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -416,6 +430,7 @@ def po_new(
             # Get modified and untracked files (files in working directory)
             working_result = subprocess.run(
                 ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
+                cwd=repo_path,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -428,6 +443,7 @@ def po_new(
             # Get deleted files (files that were tracked but are now missing)
             deleted_result = subprocess.run(
                 ["git", "ls-files", "--deleted"],
+                cwd=repo_path,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -458,6 +474,7 @@ def po_new(
                 # Determine file status
                 status_result = subprocess.run(
                     ["git", "status", "--porcelain", file_path],
+                    cwd=repo_path,
                     capture_output=True,
                     text=True,
                     check=False,
@@ -483,9 +500,6 @@ def po_new(
 
                 modified_files.append((repo_name, file_path, status))
 
-            # Return to original directory
-            os.chdir(original_cwd)
-
         except (OSError, subprocess.SubprocessError) as e:
             log.error("Failed to get modified files for repository %s: %s", repo_name, e)
             print(f"Warning: Failed to get modified files for repository {repo_name}: {e}")
@@ -509,13 +523,10 @@ def po_new(
             if not repo_path:
                 return False
 
-            # Change to repository directory
-            original_cwd = os.getcwd()
-            os.chdir(repo_path)
-
             # Check if file is staged
             staged_result = subprocess.run(
                 ["git", "diff", "--name-only", "--cached"],
+                cwd=repo_path,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -574,6 +585,7 @@ def po_new(
             if use_staged:
                 result = subprocess.run(
                     ["git", "diff", "--cached", "--", file_path],
+                    cwd=repo_path,
                     capture_output=True,
                     text=True,
                     check=False,
@@ -582,6 +594,7 @@ def po_new(
             else:
                 result = subprocess.run(
                     ["git", "diff", "--", file_path],
+                    cwd=repo_path,
                     capture_output=True,
                     text=True,
                     check=False,
@@ -593,11 +606,8 @@ def po_new(
                 with open(patch_file_path, "w", encoding="utf-8") as f:
                     f.write(result.stdout)
 
-                # Return to original directory
-                os.chdir(original_cwd)
                 return True
             print(f"    Warning: No changes found for {file_path}")
-            os.chdir(original_cwd)
             return False
 
         except (OSError, subprocess.SubprocessError) as e:
@@ -997,7 +1007,7 @@ def po_new(
     try:
         # Interactive file selection first
         if not force:
-            # 传入env['repositories']和project_cfg
+            # Pass env["repositories"] and project_cfg for interactive selection.
             __interactive_file_selection(po_path, env.get("repositories", []), project_cfg)
 
         # In force mode, create empty directory structure
@@ -1130,7 +1140,8 @@ def po_del(env: Dict, projects_info: Dict, project_name: str, po_name: str, forc
         """Find all projects that use the specified PO."""
         using_projects = []
         for project_name, project_cfg in projects_info.items():
-            po_config = project_cfg.get("PROJECT_PO_CONFIG", "").strip()
+            config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
+            po_config = str(config.get("PROJECT_PO_CONFIG", "")).strip()
             if not po_config:
                 continue
 

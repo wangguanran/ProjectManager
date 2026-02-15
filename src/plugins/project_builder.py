@@ -357,11 +357,20 @@ def project_diff(
 
     for idx, (repo_path, repo_name) in enumerate(repositories):
         print(f"Processing repo {idx + 1}/{len(repositories)}: {repo_name}")
-        original_cwd = os.getcwd()
-        os.chdir(repo_path)
-        staged_files = subprocess.check_output(["git", "diff", "--name-only", "--cached"]).decode().strip().splitlines()
+        staged_files = (
+            subprocess.check_output(
+                ["git", "diff", "--name-only", "--cached"],
+                cwd=repo_path,
+            )
+            .decode()
+            .strip()
+            .splitlines()
+        )
         working_files = (
-            subprocess.check_output(["git", "ls-files", "--modified", "--others", "--exclude-standard"])
+            subprocess.check_output(
+                ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
+                cwd=repo_path,
+            )
             .decode()
             .strip()
             .splitlines()
@@ -392,7 +401,6 @@ def project_diff(
             )
             save_patch(repo_path, file_list, patch_dir, "changes_staged.patch", staged=True)
         save_commits(repo_path, commit_dir)
-        os.chdir(original_cwd)
 
     # Create tar.gz archive of the diff directory
     try:

@@ -58,7 +58,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             log.error("Cannot find repo path for '%s'", repo_name)
             return False
 
-        if runtime.applied_record_exists(patch_target, ctx.po_name):
+        if not ctx.reapply and runtime.applied_record_exists(patch_target, ctx.po_name):
             log.info(
                 "po '%s' already applied for repo '%s', skipping commit '%s'",
                 ctx.po_name,

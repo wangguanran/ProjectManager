@@ -35,6 +35,8 @@ class PoPluginContext:
     force: bool
     exclude_files: Dict[str, set]
     applied_records: Dict[str, Dict[str, Any]]
+    # When True, ignore existing applied record markers and apply again.
+    reapply: bool = False
 
 
 class PoPluginRuntime:
