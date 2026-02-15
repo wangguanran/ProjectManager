@@ -200,6 +200,7 @@
 | PO-022 | PO Delete | po_del cancelled by user | PO exists | 1. Run `python -m src po_del projA po_base`.<br>2. Enter `no`. | Deletion cancelled; PO directory and config unchanged. | P2 | Compatibility |
 | PO-023 | PO List | po_list short names only | Dataset A completed | 1. Run `python -m src po_list projA --short`. | Only PO names printed. | P1 | Functional |
 | PO-024 | PO List | po_list detailed output | Dataset A completed | 1. Run `python -m src po_list projA`. | Outputs commits, patches, overrides, and custom file lists. | P1 | Functional |
+| PO-025 | PO Analyze | po_analyze detects conflicts (JSON) | Dataset A completed with two POs touching same path | 1. Prepare two POs that both touch the same file via patches and/or overrides.<br>2. Run `python -m src po_analyze projA --json`.<br>3. Inspect `conflicts.overrides` and `conflicts.patches`. | JSON includes overlapping paths with the list of POs. Multi-repo targets are reported as `repo1/path/to/file`. | P1 | DX |
 
 ## 9. Utilities & Logging (src/utils.py / src/log_manager.py / src/profiler.py)
 
