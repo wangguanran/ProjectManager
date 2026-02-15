@@ -387,7 +387,7 @@ python -m src po_analyze myproject --json --strict
 
 **语法**:
 ```bash
-python -m src po_new <项目名称> <po名称> [--force]
+python -m src po_new <项目名称> <po名称> [--force] [--tui]
 ```
 
 **描述**: 创建新的PO目录结构，并可选择性地用修改的文件填充它。
@@ -396,6 +396,8 @@ python -m src po_new <项目名称> <po名称> [--force]
 - `项目名称`（必需）: 项目名称
 - `po名称`（必需）: 新PO的名称（必须以'po'开头，只能包含小写字母、数字、下划线）
 - `--force`（可选）: 跳过确认提示并创建空目录结构
+- `--tui`（可选）: 使用交互式 TUI（复选框文件选择 + 动作预览）替代传统输入提示流程
+  - 依赖: `questionary`（安装: `pip install -e ".[tui]"`）
 
 **功能**:
 - 从git仓库中的修改文件进行交互式文件选择
@@ -438,7 +440,7 @@ python -m src po_new myproject po_feature1 --force
 
 **语法**:
 ```bash
-python -m src po_update <项目名称> <po名称> [--force]
+python -m src po_update <项目名称> <po名称> [--force] [--tui]
 ```
 
 **描述**: 更新一个已存在的 PO（PO 目录必须已存在），复用 `po_new` 的交互流程。
@@ -447,6 +449,7 @@ python -m src po_update <项目名称> <po名称> [--force]
 - `项目名称`（必需）: 项目名称
 - `po名称`（必需）: 要更新的 PO 名称
 - `--force`（可选）: 跳过确认提示
+- `--tui`（可选）: 使用交互式 TUI（复选框文件选择 + 动作预览）。依赖 `questionary`（`pip install -e ".[tui]"`）
 
 **示例**:
 ```bash
