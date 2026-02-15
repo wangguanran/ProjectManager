@@ -1,0 +1,8 @@
+{
+  "baseline_error_count": 23,
+  "command": "python -m mypy src crewai_agents --no-color-output",
+  "targets": [
+    "src",
+    "crewai_agents"
+  ]
+}

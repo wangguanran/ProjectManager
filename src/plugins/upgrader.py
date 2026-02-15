@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 from src.log_manager import log
 from src.operations.registry import register
@@ -50,7 +50,10 @@ def _is_admin_user() -> bool:
         try:
             import ctypes
 
-            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+            windll = getattr(ctypes, "windll", None)
+            if windll is None:
+                return False
+            return bool(windll.shell32.IsUserAnAdmin())
         except (AttributeError, OSError):
             return False
 
@@ -75,7 +78,7 @@ def _resolve_install_dir(
     install_mode: str,
     prefix: str,
     is_admin: bool,
-    env_vars: Dict[str, str],
+    env_vars: Mapping[str, str],
 ) -> str:
     if prefix:
         return os.path.abspath(os.path.expanduser(prefix))

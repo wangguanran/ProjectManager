@@ -1,0 +1,42 @@
+name: mypy
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - ".github/workflows/mypy.yml"
+      - "**.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "mypy_baseline.json"
+      - "scripts/mypy_ci.py"
+  pull_request:
+    branches: ["master"]
+    paths:
+      - ".github/workflows/mypy.yml"
+      - "**.py"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "mypy_baseline.json"
+      - "scripts/mypy_ci.py"
+  workflow_dispatch:
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run mypy (ratcheted baseline)
+        run: |
+          make typecheck
+

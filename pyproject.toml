@@ -50,6 +50,7 @@ dev = [
     "black==24.8.0",
     "isort==5.13.2",
     "mypy>=1.5.0",
+    "types-toml>=0.10.8",
     "pre-commit>=3.3.0",
     "crewai>=0.80.0",
 ]
@@ -116,26 +117,18 @@ multi_line_output = 3
 line_length = 88
 known_first_party = ["src"]
 
-# [tool.mypy]
-# python_version = "3.8"
-# warn_return_any = true
-# warn_unused_configs = true
-# disallow_untyped_defs = true
-# disallow_incomplete_defs = true
-# check_untyped_defs = true
-# disallow_untyped_decorators = true
-# no_implicit_optional = true
-# warn_redundant_casts = true
-# warn_unused_ignores = true
-# warn_no_return = true
-# warn_unreachable = true
-# strict_equality = true
+[tool.mypy]
+python_version = "3.9"
+warn_unused_configs = true
+no_implicit_optional = true
+show_error_codes = true
 
-# [[tool.mypy.overrides]]
-# module = [
-#     "GitPython.*",
-# ]
-# ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = [
+    "crewai",
+    "crewai.*",
+]
+ignore_missing_imports = true
 
 [tool.pylint.main]
 fail-under = 10

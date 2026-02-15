@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json as jsonlib
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from src.log_manager import log
 from src.operations.registry import register
@@ -160,7 +160,7 @@ def doctor(env: Dict[str, Any], projects_info: Dict[str, Any], json: bool = Fals
                 try:
                     with open(ini_path, "r", encoding="utf-8") as f:
                         current_section = None
-                        keys_in_section = set()
+                        keys_in_section: Set[str] = set()
                         for raw_line in f:
                             line = raw_line.strip()
                             if not line or line.startswith(";") or line.startswith("#"):
