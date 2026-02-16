@@ -273,3 +273,16 @@ Notes:
 | AI-001 | AI | `ai_review --dry-run` works without API key | Run inside any git repo with local changes | 1. Run `python -m src ai_review --dry-run`.<br>2. Observe stdout. | Prints a redacted, size-limited payload (status + `git diff --stat`) without calling the LLM; exits 0. | P1 | DX |
 | AI-002 | AI | `ai_review` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_review`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P1 | Negative |
 | AI-003 | AI | Full diff sending is explicit opt-in | API key configured | 1. Run `python -m src ai_review --allow-send-diff`.<br>2. Observe review output. | Full diff is included in the request (may be truncated); output includes review and suggests tests; no secrets are printed. | P2 | Privacy |
+
+## 15. MCP Server (src/plugins/mcp_server.py)
+
+Notes:
+- `mcp_server` is intended for machine-to-machine use (external AI agents).
+- **Stdout must be JSON-only**. Logs are written to stderr.
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| MCP-001 | MCP | initialize + tools/list returns JSON-RPC | None | 1. Run:<br>`printf '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\"}}\\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\\n' \\`<br>&nbsp;&nbsp;`| python -m src mcp_server`<br>2. Observe stdout. | Stdout contains two JSON objects: initialize response and tools/list response; no extra text in stdout. | P1 | Functional |
+| MCP-002 | MCP | list_files excludes sensitive paths | None | 1. Call `tools/call` with `name=list_files` and `arguments={\"root\":\".\",\"max_depth\":3}`.<br>2. Inspect returned `structuredContent.files`. | Returned files exclude `.git/`, `.env`, `.agent_artifacts/`, `.cache/` by policy. | P1 | Safety |
+| MCP-003 | MCP | read_file denies `.env` | `.env` exists | 1. Call `tools/call` with `name=read_file` and `arguments={\"path\":\".env\"}`. | Returns `isError=true` and a policy error message; stdout remains JSON-only. | P1 | Negative |
+| MCP-004 | MCP | read_file redacts token-like strings by default | Create `tmp_secrets.txt` containing `ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` | 1. Call `tools/call` with `name=read_file` and `arguments={\"path\":\"tmp_secrets.txt\"}`.<br>2. Inspect returned text. | Output contains redacted form (e.g., `ghp_***`), not the raw token string. | P2 | Safety |
