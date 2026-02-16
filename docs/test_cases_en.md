@@ -284,6 +284,7 @@ Notes:
 | AI-012 | AI | `ai_test --dry-run` works without API key | Repo contains target `.py` file | 1. Run `python -m src ai_test src/utils.py --dry-run`.<br>2. Observe stdout. | Prints a redacted, size-limited payload without calling the LLM; exits 0. | P2 | DX |
 | AI-013 | AI | `ai_test` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_test src/utils.py --allow-send-code`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P2 | Negative |
 | AI-014 | AI | `ai_test` requires explicit `--allow-send-code` | API key configured | 1. Run `python -m src ai_test src/utils.py`.<br>2. Observe output and exit code. | Exits non-zero with a clear message requiring `--allow-send-code` (privacy safety); does not call the LLM. | P2 | Privacy |
+| AI-015 | AI | `ai_test --out` only allows safe workspace paths | API key configured | 1. Run `python -m src ai_test src/utils.py --allow-send-code --out tests/test_ai_out.py`.<br>2. Run `python -m src ai_test src/utils.py --allow-send-code --out ../bad.py`. | Safe path writes file under `tests/` and prints a pytest verification hint; unsafe path is rejected and writes nothing. | P2 | Safety |
 
 ## 15. MCP Server (src/plugins/mcp_server.py)
 
