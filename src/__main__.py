@@ -33,6 +33,7 @@ import_module("src.plugins.snapshot")
 import_module("src.plugins.ai_review")
 import_module("src.plugins.ai_explain")
 import_module("src.plugins.ai_docs")
+import_module("src.plugins.ai_semantic_search")
 import_module("src.plugins.mcp_server")
 
 
