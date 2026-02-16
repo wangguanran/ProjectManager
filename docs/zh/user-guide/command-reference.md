@@ -89,6 +89,37 @@ python -m src ai_explain .cache/latest.log
 python -m src ai_explain build.log --tail-lines 400 --question "为什么失败？下一步怎么排查？"
 ```
 
+### `ai_docs` - AI 辅助文档片段生成（带引用）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src ai_docs <command> [--lang en|zh] [--dry-run] [--out <path>] [--max-input-chars <n>]
+```
+
+**描述**: 为某个 CLI 命令生成可直接写入文档的 Markdown 片段（例如 `ai_review`、`mcp_server`）。模型会被要求用 `[S1]`、`[S2]` 等标记引用来源，便于人工核对与审阅。
+
+**配置方式**
+- 必需（除 `--dry-run` 外）：`PROJMAN_LLM_API_KEY`（或 `OPENAI_API_KEY`）
+- 可选：与 `ai_review` 相同（参考 `.env.example`）
+
+**隐私与安全**
+- 默认只发送少量、已脱敏的 sources（命令 docstring、`.env.example`、已有文档上下文等）。
+- 请求内容有大小限制（可能截断）。
+
+**示例**:
+```bash
+# 只预览将发送给 LLM 的内容，不发起网络请求
+python -m src ai_docs ai_review --dry-run
+
+# 生成英文片段
+python -m src ai_docs mcp_server --lang en
+
+# 生成中文片段
+python -m src ai_docs mcp_server --lang zh
+```
+
 ## MCP 命令
 
 ### `mcp_server` - MCP stdio server（只读工具）

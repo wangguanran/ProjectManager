@@ -143,6 +143,37 @@ python -m src ai_explain .cache/latest.log
 python -m src ai_explain build.log --tail-lines 400 --question "Why did this fail and what should I try next?"
 ```
 
+### `ai_docs` — AI-assisted docs snippet generation (with citations)
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src ai_docs <command> [--lang en|zh] [--dry-run] [--out <path>] [--max-input-chars <n>]
+```
+
+**Description**: Generate a documentation snippet for a CLI command (e.g., `ai_review`, `mcp_server`). The LLM is instructed to cite sources using `[S1]`, `[S2]`, ... so the output is reviewable.
+
+**Configuration**
+- Required (unless `--dry-run`): `PROJMAN_LLM_API_KEY` (or `OPENAI_API_KEY`)
+- Optional: same as `ai_review` (see `.env.example`)
+
+**Privacy / Safety**
+- Only a small, redacted set of sources is sent (docstring + `.env.example` + existing docs context when available).
+- Payload is size-limited (may be truncated).
+
+**Examples**
+```bash
+# Preview payload (no network)
+python -m src ai_docs ai_review --dry-run
+
+# Generate an English snippet for MCP server
+python -m src ai_docs mcp_server --lang en
+
+# Generate a Chinese snippet
+python -m src ai_docs mcp_server --lang zh
+```
+
 ---
 
 ## MCP Commands
