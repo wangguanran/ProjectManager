@@ -213,6 +213,7 @@
 | UTIL-003 | Utils | get_filename creates directory | Remove `.cache/logs` | 1. Run `python -c "from src.utils import get_filename; print(get_filename('T_', '.log', '.cache/logs'))"`. | `.cache/logs` created; returned path contains timestamp. | P3 | Functional |
 | UTIL-004 | Utils | list_file_path depth & filters | Create test tree | 1. Create `tmp/a/b/file.txt`.<br>2. Run `python -c "from src.utils import list_file_path; print(list(list_file_path('tmp', max_depth=1)))"`. | Output excludes paths deeper than depth 1. | P3 | Functional |
 | LOG-001 | Logging | latest.log symlink created | Dataset A completed | 1. Run any command (e.g., `python -m src --help`).<br>2. Check `.cache/latest.log`. | Symlink exists and points to the latest log file. | P2 | Functional |
+| LOG-002 | Logging | Symlink failure does not write to stdout | Force symlink creation to fail (e.g., restricted FS) | 1. Run any command (e.g., `python -m src --help`).<br>2. If symlink creation fails, observe console output streams. | Warning is written to **stderr**; stdout stays clean (MCP-safe). | P2 | Safety |
 | PROF-001 | Profiler | ENABLE_CPROFILE toggles profiling | Use a script setting `builtins.ENABLE_CPROFILE=True` | 1. Call a function decorated with `@func_cprofile`. | cProfile stats appear in logs; process finishes normally. | P3 | Functional |
 
 ## 10. Artifact Saving Rules (src/plugins/project_builder.py)
@@ -260,3 +261,15 @@
 |---|---|---|---|---|---|---|---|
 | SNAP-001 | Ops | `snapshot_create` outputs deterministic JSON | Dataset A completed | 1. Run `python -m src snapshot_create projA > snapshot.json`.<br>2. Run again and compare with previous snapshot. | Snapshot JSON is deterministic for the same workspace state; includes repo HEAD SHAs and resolved enabled POs. | P1 | Ops |
 | SNAP-002 | Ops | `snapshot_validate` detects drift | SNAP-001 completed | 1. Change repo HEAD (new commit) or change enabled POs in config.<br>2. Run `python -m src snapshot_validate snapshot.json --json`. | JSON report indicates drift and exits non-zero when drift exists. | P1 | Ops |
+
+## 14. AI Commands (src/plugins/ai_review.py)
+
+Notes:
+- AI features are **default off** and require an API key via env var (or local `.env`).
+- Do not commit API keys. Use `.env.example` as a template.
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| AI-001 | AI | `ai_review --dry-run` works without API key | Run inside any git repo with local changes | 1. Run `python -m src ai_review --dry-run`.<br>2. Observe stdout. | Prints a redacted, size-limited payload (status + `git diff --stat`) without calling the LLM; exits 0. | P1 | DX |
+| AI-002 | AI | `ai_review` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_review`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P1 | Negative |
+| AI-003 | AI | Full diff sending is explicit opt-in | API key configured | 1. Run `python -m src ai_review --allow-send-diff`.<br>2. Observe review output. | Full diff is included in the request (may be truncated); output includes review and suggests tests; no secrets are printed. | P2 | Privacy |

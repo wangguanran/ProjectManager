@@ -30,6 +30,7 @@ import_module("src.plugins.project_builder")
 import_module("src.plugins.patch_override")
 import_module("src.plugins.doctor")
 import_module("src.plugins.snapshot")
+import_module("src.plugins.ai_review")
 
 
 # ===== Migration utility functions =====

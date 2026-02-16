@@ -74,6 +74,46 @@ python -m src doctor --strict
 
 ---
 
+## AI Commands
+
+### `ai_review` — AI-assisted review of git changes
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src ai_review [repo] [--staged] [--allow-send-diff] [--dry-run] [--out <path>] [--max-input-chars <n>]
+```
+
+**Description**: Generate an AI-assisted review of local git changes. Safe-by-default: without `--allow-send-diff`, it only sends `git status --porcelain` and `git diff --stat` to the LLM.
+
+**Configuration**
+- Required (unless `--dry-run`): `PROJMAN_LLM_API_KEY` (or `OPENAI_API_KEY`)
+- Optional: `PROJMAN_LLM_BASE_URL`, `PROJMAN_LLM_MODEL`, `PROJMAN_LLM_TIMEOUT_SEC`, `PROJMAN_LLM_MAX_INPUT_CHARS`, `PROJMAN_LLM_MAX_OUTPUT_TOKENS`, `PROJMAN_LLM_TEMPERATURE`
+- Template: see `.env.example` (copy to `.env`; `.env` is gitignored)
+
+**Privacy / Safety**
+- Default: does **not** send full diff/source code.
+- Full diff sending requires explicit `--allow-send-diff`.
+- Payload is redacted best-effort and size-limited (may be truncated).
+
+**Examples**
+```bash
+# Preview payload locally without calling the LLM
+python -m src ai_review --dry-run
+
+# Review staged changes only
+python -m src ai_review --staged
+
+# Opt-in to send full diff content (privacy risk)
+python -m src ai_review --allow-send-diff
+
+# Write the review to a file (also prints to stdout)
+python -m src ai_review --out review.md
+```
+
+---
+
 ## Project Management Commands
 
 ### `project_new` — Create a project
