@@ -22,31 +22,45 @@ All commands accept the following global options:
 | `--load-scripts` | Opt-in: import workspace scripts under `projects/scripts/*.py` (unsafe in untrusted workspaces) | `python -m src --load-scripts project_build proj1` |
 | `--no-fuzzy` | Require exact operation match (disable fuzzy matching) | `python -m src --no-fuzzy po_list proj1` |
 | `--safe-mode` | Safe mode for untrusted workspaces (requires explicit confirmation for destructive ops; blocks env-based script loading) | `python -m src --safe-mode po_apply proj1 --dry-run` |
-| `--allow-network` | Safe mode: allow network operations such as `upgrade` | `python -m src --safe-mode --allow-network upgrade --dry-run` |
+| `--allow-network` | Safe mode: allow network operations such as `update`/`upgrade` | `python -m src --safe-mode --allow-network update --dry-run` |
 | `-y`, `--yes` | Safe mode: explicitly confirm destructive operations (non-interactive) | `python -m src --safe-mode -y po_apply proj1` |
 
 ---
 
 ## Maintenance Commands
 
-### `upgrade` — Upgrade projman binary
+### `update` — Update projman binary (stable/beta channels)
 
 **Status**: ✅ Implemented
 
 **Syntax**
 ```bash
-python -m src upgrade [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
+python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
 ```
 
 **Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, optionally verify sha256 checksum (if published), and install `projman` to the selected location.
 
+**Stable vs Beta**
+- Default channel inference (best-effort): if current version contains `+beta`, default to `beta`; otherwise `stable`.
+- `--beta`: upgrade from the latest GitHub prerelease (beta channel).
+- `--stable`: force upgrading from the latest stable release.
+
 **Examples**
 ```bash
-python -m src upgrade --user
-python -m src upgrade --prefix ~/.local/bin
-python -m src upgrade --dry-run
-python -m src upgrade --require-checksum
+python -m src update --user
+python -m src update --prefix ~/.local/bin
+python -m src update --dry-run
+python -m src update --beta --dry-run
+python -m src update --require-checksum
 ```
+
+---
+
+### `upgrade` — Alias of `update`
+
+**Status**: ✅ Implemented
+
+**Description**: `upgrade` is kept for backward compatibility. It behaves the same as `update`.
 
 ---
 

@@ -54,6 +54,15 @@ class TestUpgrader:
         )
         assert result is True
 
+    def test_update_dry_run_succeeds_without_network(self, tmp_path):
+        result = self.upgrader.update(
+            env={},
+            projects_info={},
+            prefix=str(tmp_path / "bin"),
+            dry_run=True,
+        )
+        assert result is True
+
     def test_upgrade_installs_selected_asset(self, tmp_path):
         install_dir = tmp_path / "install-bin"
         downloaded = tmp_path / "downloaded-projman"
@@ -81,6 +90,55 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+            )
+
+        assert result is True
+        target = install_dir / "projman"
+        assert target.exists()
+        assert target.read_bytes() == b"projman-binary"
+
+    def test_upgrade_beta_selects_prerelease(self, tmp_path):
+        install_dir = tmp_path / "install-bin"
+        downloaded = tmp_path / "downloaded-projman"
+        downloaded.write_bytes(b"projman-binary")
+
+        releases = [
+            {
+                "tag_name": "v0.0.12",
+                "prerelease": False,
+                "assets": [
+                    {
+                        "name": "projman-linux-x86_64",
+                        "browser_download_url": "https://example.com/stable",
+                    }
+                ],
+            },
+            {
+                "tag_name": "beta-0.0.13",
+                "prerelease": True,
+                "assets": [
+                    {
+                        "name": "projman-linux-x86_64",
+                        "browser_download_url": "https://example.com/beta",
+                    }
+                ],
+            },
+        ]
+
+        with (
+            patch.object(self.upgrader, "_normalize_platform_name", return_value="linux"),
+            patch.object(self.upgrader, "_normalize_arch", return_value="x86_64"),
+            patch.object(self.upgrader, "_is_admin_user", return_value=False),
+            patch.object(self.upgrader, "_http_get_json", return_value=releases),
+            patch.object(self.upgrader, "_download_file", return_value=str(downloaded)),
+            patch.object(self.upgrader, "_verify_binary", return_value="0.0.13"),
+            patch.object(self.upgrader, "_path_contains", return_value=True),
+        ):
+            result = self.upgrader.upgrade(
+                env={},
+                projects_info={},
+                prefix=str(install_dir),
+                beta=True,
             )
 
         assert result is True

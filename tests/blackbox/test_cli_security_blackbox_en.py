@@ -47,7 +47,7 @@ def test_cli_platform_scripts_not_auto_imported_by_default(tmp_path: Path) -> No
 
     marker = tmp_path / "scripts_imported.txt"
     assert not marker.exists()
-    cp = _run_cli(tmp_path, "upgrade", "--dry-run")
+    cp = _run_cli(tmp_path, "update", "--dry-run")
     assert cp.returncode == 0
     assert not marker.exists()
 
@@ -69,6 +69,6 @@ def test_cli_platform_scripts_imported_when_opted_in(tmp_path: Path) -> None:
 
     marker = tmp_path / "scripts_imported.txt"
     assert not marker.exists()
-    cp = _run_cli(tmp_path, "--load-scripts", "upgrade", "--dry-run")
+    cp = _run_cli(tmp_path, "--load-scripts", "update", "--dry-run")
     assert cp.returncode == 0
     assert marker.exists()

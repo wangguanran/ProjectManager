@@ -585,12 +585,12 @@ def _parse_args_and_plugin_args(builtin_operations):
     parser.add_argument(
         "--safe-mode",
         action="store_true",
-        help="Enable safe mode for untrusted workspaces (blocks env-based script loading; requires confirmation for destructive ops; blocks network upgrade unless allowed).",
+        help="Enable safe mode for untrusted workspaces (blocks env-based script loading; requires confirmation for destructive ops; blocks network update/upgrade unless allowed).",
     )
     parser.add_argument(
         "--allow-network",
         action="store_true",
-        help="Safe mode: allow network operations such as 'upgrade'.",
+        help="Safe mode: allow network operations such as 'update'/'upgrade'.",
     )
     parser.add_argument(
         "-y",
@@ -1015,6 +1015,7 @@ def main():
     if operate in all_operations:
         if safe_mode:
             destructive_ops = {
+                "update",
                 "upgrade",
                 "po_apply",
                 "po_revert",
@@ -1028,9 +1029,9 @@ def main():
                 "board_del",
             }
             is_dry_run = _arg_truthy(parsed_kwargs.get("dry_run"))
-            if operate == "upgrade" and not is_dry_run and not allow_network:
-                log.error("Safe mode blocks networked upgrade without --allow-network.")
-                print("Error: --safe-mode blocks 'upgrade' without --allow-network (use --dry-run to preview).")
+            if operate in {"update", "upgrade"} and not is_dry_run and not allow_network:
+                log.error("Safe mode blocks networked %s without --allow-network.", operate)
+                print(f"Error: --safe-mode blocks '{operate}' without --allow-network (use --dry-run to preview).")
                 sys.exit(1)
             if operate in destructive_ops and not is_dry_run and not confirmed:
                 log.error("Safe mode blocks destructive operation '%s' without --dry-run or --yes.", operate)

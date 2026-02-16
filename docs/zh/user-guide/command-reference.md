@@ -20,6 +20,38 @@ python -m src <命令> <参数> [选项]
 | `--help` | 显示帮助信息 | `python -m src --help` |
 | `--perf-analyze` | 启用性能分析 | `python -m src --perf-analyze po_apply proj1` |
 
+## 维护命令
+
+### `update` - 更新 projman（二进制升级，支持 stable/beta 通道）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
+```
+
+**描述**: 自动检测当前平台/架构，从 GitHub Release 拉取最新二进制并安装到目标目录。若 Release 中存在匹配的 `.sha256` 资产，会进行 sha256 校验（可用 `--require-checksum` 强制必须存在 checksum）。
+
+**Stable vs Beta**
+- 默认通道推断（best-effort）：当前版本包含 `+beta` 则默认 `beta`，否则默认 `stable`。
+- `--beta`：升级到最新 prerelease（beta 通道）。
+- `--stable`：强制从最新 stable release 升级（覆盖默认推断）。
+
+**示例**:
+```bash
+python -m src update --dry-run
+python -m src update --beta --dry-run
+python -m src update --user
+python -m src update --require-checksum
+```
+
+### `upgrade` - `update` 的别名
+
+**状态**: ✅ 已实现
+
+**描述**: `upgrade` 为历史命令名，为兼容性保留，行为与 `update` 相同。
+
 ## AI 命令
 
 ### `ai_review` - AI 辅助代码变更评审

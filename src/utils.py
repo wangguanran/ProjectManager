@@ -91,6 +91,19 @@ def get_version():
                 return sha
         return ""
 
+    def _try_get_build_release_channel() -> str:
+        # Prefer build-time embedded channel marker when available.
+        for mod_name in ("src._build_info", "_build_info"):
+            try:
+                build_info = importlib.import_module(mod_name)
+            except ImportError:
+                continue
+            ch = getattr(build_info, "RELEASE_CHANNEL", "")
+            ch = str(ch).strip().lower()
+            if ch in {"stable", "beta"}:
+                return ch
+        return ""
+
     def _try_get_git_sha_from_repo(repo_dir: str) -> str:
         # Best-effort: only for dev/source runs where `.git` exists.
         try:
@@ -122,6 +135,7 @@ def get_version():
 
         # Build-time embedded hash, if available
         git_sha = _try_get_build_git_sha()
+        release_channel = _try_get_build_release_channel()
 
         # Fallback to git (dev/source execution)
         if not git_sha:
@@ -129,9 +143,15 @@ def get_version():
             repo_dir = os.path.realpath(os.path.join(base_dir, ".."))
             git_sha = _try_get_git_sha_from_repo(repo_dir)
 
+        local_parts = []
+        if release_channel:
+            local_parts.append(release_channel)
         if git_sha:
+            local_parts.append(f"g{git_sha}")
+
+        if local_parts:
             # PEP 440 local version segment (display-only; does not change package metadata).
-            return f"{base_version}+g{git_sha}"
+            return f"{base_version}+{'.'.join(local_parts)}"
         return base_version
     except (OSError, KeyError, toml.TomlDecodeError):
         return "0.0.0-dev"

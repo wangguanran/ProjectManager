@@ -43,8 +43,8 @@ def test_cli_002b_help_no_projects_dir_no_warnings(empty_workspace: Path) -> Non
     assert "projects directory does not exist" not in result.stderr.lower()
 
 
-def test_cli_002c_upgrade_dry_run_no_projects_dir_no_warnings(empty_workspace: Path) -> None:
-    result = run_cli(["upgrade", "--dry-run"], cwd=empty_workspace)
+def test_cli_002c_update_dry_run_no_projects_dir_no_warnings(empty_workspace: Path) -> None:
+    result = run_cli(["update", "--dry-run"], cwd=empty_workspace)
     assert result.returncode == 0
     assert "common config not found" not in result.stderr.lower()
     assert "projects directory does not exist" not in result.stderr.lower()
