@@ -58,6 +58,37 @@ python -m src ai_review --allow-send-diff
 python -m src ai_review --out review.md
 ```
 
+## MCP 命令
+
+### `mcp_server` - MCP stdio server（只读工具）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src mcp_server [--root <path>]
+```
+
+**描述**: 通过 stdio 启动 MCP server（newline-delimited JSON-RPC 2.0），用于外部 AI/智能体调用。**stdout 仅输出 JSON**（机器可读），日志输出到 stderr。
+
+**暴露的工具（MVP）**
+- `list_files`: 列出安全的相对路径（策略默认排除 `.git/`、`.env`、`.agent_artifacts/`、`.cache/`）
+- `read_file`: 读取文本文件（best-effort 脱敏；大小限制）
+- `search_code`: 搜索代码（优先使用 `rg`；否则回退到 Python 搜索）
+- `get_repo_profile`: 读取最新 `.agent_artifacts/.../repo_profile.json`
+- `get_findings`: 读取最新 `.agent_artifacts/.../findings.json`
+
+**安全与隐私**
+- 路径被 sandbox 到 `--root`（默认当前目录）。
+- 默认排除常见敏感目录/文件。
+- 输出会进行 best-effort 脱敏（token/key/password 等模式）。
+
+**示例**:
+```bash
+python -m src mcp_server
+python -m src mcp_server --root .
+```
+
 ## 项目管理命令
 
 ### `project_new` - 创建新项目

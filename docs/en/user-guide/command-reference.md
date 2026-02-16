@@ -114,6 +114,39 @@ python -m src ai_review --out review.md
 
 ---
 
+## MCP Commands
+
+### `mcp_server` — MCP stdio server (read-only tools)
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src mcp_server [--root <path>]
+```
+
+**Description**: Start an MCP server over stdio (newline-delimited JSON-RPC 2.0). Designed for external AI agents. **Stdout is JSON-only**; logs go to stderr.
+
+**Tools exposed (MVP)**
+- `list_files`: list safe relative paths (policy excludes `.git/`, `.env`, `.agent_artifacts/`, `.cache/`)
+- `read_file`: read a text file (best-effort redaction; size-limited)
+- `search_code`: search code (`rg` if available; fallback to Python search)
+- `get_repo_profile`: read latest `.agent_artifacts/.../repo_profile.json`
+- `get_findings`: read latest `.agent_artifacts/.../findings.json`
+
+**Safety / Privacy**
+- Path sandboxed to `--root` (default: current working directory).
+- Excludes common sensitive dirs/files by policy.
+- Tool outputs are redacted best-effort (tokens/keys/password-like patterns).
+
+**Examples**
+```bash
+python -m src mcp_server
+python -m src mcp_server --root .
+```
+
+---
+
 ## Project Management Commands
 
 ### `project_new` — Create a project
