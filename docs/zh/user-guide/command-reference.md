@@ -20,6 +20,44 @@ python -m src <命令> <参数> [选项]
 | `--help` | 显示帮助信息 | `python -m src --help` |
 | `--perf-analyze` | 启用性能分析 | `python -m src --perf-analyze po_apply proj1` |
 
+## AI 命令
+
+### `ai_review` - AI 辅助代码变更评审
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src ai_review [repo] [--staged] [--allow-send-diff] [--dry-run] [--out <path>] [--max-input-chars <n>]
+```
+
+**描述**: 对当前 git 变更生成 AI 评审建议。默认安全策略：不发送完整 diff/源码，仅发送 `git status --porcelain` 和 `git diff --stat`；只有显式指定 `--allow-send-diff` 才会发送完整 diff（可能会截断）。
+
+**配置方式**
+- 必需（除 `--dry-run` 外）：`PROJMAN_LLM_API_KEY`（或 `OPENAI_API_KEY`）
+- 可选：`PROJMAN_LLM_BASE_URL` / `PROJMAN_LLM_MODEL` / `PROJMAN_LLM_TIMEOUT_SEC` / `PROJMAN_LLM_MAX_INPUT_CHARS` / `PROJMAN_LLM_MAX_OUTPUT_TOKENS` / `PROJMAN_LLM_TEMPERATURE`
+- 模板：参考 `.env.example`（可复制为 `.env`；本仓库已默认忽略 `.env`）
+
+**隐私与安全**
+- 默认：不会发送完整 diff/源码。
+- 发送完整 diff 需要显式 `--allow-send-diff`。
+- 请求内容会进行 best-effort 脱敏与大小限制（可能截断）。
+
+**示例**:
+```bash
+# 只预览将发送给 LLM 的内容，不发起网络请求
+python -m src ai_review --dry-run
+
+# 只评审 staged 变更
+python -m src ai_review --staged
+
+# 显式允许发送完整 diff（隐私风险）
+python -m src ai_review --allow-send-diff
+
+# 输出到文件（同时也会打印到 stdout）
+python -m src ai_review --out review.md
+```
+
 ## 项目管理命令
 
 ### `project_new` - 创建新项目

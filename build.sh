@@ -121,11 +121,13 @@ pyinstaller \
     --hidden-import=src.plugins.patch_override \
     --hidden-import=src.plugins.doctor \
     --hidden-import=src.plugins.snapshot \
+    --hidden-import=src.plugins.ai_review \
     --hidden-import=src.plugins.po_plugins \
     --hidden-import=src.operations.registry \
     --hidden-import=src.log_manager \
     --hidden-import=src.profiler \
     --hidden-import=src.utils \
+    --hidden-import=src.ai.llm \
     --hidden-import=src._build_info \
     "${IMPORTLIB_METADATA_ARGS[@]}" \
     --collect-all=git \
