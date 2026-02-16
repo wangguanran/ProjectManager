@@ -58,6 +58,37 @@ python -m src ai_review --allow-send-diff
 python -m src ai_review --out review.md
 ```
 
+### `ai_explain` - AI 辅助日志/CI 失败分析
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src ai_explain [path] [--tail-lines <n>] [--dry-run] [--out <path>] [--max-input-chars <n>] [--question <text>]
+```
+
+**描述**: 读取日志文件尾部片段并交给 LLM 进行分析，输出可能的根因、下一步建议与验证方式。默认读取仓库根目录下的 `.cache/latest.log`，并对请求内容进行 best-effort 脱敏与大小限制。
+
+**配置方式**
+- 必需（除 `--dry-run` 外）：`PROJMAN_LLM_API_KEY`（或 `OPENAI_API_KEY`）
+- 可选：与 `ai_review` 相同（参考 `.env.example`）
+
+**隐私与安全**
+- 仅发送尾部片段（默认最后 200 行）。
+- 请求内容会进行 best-effort 脱敏与大小限制（可能截断）。
+
+**示例**:
+```bash
+# 只预览将发送给 LLM 的内容，不发起网络请求
+python -m src ai_explain --dry-run
+
+# 分析最新日志
+python -m src ai_explain .cache/latest.log
+
+# 扩大尾部窗口并附带问题
+python -m src ai_explain build.log --tail-lines 400 --question "为什么失败？下一步怎么排查？"
+```
+
 ## MCP 命令
 
 ### `mcp_server` - MCP stdio server（只读工具）

@@ -112,6 +112,37 @@ python -m src ai_review --allow-send-diff
 python -m src ai_review --out review.md
 ```
 
+### `ai_explain` — AI-assisted explanation of logs/CI failures
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src ai_explain [path] [--tail-lines <n>] [--dry-run] [--out <path>] [--max-input-chars <n>] [--question <text>]
+```
+
+**Description**: Explain a failure by analyzing the tail of a log file. By default it reads `.cache/latest.log` under the repo root and sends a redacted, size-limited excerpt to the LLM.
+
+**Configuration**
+- Required (unless `--dry-run`): `PROJMAN_LLM_API_KEY` (or `OPENAI_API_KEY`)
+- Optional: same as `ai_review` (see `.env.example`)
+
+**Privacy / Safety**
+- Sends only a tail excerpt (default: last 200 lines).
+- Payload is redacted best-effort and size-limited (may be truncated).
+
+**Examples**
+```bash
+# Preview what would be sent (no network)
+python -m src ai_explain --dry-run
+
+# Explain the latest log symlink
+python -m src ai_explain .cache/latest.log
+
+# Use a bigger tail window and include a question
+python -m src ai_explain build.log --tail-lines 400 --question "Why did this fail and what should I try next?"
+```
+
 ---
 
 ## MCP Commands

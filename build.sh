@@ -122,6 +122,7 @@ pyinstaller \
     --hidden-import=src.plugins.doctor \
     --hidden-import=src.plugins.snapshot \
     --hidden-import=src.plugins.ai_review \
+    --hidden-import=src.plugins.ai_explain \
     --hidden-import=src.plugins.mcp_server \
     --hidden-import=src.plugins.po_plugins \
     --hidden-import=src.operations.registry \

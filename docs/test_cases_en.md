@@ -273,6 +273,8 @@ Notes:
 | AI-001 | AI | `ai_review --dry-run` works without API key | Run inside any git repo with local changes | 1. Run `python -m src ai_review --dry-run`.<br>2. Observe stdout. | Prints a redacted, size-limited payload (status + `git diff --stat`) without calling the LLM; exits 0. | P1 | DX |
 | AI-002 | AI | `ai_review` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_review`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P1 | Negative |
 | AI-003 | AI | Full diff sending is explicit opt-in | API key configured | 1. Run `python -m src ai_review --allow-send-diff`.<br>2. Observe review output. | Full diff is included in the request (may be truncated); output includes review and suggests tests; no secrets are printed. | P2 | Privacy |
+| AI-004 | AI | `ai_explain --dry-run` works without API key | Any command has been run to create logs | 1. Run `python -m src --help`.<br>2. Run `python -m src ai_explain --dry-run`.<br>3. Observe stdout. | Prints a redacted, size-limited payload (tail excerpt from `.cache/latest.log`) without calling the LLM; exits 0. | P1 | DX |
+| AI-005 | AI | `ai_explain` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_explain`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P1 | Negative |
 
 ## 15. MCP Server (src/plugins/mcp_server.py)
 
