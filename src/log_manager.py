@@ -9,6 +9,7 @@ import logging
 import logging.config
 import os
 import re
+import sys
 from typing import Any, Optional
 
 from src.utils import get_filename
@@ -191,7 +192,8 @@ class LogManager:
             os.symlink(log_file_path, LATEST_LOG_LINK)
         except OSError as e:
             # If symlink creation fails, log the error but don't crash
-            print(f"Warning: Failed to create log symlink: {e}")
+            # IMPORTANT: write to stderr (stdout must stay clean for machine-readable use cases).
+            print(f"Warning: Failed to create log symlink: {e}", file=sys.stderr)
 
     def get_logger(self):
         """Get logger instance."""

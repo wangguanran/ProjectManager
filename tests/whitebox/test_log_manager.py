@@ -247,6 +247,24 @@ class TestLogManager:
                 assert file_handlers, "Expected at least one FileHandler"
                 assert os.path.realpath(os.readlink(latest_link)) == os.path.realpath(file_handlers[0].baseFilename)
 
+    def test_latest_log_symlink_failure_writes_to_stderr(self, capsys):
+        """LOG-002: symlink failure should not write to stdout (MCP-safe)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            latest_link = os.path.join(temp_dir, "latest.log")
+
+            with (
+                patch("src.log_manager.LOG_PATH", logs_dir),
+                patch("src.log_manager.LATEST_LOG_LINK", latest_link),
+                patch("src.log_manager.os.symlink", side_effect=OSError("boom")),
+            ):
+                lm = self.log_manager()
+                _logger = lm.get_logger()
+
+                captured = capsys.readouterr()
+                assert captured.out == ""
+                assert "Failed to create log symlink" in captured.err
+
     def test_logger_multiple_instances(self):
         """Test multiple instances of LogManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
