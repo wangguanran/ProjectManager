@@ -174,6 +174,65 @@ python -m src ai_docs mcp_server --lang en
 python -m src ai_docs mcp_server --lang zh
 ```
 
+### `ai_index` — Build semantic search index (embeddings)
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src ai_index [--allow-send-code] [--dry-run] [--max-files <n>] [--max-chunks <n>]
+```
+
+**Description**: Build a local semantic search index under `.cache/ai_index/semantic_index.json` by embedding chunks of documentation (default) and optionally source code. This enables `ai_search`.
+
+**Configuration**
+- Required (unless `--dry-run`): `PROJMAN_LLM_API_KEY` (or `OPENAI_API_KEY`)
+- Optional: `PROJMAN_LLM_BASE_URL`, `PROJMAN_LLM_EMBEDDING_MODEL`, `PROJMAN_LLM_TIMEOUT_SEC`, `PROJMAN_LLM_MAX_INPUT_CHARS`
+- Template: see `.env.example` (copy to `.env`; `.env` is gitignored)
+
+**Privacy / Safety**
+- Default: indexes docs only (`README.md` and `docs/`).
+- Indexing source code requires explicit `--allow-send-code` (privacy/cost risk).
+- Inputs sent to the LLM are redacted best-effort and size-limited (may be truncated).
+- The index stores only a short, redacted text snippet per chunk (not full source).
+
+**Examples**
+```bash
+# Preview what would be indexed (no network)
+python -m src ai_index --dry-run
+
+# Build docs-only index (requires API key)
+python -m src ai_index
+
+# Opt-in: include src/tests in indexing (privacy risk)
+python -m src ai_index --allow-send-code --max-files 200 --max-chunks 200
+```
+
+### `ai_search` — Semantic search over the index (embeddings)
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src ai_search --query <text> [--top-k <n>] [--index-path <path>]
+```
+
+**Description**: Query the semantic index built by `ai_index`. Prints top matches with file path + line range and a short snippet.
+
+**Configuration**
+- Required: `PROJMAN_LLM_API_KEY` (or `OPENAI_API_KEY`)
+- Optional: `PROJMAN_LLM_BASE_URL`, `PROJMAN_LLM_EMBEDDING_MODEL`, `PROJMAN_LLM_TIMEOUT_SEC`
+
+**Privacy / Safety**
+- Query is redacted best-effort before sending to the embeddings API.
+- Results are printed with redacted snippets.
+
+**Examples**
+```bash
+python -m src ai_index
+python -m src ai_search --query "Where is MCP implemented?" --top-k 5
+```
+
 ---
 
 ## MCP Commands

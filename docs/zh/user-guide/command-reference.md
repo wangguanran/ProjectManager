@@ -120,6 +120,65 @@ python -m src ai_docs mcp_server --lang en
 python -m src ai_docs mcp_server --lang zh
 ```
 
+### `ai_index` - 构建语义检索索引（Embeddings）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src ai_index [--allow-send-code] [--dry-run] [--max-files <n>] [--max-chunks <n>]
+```
+
+**描述**: 将文档（默认）以及可选的源代码分块后调用 embeddings 接口，生成本地语义检索索引 `.cache/ai_index/semantic_index.json`，用于后续 `ai_search`。
+
+**配置方式**
+- 必需（除 `--dry-run` 外）：`PROJMAN_LLM_API_KEY`（或 `OPENAI_API_KEY`）
+- 可选：`PROJMAN_LLM_BASE_URL` / `PROJMAN_LLM_EMBEDDING_MODEL` / `PROJMAN_LLM_TIMEOUT_SEC` / `PROJMAN_LLM_MAX_INPUT_CHARS`
+- 模板：参考 `.env.example`（可复制为 `.env`；本仓库已默认忽略 `.env`）
+
+**隐私与安全**
+- 默认只索引文档（`README.md` + `docs/`）。
+- 索引源码必须显式指定 `--allow-send-code`（隐私/成本风险）。
+- 发送给 LLM 的内容会进行 best-effort 脱敏与大小限制（可能截断）。
+- 本地索引只保存每个分块的短摘要（已脱敏），不会保存完整源码。
+
+**示例**:
+```bash
+# 只预览将要索引的文件清单，不发起网络请求
+python -m src ai_index --dry-run
+
+# 构建文档索引（需要 API key）
+python -m src ai_index
+
+# 显式允许索引源码（隐私风险）
+python -m src ai_index --allow-send-code --max-files 200 --max-chunks 200
+```
+
+### `ai_search` - 基于语义索引的检索（Embeddings）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src ai_search --query <text> [--top-k <n>] [--index-path <path>]
+```
+
+**描述**: 查询 `ai_index` 生成的语义索引，输出 Top-K 匹配结果（文件路径 + 行号范围 + 短摘要）。
+
+**配置方式**
+- 必需：`PROJMAN_LLM_API_KEY`（或 `OPENAI_API_KEY`）
+- 可选：`PROJMAN_LLM_BASE_URL` / `PROJMAN_LLM_EMBEDDING_MODEL` / `PROJMAN_LLM_TIMEOUT_SEC`
+
+**隐私与安全**
+- Query 会在发送前 best-effort 脱敏。
+- 输出结果中的摘要也会进行 best-effort 脱敏。
+
+**示例**:
+```bash
+python -m src ai_index
+python -m src ai_search --query "MCP 在哪里实现？" --top-k 5
+```
+
 ## MCP 命令
 
 ### `mcp_server` - MCP stdio server（只读工具）
