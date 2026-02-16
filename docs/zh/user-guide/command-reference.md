@@ -120,6 +120,37 @@ python -m src ai_docs mcp_server --lang en
 python -m src ai_docs mcp_server --lang zh
 ```
 
+### `ai_test` - AI 辅助单测脚手架生成（pytest）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src ai_test <path> [--symbol <name>] [--allow-send-code] [--dry-run] [--max-input-chars <n>]
+```
+
+**描述**: 为指定的 Python 文件（可选聚焦到某个函数/类）生成 pytest 单测脚手架。MVP 仅输出到 stdout（不写入文件）。
+
+**配置方式**
+- 必需（除 `--dry-run` 外）：`PROJMAN_LLM_API_KEY`（或 `OPENAI_API_KEY`）
+- 可选：`PROJMAN_LLM_BASE_URL` / `PROJMAN_LLM_MODEL` / `PROJMAN_LLM_TIMEOUT_SEC` / `PROJMAN_LLM_MAX_INPUT_CHARS` / `PROJMAN_LLM_MAX_OUTPUT_TOKENS` / `PROJMAN_LLM_TEMPERATURE`
+- 模板：参考 `.env.example`（可复制为 `.env`；本仓库已默认忽略 `.env`）
+
+**隐私与安全**
+- 默认拒绝发送源码。
+- 发送源码必须显式指定 `--allow-send-code`（隐私风险）。
+- 仅发送用户选择的单个文件（best-effort 脱敏 + 大小限制；可能截断）。
+- MVP 不会写文件，如需保存可自行重定向 stdout。
+
+**示例**:
+```bash
+# 只预览将发送给 LLM 的内容，不发起网络请求
+python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --dry-run
+
+# 生成测试（需要 API key + 显式允许发送源码）
+python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --allow-send-code
+```
+
 ### `ai_index` - 构建语义检索索引（Embeddings）
 
 **状态**: ✅ 已实现
