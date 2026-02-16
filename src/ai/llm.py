@@ -70,12 +70,14 @@ def _dotenv_load_if_present(dotenv_path: str) -> None:
 
 
 @dataclass(frozen=True)
+# pylint: disable=too-many-instance-attributes
 class LLMConfig:
     """Configuration for OpenAI-compatible LLM calls."""
 
     api_key: str
     base_url: str
     model: str
+    embedding_model: str
     timeout_sec: int
     max_input_chars: int
     max_output_tokens: int
@@ -95,6 +97,7 @@ def load_llm_config(*, root_path: str) -> Optional[LLMConfig]:
 
     base_url = (os.environ.get("PROJMAN_LLM_BASE_URL") or "https://api.openai.com/v1").strip()
     model = (os.environ.get("PROJMAN_LLM_MODEL") or "gpt-4o-mini").strip()
+    embedding_model = (os.environ.get("PROJMAN_LLM_EMBEDDING_MODEL") or "text-embedding-3-small").strip()
     timeout_sec = _parse_int(os.environ.get("PROJMAN_LLM_TIMEOUT_SEC", ""), default=30)
     max_input_chars = _parse_int(os.environ.get("PROJMAN_LLM_MAX_INPUT_CHARS", ""), default=12000)
     max_output_tokens = _parse_int(os.environ.get("PROJMAN_LLM_MAX_OUTPUT_TOKENS", ""), default=700)
@@ -104,6 +107,7 @@ def load_llm_config(*, root_path: str) -> Optional[LLMConfig]:
         api_key=api_key,
         base_url=base_url,
         model=model,
+        embedding_model=embedding_model,
         timeout_sec=timeout_sec,
         max_input_chars=max_input_chars,
         max_output_tokens=max_output_tokens,
@@ -171,3 +175,52 @@ def openai_compatible_chat(
     except (ValueError, TypeError) as exc:
         safe_body = redact_secrets(body)[:800]
         raise LLMError(f"LLM response parse failed: {safe_body}") from exc
+
+
+def openai_compatible_embeddings(
+    *,
+    cfg: LLMConfig,
+    inputs: List[str],
+) -> List[List[float]]:
+    """Call OpenAI-compatible Embeddings API and return embeddings in input order."""
+    if not inputs:
+        return []
+
+    url = cfg.base_url.rstrip("/") + "/embeddings"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {cfg.api_key}",
+    }
+    payload: Dict[str, Any] = {
+        "model": cfg.embedding_model,
+        "input": inputs,
+    }
+
+    log.info("AI embeddings request: model=%s base_url=%s inputs=%d", cfg.embedding_model, cfg.base_url, len(inputs))
+
+    status, body = _post_json(url=url, headers=headers, payload=payload, timeout_sec=cfg.timeout_sec)
+    if status < 200 or status >= 300:
+        safe_body = redact_secrets(body)[:800]
+        raise LLMError(f"LLM embeddings request failed (HTTP {status}): {safe_body}")
+
+    try:
+        data = json.loads(body)
+        items = data.get("data") or []
+        if not items or not isinstance(items, list):
+            raise LLMError("LLM embeddings response missing data")
+        # Preserve input order via index field.
+        indexed: Dict[int, List[float]] = {}
+        for it in items:
+            idx = it.get("index")
+            emb = it.get("embedding")
+            if isinstance(idx, int) and isinstance(emb, list):
+                indexed[idx] = emb
+        out: List[List[float]] = []
+        for i in range(len(inputs)):
+            if i not in indexed:
+                raise LLMError("LLM embeddings response missing index")
+            out.append(indexed[i])
+        return out
+    except (ValueError, TypeError) as exc:
+        safe_body = redact_secrets(body)[:800]
+        raise LLMError(f"LLM embeddings response parse failed: {safe_body}") from exc
