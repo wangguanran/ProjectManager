@@ -174,6 +174,37 @@ python -m src ai_docs mcp_server --lang en
 python -m src ai_docs mcp_server --lang zh
 ```
 
+### `ai_test` — AI-assisted pytest scaffold generation
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src ai_test <path> [--symbol <name>] [--allow-send-code] [--dry-run] [--max-input-chars <n>]
+```
+
+**Description**: Generate pytest unit test scaffolds for a selected Python file (and optional symbol). Outputs a single Python test file content to stdout.
+
+**Configuration**
+- Required (unless `--dry-run`): `PROJMAN_LLM_API_KEY` (or `OPENAI_API_KEY`)
+- Optional: `PROJMAN_LLM_BASE_URL`, `PROJMAN_LLM_MODEL`, `PROJMAN_LLM_TIMEOUT_SEC`, `PROJMAN_LLM_MAX_INPUT_CHARS`, `PROJMAN_LLM_MAX_OUTPUT_TOKENS`, `PROJMAN_LLM_TEMPERATURE`
+- Template: see `.env.example` (copy to `.env`; `.env` is gitignored)
+
+**Privacy / Safety**
+- Default: refuses to send source code.
+- Sending source code requires explicit `--allow-send-code` (privacy risk).
+- Only the selected file is sent (redacted best-effort + size-limited; may be truncated).
+- No file is written in the MVP; redirect stdout if you want to save the output.
+
+**Examples**
+```bash
+# Preview payload (no network)
+python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --dry-run
+
+# Generate tests (requires API key + explicit opt-in to send code)
+python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --allow-send-code
+```
+
 ### `ai_index` — Build semantic search index (embeddings)
 
 **Status**: ✅ Implemented

@@ -281,6 +281,9 @@ Notes:
 | AI-009 | AI | `ai_index` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_index`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; no index file is written. | P2 | Negative |
 | AI-010 | AI | Indexing source code requires explicit opt-in | API key configured | 1. Run `python -m src ai_index`.<br>2. Inspect printed plan or resulting index metadata.<br>3. Run `python -m src ai_index --allow-send-code --dry-run`.<br>4. Compare file list. | Default indexes docs only; source code files under `src/` / `tests/` appear only when `--allow-send-code` is set. | P2 | Privacy |
 | AI-011 | AI | `ai_search` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_search --query \"where is MCP implemented\"`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P2 | Negative |
+| AI-012 | AI | `ai_test --dry-run` works without API key | Repo contains target `.py` file | 1. Run `python -m src ai_test src/utils.py --dry-run`.<br>2. Observe stdout. | Prints a redacted, size-limited payload without calling the LLM; exits 0. | P2 | DX |
+| AI-013 | AI | `ai_test` errors cleanly when key missing | No `PROJMAN_LLM_API_KEY` / `OPENAI_API_KEY` configured | 1. Run `python -m src ai_test src/utils.py --allow-send-code`.<br>2. Observe output and exit code. | Exits non-zero with a clear \"AI is disabled\" message; other commands remain unaffected. | P2 | Negative |
+| AI-014 | AI | `ai_test` requires explicit `--allow-send-code` | API key configured | 1. Run `python -m src ai_test src/utils.py`.<br>2. Observe output and exit code. | Exits non-zero with a clear message requiring `--allow-send-code` (privacy safety); does not call the LLM. | P2 | Privacy |
 
 ## 15. MCP Server (src/plugins/mcp_server.py)
 
