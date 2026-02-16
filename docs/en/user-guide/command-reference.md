@@ -180,7 +180,7 @@ python -m src ai_docs mcp_server --lang zh
 
 **Syntax**
 ```bash
-python -m src ai_test <path> [--symbol <name>] [--allow-send-code] [--dry-run] [--max-input-chars <n>]
+python -m src ai_test <path> [--symbol <name>] [--allow-send-code] [--out <path>] [--dry-run] [--max-input-chars <n>]
 ```
 
 **Description**: Generate pytest unit test scaffolds for a selected Python file (and optional symbol). Outputs a single Python test file content to stdout.
@@ -194,7 +194,7 @@ python -m src ai_test <path> [--symbol <name>] [--allow-send-code] [--dry-run] [
 - Default: refuses to send source code.
 - Sending source code requires explicit `--allow-send-code` (privacy risk).
 - Only the selected file is sent (redacted best-effort + size-limited; may be truncated).
-- No file is written in the MVP; redirect stdout if you want to save the output.
+- Default writes no files; use `--out` to write within the workspace (unsafe paths are rejected).
 
 **Examples**
 ```bash
@@ -203,6 +203,9 @@ python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --d
 
 # Generate tests (requires API key + explicit opt-in to send code)
 python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --allow-send-code
+
+# Write to a file under tests/ (also prints to stdout)
+python -m src ai_test src/plugins/patch_override.py --symbol parse_po_config --allow-send-code --out tests/test_patch_override_ai.py
 ```
 
 ### `ai_index` — Build semantic search index (embeddings)

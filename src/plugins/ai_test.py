@@ -56,6 +56,29 @@ def _safe_relpath(path: str) -> str:
     return path
 
 
+def _resolve_rel_under_root(root_path: str, raw_path: str) -> str:
+    """Resolve a user-supplied path to a safe workspace-relative path."""
+    rel = _safe_relpath(raw_path)
+    root_abs = os.path.abspath(root_path)
+    if rel:
+        abs_path = os.path.abspath(os.path.join(root_path, rel))
+        try:
+            if os.path.commonpath([abs_path, root_abs]) != root_abs:
+                return ""
+        except ValueError:
+            return ""
+        return rel
+
+    abs_candidate = os.path.abspath(raw_path)
+    try:
+        if os.path.commonpath([abs_candidate, root_abs]) != root_abs:
+            return ""
+    except ValueError:
+        return ""
+    rel_from_root = os.path.relpath(abs_candidate, root_abs).replace("\\", "/")
+    return _safe_relpath(rel_from_root)
+
+
 def _read_text_file(abs_path: str, *, max_bytes: int) -> Tuple[bool, str]:
     try:
         if os.path.getsize(abs_path) > max_bytes:
@@ -78,6 +101,7 @@ def ai_test(
     path: str,
     symbol: str = "",
     allow_send_code: bool = False,
+    out: str = "",
     dry_run: bool = False,
     max_input_chars: int = 0,
 ) -> bool:
@@ -87,6 +111,7 @@ def ai_test(
     path (str): Target Python file path (relative to repo root).
     symbol (str): Optional function/class name to focus on.
     allow_send_code (bool): Opt-in: send selected source code to the LLM (privacy risk).
+    out (str): Optional output file path to write the generated tests (also prints to stdout).
     dry_run (bool): Do not call the LLM; print the (redacted, truncated) payload that would be sent.
     max_input_chars (int): Override input size limit (defaults to env PROJMAN_LLM_MAX_INPUT_CHARS).
     """
@@ -100,17 +125,17 @@ def ai_test(
     root_path = env.get("root_path") or os.getcwd()
 
     # Only allow paths within the workspace root.
-    rel = _safe_relpath(path)
+    rel = _resolve_rel_under_root(root_path, path)
     if not rel:
-        # Also allow absolute paths that are still within root_path.
-        abs_candidate = os.path.abspath(path)
-        root_abs = os.path.abspath(root_path)
-        rel_from_root = os.path.relpath(abs_candidate, root_abs).replace("\\", "/")
-        rel_from_root_safe = _safe_relpath(rel_from_root)
-        if not rel_from_root_safe:
-            print("Error: path is invalid or unsafe (must be a workspace-relative path).")
+        print("Error: path is invalid or unsafe (must be within workspace).")
+        return False
+
+    rel_out = ""
+    if out:
+        rel_out = _resolve_rel_under_root(root_path, out)
+        if not rel_out:
+            print("Error: out path is invalid or unsafe (must be within workspace).")
             return False
-        rel = rel_from_root_safe
 
     abs_path = os.path.abspath(os.path.join(root_path, rel))
     if not os.path.isfile(abs_path):
@@ -194,5 +219,20 @@ def ai_test(
 
     # Never log the generated content; only log safe metadata.
     log.info("ai_test generated output for %s (len=%d)", rel, len(out))
-    print(out.strip() + "\n")
+    out_text = out.strip() + "\n"
+
+    if rel_out:
+        abs_out = os.path.abspath(os.path.join(root_path, rel_out))
+        try:
+            os.makedirs(os.path.dirname(abs_out), exist_ok=True)
+            with open(abs_out, "w", encoding="utf-8") as f:
+                f.write(out_text)
+        except OSError as exc:
+            print(f"Error: failed to write output: {exc}")
+            return False
+        print(f"Wrote: {rel_out}")
+        print(f"Verify: pytest -q {rel_out}")
+        print("")
+
+    print(out_text)
     return True
