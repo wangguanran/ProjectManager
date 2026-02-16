@@ -19,6 +19,13 @@ def test_safe_mode_version_works(workspace_a: Path) -> None:
     assert (result.stdout or "").strip().startswith("0.0.13")
 
 
+def test_safe_mode_blocks_update_without_allow_network(workspace_a: Path) -> None:
+    result = run_cli(["--safe-mode", "update"], cwd=workspace_a, check=False)
+    assert result.returncode != 0
+    combined = (result.stdout or "") + (result.stderr or "")
+    assert "--allow-network" in combined
+
+
 def test_safe_mode_blocks_po_apply_without_dry_run_or_yes(workspace_a: Path) -> None:
     result = run_cli(["--safe-mode", "po_apply", "projA"], cwd=workspace_a, check=False)
     assert result.returncode != 0
@@ -58,7 +65,7 @@ def test_safe_mode_ignores_env_based_script_loading(workspace_a: Path) -> None:
     )
 
     result = run_cli(
-        ["--safe-mode", "upgrade", "--dry-run"],
+        ["--safe-mode", "update", "--dry-run"],
         cwd=workspace_a,
         env={"PROJMAN_LOAD_SCRIPTS": "1"},
         check=False,

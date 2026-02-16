@@ -7,3 +7,6 @@
 - [x] NF-0010: AI docs assistant (generate README/docs snippets with citations)
 - [x] NF-0011: AI test generator (suggest + scaffold unit tests)
 - [x] NF-0012: Semantic code search (optional embeddings index)
+
+- [ ] #64: `update` stable/beta channels + version marker (docs/tests/verification)
+- [ ] #65: CI publish beta prerelease on push to `master`

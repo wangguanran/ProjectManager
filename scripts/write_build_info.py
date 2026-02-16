@@ -38,6 +38,11 @@ def main() -> int:
         sha_full = sha_short
 
     build_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Release channel marker for display/version semantics (stable|beta).
+    # Default to stable unless explicitly set by CI/pipeline.
+    release_channel = os.environ.get("PROJMAN_RELEASE_CHANNEL", "").strip().lower() or "stable"
+    if release_channel not in {"stable", "beta"}:
+        release_channel = "stable"
 
     content = "\n".join(
         [
@@ -45,14 +50,14 @@ def main() -> int:
             f'GIT_SHA = "{sha_short}"',
             f'GIT_SHA_FULL = "{sha_full}"',
             f'BUILD_TIME_UTC = "{build_time}"',
+            f'RELEASE_CHANNEL = "{release_channel}"',
             "",
         ]
     )
     out_path.write_text(content, encoding="utf-8")
-    print(f"Wrote {out_path} (GIT_SHA={sha_short})")
+    print(f"Wrote {out_path} (GIT_SHA={sha_short} RELEASE_CHANNEL={release_channel})")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
