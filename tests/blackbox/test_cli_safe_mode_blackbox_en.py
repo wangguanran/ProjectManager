@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import toml
+
 from .conftest import run_cli
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_safe_mode_help_works(workspace_a: Path) -> None:
@@ -16,7 +20,8 @@ def test_safe_mode_help_works(workspace_a: Path) -> None:
 def test_safe_mode_version_works(workspace_a: Path) -> None:
     result = run_cli(["--safe-mode", "--version"], cwd=workspace_a, check=False)
     assert result.returncode == 0
-    assert (result.stdout or "").strip().startswith("0.0.13")
+    base_version = toml.load(str(REPO_ROOT / "pyproject.toml"))["project"]["version"]
+    assert (result.stdout or "").strip().startswith(base_version)
 
 
 def test_safe_mode_blocks_update_without_allow_network(workspace_a: Path) -> None:
