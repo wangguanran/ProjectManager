@@ -93,55 +93,58 @@ python -m build --outdir "$PACKAGE_DIR"
 echo -e "\033[32m--- Python package build complete. Find the artifacts in the '$PACKAGE_DIR' directory. ---\033[0m"
 
 echo -e "\033[32m--- Building standalone binary with pyinstaller ---\033[0m"
-PYINSTALLER_STRIP_ARGS=()
-if [ "$PLATFORM" = "linux" ] && command -v strip >/dev/null 2>&1; then
-    PYINSTALLER_STRIP_ARGS=(--strip)
-fi
 
 if ! command -v pyinstaller >/dev/null 2>&1; then
     echo "pyinstaller not found, installing..."
     python -m pip install pyinstaller
 fi
 
-IMPORTLIB_METADATA_ARGS=()
-if python -c "import importlib_metadata" >/dev/null 2>&1; then
-    IMPORTLIB_METADATA_ARGS=(--hidden-import=importlib_metadata --collect-all=importlib_metadata)
-fi
-
 PYPROJECT_ABS_PATH="$(python -c 'import os; print(os.path.abspath("pyproject.toml"))')"
 
-pyinstaller \
-    --onefile \
-    "${PYINSTALLER_STRIP_ARGS[@]}" \
-    --hidden-import=git \
-    --hidden-import=git.cmd \
-    --hidden-import=git.repo \
-    --hidden-import=src.plugins.project_manager \
-    --hidden-import=src.plugins.project_builder \
-    --hidden-import=src.plugins.patch_override \
-    --hidden-import=src.plugins.doctor \
-    --hidden-import=src.plugins.snapshot \
-    --hidden-import=src.plugins.ai_review \
-    --hidden-import=src.plugins.ai_explain \
-    --hidden-import=src.plugins.ai_docs \
-    --hidden-import=src.plugins.ai_test \
-    --hidden-import=src.plugins.ai_semantic_search \
-    --hidden-import=src.plugins.mcp_server \
-    --hidden-import=src.plugins.po_plugins \
-    --hidden-import=src.operations.registry \
-    --hidden-import=src.log_manager \
-    --hidden-import=src.profiler \
-    --hidden-import=src.utils \
-    --hidden-import=src.ai.llm \
-    --hidden-import=src._build_info \
-    "${IMPORTLIB_METADATA_ARGS[@]}" \
-    --collect-all=git \
-    --add-data "${PYPROJECT_ABS_PATH}${ADD_DATA_SEP}." \
-    --distpath "$BINARY_DIR" \
-    --workpath "$BINARY_DIR/build" \
-    --specpath "$BINARY_DIR" \
-    -n projman \
-    src/__main__.py
+# NOTE: On macOS default /bin/bash 3.2 with `set -u`, expanding an empty array
+# (e.g. "${arr[@]}") errors with "unbound variable". Build args incrementally.
+PYINSTALLER_ARGS=(
+    --onefile
+    --hidden-import=git
+    --hidden-import=git.cmd
+    --hidden-import=git.repo
+    --hidden-import=src.plugins.project_manager
+    --hidden-import=src.plugins.project_builder
+    --hidden-import=src.plugins.patch_override
+    --hidden-import=src.plugins.doctor
+    --hidden-import=src.plugins.snapshot
+    --hidden-import=src.plugins.ai_review
+    --hidden-import=src.plugins.ai_explain
+    --hidden-import=src.plugins.ai_docs
+    --hidden-import=src.plugins.ai_test
+    --hidden-import=src.plugins.ai_semantic_search
+    --hidden-import=src.plugins.mcp_server
+    --hidden-import=src.plugins.po_plugins
+    --hidden-import=src.operations.registry
+    --hidden-import=src.log_manager
+    --hidden-import=src.profiler
+    --hidden-import=src.utils
+    --hidden-import=src.ai.llm
+    --hidden-import=src._build_info
+    --collect-all=git
+    --add-data "${PYPROJECT_ABS_PATH}${ADD_DATA_SEP}."
+    --distpath "$BINARY_DIR"
+    --workpath "$BINARY_DIR/build"
+    --specpath "$BINARY_DIR"
+    -n projman
+)
+
+if [ "$PLATFORM" = "linux" ] && command -v strip >/dev/null 2>&1; then
+    PYINSTALLER_ARGS+=(--strip)
+fi
+
+if python -c "import importlib_metadata" >/dev/null 2>&1; then
+    PYINSTALLER_ARGS+=(--hidden-import=importlib_metadata --collect-all=importlib_metadata)
+fi
+
+PYINSTALLER_ARGS+=(src/__main__.py)
+
+pyinstaller "${PYINSTALLER_ARGS[@]}"
 
 BINARY_PATH="$BINARY_DIR/projman${EXE_SUFFIX}"
 if [ ! -f "$BINARY_PATH" ]; then
