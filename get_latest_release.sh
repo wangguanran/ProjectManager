@@ -384,8 +384,15 @@ download_and_update_bin() {
         fi
     fi
     if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
-        asset_url="$(echo "$release_data" | jq -r '.assets[]? | select(.name and (.name | endswith(".sha256") | not)) | .browser_download_url // empty' | head -n1)"
-        asset_name="$(echo "$release_data" | jq -r '.assets[]? | select(.name and (.name | endswith(".sha256") | not)) | .name // empty' | head -n1)"
+        # Fail closed: do not install a binary for another OS/arch.
+        local available_assets
+        available_assets="$(
+          echo "$release_data" | jq -r '.assets[]? | .name // empty' | sed '/^$/d' | sort | tr '\n' ' '
+        )"
+        echo "Error: no matching release asset found for platform=${platform}, arch=${arch}." >&2
+        echo "Expected asset: ${preferred_asset} (or legacy: ${legacy_asset:-<none>})." >&2
+        echo "Available assets: ${available_assets:-<none>}." >&2
+        return 1
     fi
 
     if [ -z "$asset_url" ] || [ -z "$asset_name" ] || is_checksum_asset_name "$asset_name"; then
