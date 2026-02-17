@@ -239,6 +239,37 @@ class TestUpgrader:
         assert result is False
         assert not (install_dir / "projman").exists()
 
+    def test_create_ssl_context_prefers_ssl_cert_file(self, tmp_path, monkeypatch):
+        cafile = tmp_path / "custom_ca.pem"
+        cafile.write_text("dummy", encoding="utf-8")
+        monkeypatch.setenv("SSL_CERT_FILE", str(cafile))
+        monkeypatch.delenv("SSL_CERT_DIR", raising=False)
+
+        sentinel = object()
+        with patch.object(self.upgrader.ssl, "create_default_context", return_value=sentinel) as mocked:
+            ctx = self.upgrader._create_ssl_context()
+
+        assert ctx is sentinel
+        assert mocked.call_count == 1
+        kwargs = mocked.call_args.kwargs
+        assert kwargs.get("cafile") == os.path.abspath(str(cafile))
+
+    def test_create_ssl_context_uses_certifi_by_default(self, monkeypatch):
+        monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+        monkeypatch.delenv("SSL_CERT_DIR", raising=False)
+
+        sentinel = object()
+        with (
+            patch("certifi.where", return_value="/tmp/certifi-ca.pem"),
+            patch.object(self.upgrader.ssl, "create_default_context", return_value=sentinel) as mocked,
+        ):
+            ctx = self.upgrader._create_ssl_context()
+
+        assert ctx is sentinel
+        assert mocked.call_count == 1
+        kwargs = mocked.call_args.kwargs
+        assert kwargs.get("cafile") == "/tmp/certifi-ca.pem"
+
     def test_upgrade_requires_checksum_when_flag_set(self, tmp_path):
         install_dir = tmp_path / "install-bin"
         downloaded = tmp_path / "downloaded-projman"

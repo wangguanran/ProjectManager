@@ -2,6 +2,7 @@
 configupdater>=3.0.0
 toml>=0.10.2
 GitPython>=3.1.40
+certifi>=2024.2.2
 
 # Development and build dependencies
 build>=1.0.0

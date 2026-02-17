@@ -12,6 +12,7 @@ import json
 import os
 import platform
 import shutil
+import ssl
 import stat
 import subprocess
 import tempfile
@@ -21,6 +22,34 @@ from typing import Any, Dict, Mapping, Optional
 
 from src.log_manager import log
 from src.operations.registry import register
+
+
+def _create_ssl_context() -> ssl.SSLContext:
+    """Create an SSL context with a predictable CA bundle.
+
+    PyInstaller-packed binaries may not reliably locate OS CA bundles on some
+    platforms. Prefer an explicit bundle when provided by the user, otherwise
+    fall back to certifi (if installed), and finally to Python defaults.
+    """
+
+    cafile = str(os.environ.get("SSL_CERT_FILE") or "").strip()
+    if cafile:
+        cafile_path = os.path.abspath(os.path.expanduser(cafile))
+        if os.path.exists(cafile_path):
+            return ssl.create_default_context(cafile=cafile_path)
+
+    capath = str(os.environ.get("SSL_CERT_DIR") or "").strip()
+    if capath:
+        capath_path = os.path.abspath(os.path.expanduser(capath))
+        if os.path.isdir(capath_path):
+            return ssl.create_default_context(capath=capath_path)
+
+    try:
+        import certifi  # type: ignore
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
 
 
 def _normalize_platform_name(system_name: Optional[str] = None) -> str:
@@ -127,8 +156,9 @@ def _http_get_json(url: str, token: str) -> Any:
         headers["Authorization"] = f"token {token}"
 
     request = urllib.request.Request(url, headers=headers)
+    context = _create_ssl_context()
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30, context=context) as response:
             payload = response.read().decode("utf-8")
             return json.loads(payload)
     except urllib.error.HTTPError as exc:
@@ -199,10 +229,13 @@ def _download_file(url: str, token: str) -> str:
         headers["Authorization"] = f"token {token}"
 
     request = urllib.request.Request(url, headers=headers)
+    context = _create_ssl_context()
     fd, temp_path = tempfile.mkstemp(prefix="projman_upgrade_", suffix=".bin")
     os.close(fd)
     try:
-        with urllib.request.urlopen(request, timeout=120) as response, open(temp_path, "wb") as temp_file:
+        with urllib.request.urlopen(request, timeout=120, context=context) as response, open(
+            temp_path, "wb"
+        ) as temp_file:
             shutil.copyfileobj(response, temp_file)
         return temp_path
     except Exception:
