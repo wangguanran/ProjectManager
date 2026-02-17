@@ -6,6 +6,7 @@ Tests for __main__.py module.
 # pylint: disable=import-outside-toplevel
 # pylint: disable=too-many-public-methods
 
+import argparse
 import json
 import os
 import shutil
@@ -43,6 +44,62 @@ class TestMainFunction:
 
             _ = src.__main__  # avoid unused-import warning
             mock_main.assert_not_called()
+
+
+class TestArgParsing:
+    """Regression tests for CLI argument parsing (plugin flags after <operate>)."""
+
+    def setup_method(self):
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        import src.__main__ as main_mod
+
+        self.main_mod = main_mod
+
+    def test_parse_args_does_not_drop_flag_values_when_argparse_sets_name(self):
+        """Ensure `update --prefix <dir>` isn't mistaken as positional `name`."""
+
+        def dummy_update(env, projects_info, prefix: str = "", dry_run: bool = False):  # noqa: ARG001
+            _ = (prefix, dry_run)  # make linters happy
+            return True
+
+        builtin_ops = {"update": {"func": dummy_update, "desc": "Update projman"}}
+
+        # Simulate argparse.parse_known_args() assigning an unknown option value into `name`.
+        fake_ns = argparse.Namespace(
+            operate="update",
+            name="/tmp/bin",
+            args=[],
+            perf_analyze=False,
+            load_scripts=False,
+            no_fuzzy=False,
+            safe_mode=False,
+            allow_network=False,
+            yes=False,
+        )
+
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["projman", "update", "--dry-run", "--prefix", "/tmp/bin"],
+            ),
+            patch.object(
+                self.main_mod.FuzzyOperationParser,
+                "parse_known_args",
+                return_value=(fake_ns, []),
+            ),
+        ):
+            operate, name, parsed_args, parsed_kwargs, _args_dict = self.main_mod._parse_args_and_plugin_args(
+                builtin_ops
+            )
+
+        assert operate == "update"
+        assert name is None
+        assert parsed_args == []
+        assert parsed_kwargs.get("dry_run") is True
+        assert parsed_kwargs.get("prefix") == "/tmp/bin"
 
 
 class TestLoadAllProjects:

@@ -441,15 +441,24 @@ def _should_load_platform_scripts(argv: List[str]) -> bool:
 
 @func_time
 def _parse_args_and_plugin_args(builtin_operations):
-    def _extract_plugin_tokens(argv: List[str], parsed_name: Optional[str]) -> List[str]:
+    def _extract_plugin_name_and_tokens(argv: List[str]) -> Tuple[Optional[str], List[str]]:
         """
-        Extract plugin tokens in original argv order.
+        Extract plugin name + tokens in original argv order.
 
         Rationale:
         - `argparse.parse_known_args()` may split unknown option values into the
           positional `args` bucket, which breaks our later `args + unknown`
           reconstruction (order is lost).
         - Plugin flags/args are defined as "everything after <operate> [name]".
+
+        IMPORTANT:
+        - Do NOT use argparse's parsed positional `name` here. In newer Python
+          versions, `parse_known_args()` may assign unknown option values (for
+          example: `update --prefix /tmp/bin`) into the `name` positional, which
+          would cause us to incorrectly drop real plugin flags like `--prefix`.
+        - We treat `name` as the immediate token after <operate> when it does
+          not start with '-'. This matches our CLI contract:
+            projman <operate> [name] [--flags...]
         """
 
         # Skip global options before <operate>. Today we only have boolean flags
@@ -466,18 +475,17 @@ def _parse_args_and_plugin_args(builtin_operations):
                 continue
 
         if operate_idx is None:
-            return []
+            return None, []
 
         start_idx = operate_idx + 1
-        if parsed_name is not None:
-            for idx in range(start_idx, len(argv)):
-                token = argv[idx]
-                if token.startswith("-"):
-                    continue
-                start_idx = idx + 1
-                break
+        parsed_name: Optional[str] = None
+        if start_idx < len(argv):
+            candidate = argv[start_idx]
+            if not candidate.startswith("-"):
+                parsed_name = candidate
+                start_idx += 1
 
-        return argv[start_idx:]
+        return parsed_name, argv[start_idx:]
 
     def get_supported_flags(sig):
         return [
@@ -605,7 +613,7 @@ def _parse_args_and_plugin_args(builtin_operations):
     args, _unknown = parser.parse_known_args(argv)
     args_dict = vars(args)
     # Preserve original order; do NOT concatenate `args` + `unknown`.
-    additional_args = _extract_plugin_tokens(argv, args_dict.get("name"))
+    name, additional_args = _extract_plugin_name_and_tokens(argv)
     parsed_args = []
     parsed_kwargs = {}
     i = 0
@@ -624,7 +632,6 @@ def _parse_args_and_plugin_args(builtin_operations):
             parsed_args.append(arg)
             i += 1
     operate = args_dict["operate"]
-    name = args_dict.get("name")
     return operate, name, parsed_args, parsed_kwargs, args_dict
 
 
