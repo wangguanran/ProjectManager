@@ -338,6 +338,35 @@ def _ensure_executable(file_path: str, platform_name: str) -> None:
     os.chmod(file_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def _sanitized_subprocess_env() -> Dict[str, str]:
+    """Return a safe subprocess env for launching other executables.
+
+    When projman itself is packaged via PyInstaller (onefile), it sets a few
+    environment variables (for example: PYTHONHOME, _MEIPASS2). If we spawn
+    another PyInstaller binary for verification, inheriting these variables can
+    break the child process on macOS (missing Python shared library under the
+    parent's extracted temp dir). Clearing them makes verification reliable.
+    """
+
+    env = dict(os.environ)
+
+    # Remove PyInstaller process markers and Python env overrides.
+    for key in list(env.keys()):
+        if key in {"PYTHONHOME", "PYTHONPATH"}:
+            env.pop(key, None)
+            continue
+        if key.startswith(("_MEI", "_PYI", "PYI_")):
+            env.pop(key, None)
+
+    # Avoid leaking dynamic loader paths into child processes.
+    for key in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"):
+        env.pop(key, None)
+
+    # Force PyInstaller bootloader to ignore inherited environment when present.
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return env
+
+
 def _verify_binary(binary_path: str) -> str:
     try:
         completed = subprocess.run(
@@ -345,6 +374,7 @@ def _verify_binary(binary_path: str) -> str:
             capture_output=True,
             text=True,
             check=False,
+            env=_sanitized_subprocess_env(),
         )
     except OSError as exc:
         raise RuntimeError(f"Failed to execute '{binary_path} --version': {exc}") from exc

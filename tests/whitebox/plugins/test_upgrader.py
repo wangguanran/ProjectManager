@@ -239,6 +239,44 @@ class TestUpgrader:
         assert result is False
         assert not (install_dir / "projman").exists()
 
+    def test_verify_binary_sanitizes_pyinstaller_env(self):
+        captured: dict = {}
+
+        class DummyCompleted:  # minimal subprocess.CompletedProcess-like object
+            returncode = 0
+            stdout = "0.0.1\n"
+            stderr = ""
+
+        def fake_run(*_args, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return DummyCompleted()
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "PYTHONHOME": "/tmp/_MEIparent",
+                    "PYTHONPATH": "/tmp/_MEIparent",
+                    "_MEIPASS2": "/tmp/_MEIparent",
+                    "_PYI_APPLICATION_HOME_DIR": "/tmp/_MEIparent",
+                    "DYLD_LIBRARY_PATH": "/tmp/bad",
+                },
+                clear=False,
+            ),
+            patch.object(self.upgrader.subprocess, "run", side_effect=fake_run),
+        ):
+            version = self.upgrader._verify_binary("/tmp/projman")
+
+        assert version == "0.0.1"
+        env = captured.get("env")
+        assert isinstance(env, dict)
+        assert env.get("PYINSTALLER_RESET_ENVIRONMENT") == "1"
+        assert "PYTHONHOME" not in env
+        assert "PYTHONPATH" not in env
+        assert "_MEIPASS2" not in env
+        assert "_PYI_APPLICATION_HOME_DIR" not in env
+        assert "DYLD_LIBRARY_PATH" not in env
+
     def test_create_ssl_context_prefers_ssl_cert_file(self, tmp_path, monkeypatch):
         cafile = tmp_path / "custom_ca.pem"
         cafile.write_text("dummy", encoding="utf-8")
