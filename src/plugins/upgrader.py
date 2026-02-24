@@ -636,10 +636,14 @@ def _upgrade_impl(  # noqa: PLR0913
                 "sha256 checksum asset not found for '%s'; proceeding without integrity verification.", asset_name
             )
 
+        _ensure_executable(temp_path, platform_name)
+        # Verify the downloaded candidate before replacing the existing binary.
+        # This prevents ending up with a broken install on incompatible systems.
+        version_output = _verify_binary(temp_path)
+
         os.replace(temp_path, target_path)
         temp_path = ""
         _ensure_executable(target_path, platform_name)
-        version_output = _verify_binary(target_path)
     except PermissionError as exc:
         log.error("Permission denied while installing binary: %s", exc)
         print(

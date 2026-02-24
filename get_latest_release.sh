@@ -131,6 +131,29 @@ sha256_file() {
     return 1
 }
 
+verify_binary_candidate() {
+    local path="$1"
+    local output_file
+    output_file="$(mktemp)"
+    if "$path" --version >"$output_file" 2>&1; then
+        local first_line
+        first_line="$(head -n1 "$output_file" || true)"
+        rm -f "$output_file" 2>/dev/null || true
+        if [ -n "$first_line" ]; then
+            echo "Binary self-check passed: $first_line"
+        else
+            echo "Binary self-check passed."
+        fi
+        return 0
+    fi
+    echo "Error: downloaded projman binary failed self-check on this system." >&2
+    sed -n '1,3p' "$output_file" >&2 || true
+    rm -f "$output_file" 2>/dev/null || true
+    echo "Tip: this host may be incompatible with the release binary (for example: glibc mismatch)." >&2
+    echo "Tip: install Python package instead: python3 -m pip install --user -U multi-project-manager" >&2
+    return 1
+}
+
 detect_platform() {
     local uname_s
     uname_s="$(uname -s 2>/dev/null || echo unknown)"
@@ -461,6 +484,11 @@ download_and_update_bin() {
     
     # 赋予可执行权限
     chmod +x "$temp_file"
+
+    if ! verify_binary_candidate "$temp_file"; then
+        rm -f "$temp_file" 2>/dev/null || true
+        return 1
+    fi
     
     # 重命名为 projman 并移动到 .local/bin 目录
     if ! mv "$temp_file" "$install_dir/projman" 2>/dev/null; then

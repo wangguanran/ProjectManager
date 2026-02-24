@@ -97,6 +97,46 @@ class TestUpgrader:
         assert target.exists()
         assert target.read_bytes() == b"projman-binary"
 
+    def test_upgrade_keeps_existing_binary_when_new_binary_fails_verification(self, tmp_path):
+        install_dir = tmp_path / "install-bin"
+        install_dir.mkdir(parents=True, exist_ok=True)
+        target = install_dir / "projman"
+        target.write_bytes(b"existing-projman-binary")
+
+        downloaded = tmp_path / "downloaded-projman"
+        downloaded.write_bytes(b"new-projman-binary")
+        release_data = {
+            "tag_name": "v0.0.12",
+            "assets": [
+                {
+                    "name": "projman-linux-x86_64",
+                    "browser_download_url": "https://example.com/projman-linux-x86_64",
+                }
+            ],
+        }
+
+        with (
+            patch.object(self.upgrader, "_normalize_platform_name", return_value="linux"),
+            patch.object(self.upgrader, "_normalize_arch", return_value="x86_64"),
+            patch.object(self.upgrader, "_is_admin_user", return_value=False),
+            patch.object(self.upgrader, "_http_get_json", return_value=release_data),
+            patch.object(self.upgrader, "_download_file", return_value=str(downloaded)),
+            patch.object(
+                self.upgrader,
+                "_verify_binary",
+                side_effect=RuntimeError("Installed binary verification failed: GLIBC_2.38 not found"),
+            ),
+        ):
+            result = self.upgrader.upgrade(
+                env={},
+                projects_info={},
+                prefix=str(install_dir),
+            )
+
+        assert result is False
+        assert target.exists()
+        assert target.read_bytes() == b"existing-projman-binary"
+
     def test_upgrade_beta_selects_prerelease(self, tmp_path):
         install_dir = tmp_path / "install-bin"
         downloaded = tmp_path / "downloaded-projman"
