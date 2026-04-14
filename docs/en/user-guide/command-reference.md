@@ -35,7 +35,7 @@ All commands accept the following global options:
 
 **Syntax**
 ```bash
-python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
+python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--token <token>] [--dry-run] [--require-checksum]
 ```
 
 **Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, optionally verify sha256 checksum (if published), and install `projman` to the selected location.

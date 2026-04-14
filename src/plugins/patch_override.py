@@ -22,10 +22,14 @@ from src.plugins.po_plugins.registry import (
     get_po_plugins,
 )
 from src.plugins.po_plugins.runtime import PoPluginContext, PoPluginRuntime
-from src.plugins.po_plugins.utils import extract_patch_targets
+from src.plugins.po_plugins.utils import (
+    extract_original_commit_sha,
+    extract_patch_targets,
+)
 from src.plugins.po_plugins.utils import (
     po_applied_record_path as _po_applied_record_path,
 )
+from src.plugins.po_plugins.utils import repo_history_contains_commit
 
 # from src.profiler import auto_profile  # unused
 
@@ -134,6 +138,46 @@ def _read_patch_targets_best_effort(abs_patch_path: str) -> List[str]:
         return []
 
 
+def _build_commit_apply_action(
+    runtime: PoPluginRuntime,
+    *,
+    repo_root: str,
+    po_name: str,
+    patch_abs: str,
+    source: str,
+    reapply: bool,
+) -> Dict[str, Any]:
+    patch_text = ""
+    try:
+        with open(patch_abs, "r", encoding="utf-8") as handle:
+            patch_text = handle.read()
+    except OSError:
+        patch_text = ""
+
+    targets = extract_patch_targets(patch_text) if patch_text else []
+    original_commit_sha = extract_original_commit_sha(patch_text) if patch_text else None
+    action: Dict[str, Any] = {
+        "po": po_name,
+        "source": source,
+        "targets": targets,
+    }
+    if original_commit_sha:
+        action["original_commit_sha"] = original_commit_sha
+
+    if not reapply and runtime.applied_record_exists(repo_root, po_name):
+        action["type"] = "commit_skip"
+        action["reason"] = "already_applied_record_exists"
+        return action
+
+    if original_commit_sha and repo_history_contains_commit(repo_root, original_commit_sha):
+        action["type"] = "commit_skip"
+        action["reason"] = "already_in_history"
+        return action
+
+    action["type"] = "commit_apply"
+    return action
+
+
 def _split_override_repo_prefix(rel_path: str, repo_names: List[str]) -> Tuple[str, str]:
     """Return (repo_name, dest_rel_in_repo) for an overrides rel_path."""
     root_prefix = f"root{os.sep}"
@@ -221,13 +265,16 @@ def build_po_apply_plan(
         for rel_path in plugin_files.get("commits", {}).get("commit_files", []) or []:
             repo_name = _repo_name_from_po_relpath(rel_path)
             patch_abs = os.path.join(po_path, "commits", rel_path)
+            repo_root = runtime.repo_map.get(repo_name, "")
             actions_by_repo.setdefault(repo_name, []).append(
-                {
-                    "type": "commit_apply",
-                    "po": po_name,
-                    "source": f"commits/{rel_path}",
-                    "targets": _read_patch_targets_best_effort(patch_abs),
-                }
+                _build_commit_apply_action(
+                    runtime,
+                    repo_root=repo_root,
+                    po_name=po_name,
+                    patch_abs=patch_abs,
+                    source=f"commits/{rel_path}",
+                    reapply=bool(reapply),
+                )
             )
 
         # patches -> per-repo actions

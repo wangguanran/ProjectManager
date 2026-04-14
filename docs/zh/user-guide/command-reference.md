@@ -19,6 +19,11 @@ python -m src <命令> <参数> [选项]
 | `--version` | 显示程序版本 | `python -m src --version` |
 | `--help` | 显示帮助信息 | `python -m src --help` |
 | `--perf-analyze` | 启用性能分析 | `python -m src --perf-analyze po_apply proj1` |
+| `--load-scripts` | 显式导入 `projects/scripts/*.py` 下的工作区脚本（不可信工作区下有风险） | `python -m src --load-scripts project_build proj1` |
+| `--no-fuzzy` | 要求命令精确匹配（禁用模糊匹配） | `python -m src --no-fuzzy po_list proj1` |
+| `--safe-mode` | 不可信工作区安全模式（危险操作需显式确认；阻止基于环境变量的脚本加载） | `python -m src --safe-mode po_apply proj1 --dry-run` |
+| `--allow-network` | 安全模式下允许 `update` / `upgrade` 这类网络操作 | `python -m src --safe-mode --allow-network update --dry-run` |
+| `-y`, `--yes` | 安全模式下显式确认执行危险操作（非交互） | `python -m src --safe-mode -y po_apply proj1` |
 
 ## 维护命令
 
@@ -28,7 +33,7 @@ python -m src <命令> <参数> [选项]
 
 **语法**:
 ```bash
-python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
+python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--token <token>] [--dry-run] [--require-checksum]
 ```
 
 **描述**: 自动检测当前平台/架构，从 GitHub Release 拉取最新二进制并安装到目标目录。若 Release 中存在匹配的 `.sha256` 资产，会进行 sha256 校验（可用 `--require-checksum` 强制必须存在 checksum）。
@@ -51,6 +56,28 @@ python -m src update --require-checksum
 **状态**: ✅ 已实现
 
 **描述**: `upgrade` 为历史命令名，为兼容性保留，行为与 `update` 相同。
+
+### `doctor` - 工作区诊断
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src doctor [--json] [--strict]
+```
+
+**描述**: 在执行构建或 PO 操作前，校验当前工作区布局与配置，并输出可执行的修复建议。
+
+**选项**:
+- `--json`: 输出机器可读的 JSON 诊断结果到 stdout。
+- `--strict`: 将 warning 视为 error，并以非零状态退出。
+
+**示例**:
+```bash
+python -m src doctor
+python -m src doctor --json
+python -m src doctor --strict
+```
 
 ## 项目管理命令
 

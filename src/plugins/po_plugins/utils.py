@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 from typing import Any, Dict, List
 
 
@@ -64,3 +65,23 @@ def extract_patch_targets(patch_text: str) -> List[str]:
         elif a_path and a_path != "/dev/null":
             targets.append(a_path)
     return sorted(set(targets))
+
+
+def extract_original_commit_sha(patch_text: str) -> str | None:
+    """Extract the leading `From <sha>` commit id from a format-patch payload."""
+    match = re.search(r"^From ([0-9a-fA-F]{7,40})\b", patch_text, re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).lower()
+
+
+def repo_history_contains_commit(repo_path: str, commit_sha: str) -> bool:
+    """Return True when `commit_sha` is reachable from the repository HEAD."""
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit_sha, "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0

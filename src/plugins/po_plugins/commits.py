@@ -5,7 +5,6 @@ PO plugin: commits (git format-patch + git am).
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,27 +16,13 @@ from .registry import (
     register_simple_plugin,
 )
 from .runtime import PoPluginContext, PoPluginRuntime
-from .utils import extract_patch_targets
+from .utils import (
+    extract_original_commit_sha,
+    extract_patch_targets,
+    repo_history_contains_commit,
+)
 
 SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
-
-
-def _extract_original_commit_sha(patch_text: str) -> Optional[str]:
-    match = re.search(r"^From ([0-9a-fA-F]{7,40})\b", patch_text, re.MULTILINE)
-    if not match:
-        return None
-    return match.group(1).lower()
-
-
-def _repo_history_contains_commit(repo_path: str, commit_sha: str) -> bool:
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", commit_sha, "HEAD"],
-        cwd=repo_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result.returncode == 0
 
 
 def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
@@ -96,9 +81,9 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             return False
 
         patch_targets = extract_patch_targets(patch_text)
-        original_commit_sha = _extract_original_commit_sha(patch_text)
+        original_commit_sha = extract_original_commit_sha(patch_text)
 
-        if original_commit_sha and _repo_history_contains_commit(patch_target, original_commit_sha):
+        if original_commit_sha and repo_history_contains_commit(patch_target, original_commit_sha):
             log.info(
                 "Commit patch '%s' already exists in history for repo '%s' via sha '%s'; skipping.",
                 rel_path,

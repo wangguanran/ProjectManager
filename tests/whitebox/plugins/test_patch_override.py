@@ -440,6 +440,66 @@ class TestPatchOverrideApply:
             with open(target_file, "r", encoding="utf-8") as f:
                 assert f.read() == "original\n"
 
+    def test_po_apply_emit_plan_marks_commit_patch_already_in_history(self, capsys):
+        """PLAN-002/PO-005c: emit-plan should report commit patches skipped by existing history."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str, capture: bool = False) -> str:
+                result = subprocess.run(
+                    ["git", *args],
+                    cwd=repo_root,
+                    check=True,
+                    text=True,
+                    capture_output=capture,
+                )
+                return result.stdout if capture else ""
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            target_rel = "tracked.txt"
+            target_abs = os.path.join(repo_root, target_rel)
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("base\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "base")
+
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("base\nfeature\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "feature")
+            feature_sha = _git("rev-parse", "HEAD", capture=True).strip()
+            patch_text = _git("format-patch", "-1", "HEAD", "--stdout", capture=True)
+
+            commits_dir = os.path.join(projects_path, board_name, "po", po_name, "commits")
+            os.makedirs(commits_dir, exist_ok=True)
+            patch_file = os.path.join(commits_dir, "feature.patch")
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write(patch_text)
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, emit_plan=True) is True
+            payload = json.loads(capsys.readouterr().out)
+
+            repo_actions = payload["per_repo_actions"][0]["actions"]
+            assert not any(action["type"] == "commit_apply" for action in repo_actions)
+            assert any(
+                action["type"] == "commit_skip"
+                and action["reason"] == "already_in_history"
+                and action["original_commit_sha"] == feature_sha
+                for action in repo_actions
+            )
+
     def test_po_apply_custom_copy_outside_workspace_requires_force(self):
         """Custom copy refuses targets outside workspace/repositories unless --force is set."""
         with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as outside_dir:
