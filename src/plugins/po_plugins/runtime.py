@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.execution import get_execution_session
 from src.log_manager import log, log_cmd_event
 
 from .utils import po_applied_record_path, write_json_atomic
@@ -43,12 +44,14 @@ class PoPluginRuntime:
     def __init__(
         self,
         *,
+        env: Dict[str, Any] | None = None,
         board_name: str,
         project_name: str,
         repositories: List[Tuple[str, str]],
         workspace_root: str,
         po_configs: Dict[str, Dict[str, Any]] | None = None,
     ) -> None:
+        self.env: Dict[str, Any] = dict(env or {})
         self.board_name = board_name
         self.project_name = project_name
         self.repositories = list(repositories or [])
@@ -125,11 +128,25 @@ class PoPluginRuntime:
     ) -> subprocess.CompletedProcess:
         """Execute command and record it to repo-root applied record."""
         formatted = self._format_command(command, cwd=cwd, description=description, shell=shell)
+        session = get_execution_session(self.env)
 
         if getattr(ctx, "dry_run", False):
             log.info("DRY-RUN: %s", formatted["cmd"])
+            if session is not None:
+                session.command_started(command=command, cwd=cwd, description=description)
+                session.log(f"DRY-RUN: {formatted['cmd']}", stream="stdout")
+                session.command_finished(
+                    command=command,
+                    cwd=cwd,
+                    description=description,
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                )
             return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="")
 
+        if session is not None:
+            session.command_started(command=command, cwd=cwd, description=description)
         result = subprocess.run(
             command,
             cwd=cwd,
@@ -148,6 +165,15 @@ class PoPluginRuntime:
             stdout=result.stdout,
             stderr=result.stderr,
         )
+        if session is not None:
+            session.command_finished(
+                command=command,
+                cwd=cwd,
+                description=description,
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
 
         formatted["returncode"] = result.returncode
         record = self.get_repo_record(ctx, repo_root, repo_name)

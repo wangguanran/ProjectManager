@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.execution import execution_step, get_execution_session, make_step_id
 from src.hooks import HookType, execute_hooks_with_fallback
 from src.log_manager import log, summarize_output
 from src.operations.registry import register
@@ -113,14 +114,39 @@ def _safe_relpath(path: str) -> str:
 def _run_cmd(
     cmd: List[str],
     *,
+    env: Optional[Dict[str, Any]],
     cwd: str,
     dry_run: bool,
     description: str,
 ) -> subprocess.CompletedProcess:
     log.info("%s (cwd=%s): %s", description, cwd, " ".join(cmd))
+    session = get_execution_session(env or {})
     if dry_run:
+        if session is not None:
+            session.command_started(command=cmd, cwd=cwd, description=description)
+            session.log(f"DRY-RUN: {' '.join(cmd)}", stream="stdout")
+            session.command_finished(
+                command=cmd,
+                cwd=cwd,
+                description=description,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    if session is not None:
+        session.command_started(command=cmd, cwd=cwd, description=description)
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    if session is not None:
+        session.command_finished(
+            command=cmd,
+            cwd=cwd,
+            description=description,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+    return result
 
 
 @dataclass
@@ -528,7 +554,7 @@ def _repo_sync(ctx: BuildContext) -> bool:
     if cmd:
         cwd = _resolve_cwd(ctx.root_path, ctx.project_cfg.get("PROJECT_SYNC_CWD", ""))
         cmd = _format_cmd_template(cmd, ctx)
-        result = _run_cmd(shlex.split(cmd), cwd=cwd, dry_run=ctx.dry_run, description="Sync repositories")
+        result = _run_cmd(shlex.split(cmd), env=ctx.env, cwd=cwd, dry_run=ctx.dry_run, description="Sync repositories")
         if result.returncode != 0:
             log.error("Sync command failed (code=%s): %s", result.returncode, summarize_output(result.stderr))
             return False
@@ -536,7 +562,9 @@ def _repo_sync(ctx: BuildContext) -> bool:
 
     manifest = os.path.join(ctx.root_path, ".repo", "manifest.xml")
     if os.path.exists(manifest) and shutil.which("repo"):
-        result = _run_cmd(["repo", "sync"], cwd=ctx.root_path, dry_run=ctx.dry_run, description="repo sync")
+        result = _run_cmd(
+            ["repo", "sync"], env=ctx.env, cwd=ctx.root_path, dry_run=ctx.dry_run, description="repo sync"
+        )
         if result.returncode != 0:
             log.error("repo sync failed (code=%s): %s", result.returncode, summarize_output(result.stderr))
             return False
@@ -572,6 +600,7 @@ def _repo_sync(ctx: BuildContext) -> bool:
 
         result = _run_cmd(
             ["git", "pull", "--rebase"],
+            env=ctx.env,
             cwd=repo_path,
             dry_run=ctx.dry_run,
             description=f"git pull {repo_name}",
@@ -613,6 +642,7 @@ def _repo_clean(ctx: BuildContext) -> bool:
 
         reset_result = _run_cmd(
             ["git", "reset", "--hard", "HEAD"],
+            env=ctx.env,
             cwd=repo_path,
             dry_run=ctx.dry_run,
             description=f"Clean reset {repo_name}",
@@ -631,6 +661,7 @@ def _repo_clean(ctx: BuildContext) -> bool:
             clean_cmd.extend(["-e", pattern])
         clean_result = _run_cmd(
             clean_cmd,
+            env=ctx.env,
             cwd=repo_path,
             dry_run=ctx.dry_run,
             description=f"Clean untracked {repo_name}",
@@ -934,11 +965,19 @@ def project_pre_build(
     """
     log.info("Pre-build stage for project: %s", project_name)
     if not _coerce_bool(no_po, False):
-        # Apply patch/override; failures are fatal
         try:
-            result = po_apply(
-                env, projects_info, project_name, dry_run=_coerce_bool(dry_run, False), force=_coerce_bool(force, False)
-            )
+            with execution_step(
+                env,
+                make_step_id("build", project_name, "pre_build", "po_apply"),
+                "Apply POs",
+            ):
+                result = po_apply(
+                    env,
+                    projects_info,
+                    project_name,
+                    dry_run=_coerce_bool(dry_run, False),
+                    force=_coerce_bool(force, False),
+                )
             if not result:
                 log.error("po_apply failed for project: %s", project_name)
                 return False
@@ -949,7 +988,12 @@ def project_pre_build(
         log.info("Skipping po_apply (--no-po).")
 
     if not _coerce_bool(no_diff, False):
-        project_diff(env, projects_info, project_name, timestamp=timestamp, dry_run=_coerce_bool(dry_run, False))
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "pre_build", "diff"),
+            "Collect project diff",
+        ):
+            project_diff(env, projects_info, project_name, timestamp=timestamp, dry_run=_coerce_bool(dry_run, False))
     else:
         log.info("Skipping project_diff (--no-diff).")
     return True
@@ -1050,15 +1094,19 @@ def project_do_build(
     )
 
     log.info("Running build command (cwd=%s): %s", cwd, cmd)
-    if _coerce_bool(dry_run, False):
-        log.info("DRY-RUN: skipping build execution.")
-        return True
     try:
-        result = subprocess.run(
-            shlex.split(cmd),
-            cwd=cwd,
-            check=False,
-        )
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "main"),
+            "Build",
+        ):
+            result = _run_cmd(
+                shlex.split(cmd),
+                env=env,
+                cwd=cwd,
+                dry_run=_coerce_bool(dry_run, False),
+                description="Run build command",
+            )
     except (OSError, ValueError) as exc:
         log.error("Failed to run build command: %s", exc)
         return False
@@ -1130,15 +1178,19 @@ def project_post_build(
     )
 
     log.info("Running post-build command (cwd=%s): %s", cwd, cmd)
-    if _coerce_bool(dry_run, False):
-        log.info("DRY-RUN: skipping post-build execution.")
-        return True
     try:
-        result = subprocess.run(
-            shlex.split(cmd),
-            cwd=cwd,
-            check=False,
-        )
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "post_build", "command"),
+            "Post-build",
+        ):
+            result = _run_cmd(
+                shlex.split(cmd),
+                env=env,
+                cwd=cwd,
+                dry_run=_coerce_bool(dry_run, False),
+                description="Run post-build command",
+            )
     except (OSError, ValueError) as exc:
         log.error("Failed to run post-build command: %s", exc)
         return False
@@ -1490,83 +1542,133 @@ def project_build(
     shared_context = create_context(env, projects_info, project_name, platform)
 
     if _coerce_bool(clean, False):
-        if not _repo_clean(ctx):
-            return False
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "clean"),
+            "Clean repositories",
+        ):
+            if not _repo_clean(ctx):
+                return False
 
     if _coerce_bool(sync, False):
-        if not _repo_sync(ctx):
-            return False
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "sync"),
+            "Sync repositories",
+        ):
+            if not _repo_sync(ctx):
+                return False
 
     # Execute validation hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.VALIDATION, platform):
-        validation_result = execute_hooks_with_fallback(HookType.VALIDATION, shared_context, platform)
-        if not validation_result:
-            log.error("Validation hooks failed, aborting build")
-            return False
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "validation_hooks"),
+            "Run validation hooks",
+        ):
+            validation_result = execute_hooks_with_fallback(HookType.VALIDATION, shared_context, platform)
+            if not validation_result:
+                log.error("Validation hooks failed, aborting build")
+                return False
 
     # Execute pre-build stage
-    if not project_pre_build(
+    with execution_step(
         env,
-        projects_info,
-        project_name,
-        timestamp=ctx.build_ts,
-        no_po=no_po,
-        no_diff=no_diff,
-        dry_run=ctx.dry_run,
-        force=ctx.force,
+        make_step_id("build", project_name, "pre_build"),
+        "Pre-build",
     ):
-        log.error("Pre-build failed for project: %s", project_name)
-        return False
+        if not project_pre_build(
+            env,
+            projects_info,
+            project_name,
+            timestamp=ctx.build_ts,
+            no_po=no_po,
+            no_diff=no_diff,
+            dry_run=ctx.dry_run,
+            force=ctx.force,
+        ):
+            log.error("Pre-build failed for project: %s", project_name)
+            return False
 
     # Execute pre-build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.PRE_BUILD, platform):
-        pre_build_result = execute_hooks_with_fallback(HookType.PRE_BUILD, shared_context, platform)
-        if not pre_build_result:
-            log.error("Pre-build hooks failed, aborting build")
-            return False
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "pre_build_hooks"),
+            "Run pre-build hooks",
+        ):
+            pre_build_result = execute_hooks_with_fallback(HookType.PRE_BUILD, shared_context, platform)
+            if not pre_build_result:
+                log.error("Pre-build hooks failed, aborting build")
+                return False
 
     # Execute build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.BUILD, platform):
-        build_result = execute_hooks_with_fallback(HookType.BUILD, shared_context, platform)
-        if not build_result:
-            log.error("Build hooks failed, aborting build")
-            return False
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "build_hooks"),
+            "Run build hooks",
+        ):
+            build_result = execute_hooks_with_fallback(HookType.BUILD, shared_context, platform)
+            if not build_result:
+                log.error("Build hooks failed, aborting build")
+                return False
 
     # Execute build stage
-    if not project_do_build(
+    with execution_step(
         env,
-        projects_info,
-        project_name,
-        profile=ctx.profile,
-        repo=ctx.repo,
-        target=ctx.target,
-        dry_run=ctx.dry_run,
+        make_step_id("build", project_name, "build"),
+        "Build project",
     ):
-        log.error("Build failed for project: %s", project_name)
-        return False
+        if not project_do_build(
+            env,
+            projects_info,
+            project_name,
+            profile=ctx.profile,
+            repo=ctx.repo,
+            target=ctx.target,
+            dry_run=ctx.dry_run,
+        ):
+            log.error("Build failed for project: %s", project_name)
+            return False
 
     # Execute post-build hooks if platform is specified and has hooks
     if platform and has_platform_hooks(HookType.POST_BUILD, platform):
-        post_build_result = execute_hooks_with_fallback(HookType.POST_BUILD, shared_context, platform)
-        if not post_build_result:
-            log.error("Post-build hooks failed, aborting build")
-            return False
+        with execution_step(
+            env,
+            make_step_id("build", project_name, "post_build_hooks"),
+            "Run post-build hooks",
+        ):
+            post_build_result = execute_hooks_with_fallback(HookType.POST_BUILD, shared_context, platform)
+            if not post_build_result:
+                log.error("Post-build hooks failed, aborting build")
+                return False
 
     # Execute post-build stage
-    if not project_post_build(
+    with execution_step(
         env,
-        projects_info,
-        project_name,
-        profile=ctx.profile,
-        repo=ctx.repo,
-        target=ctx.target,
-        dry_run=ctx.dry_run,
+        make_step_id("build", project_name, "post_build"),
+        "Post-build",
     ):
-        log.error("Post-build failed for project: %s", project_name)
-        return False
+        if not project_post_build(
+            env,
+            projects_info,
+            project_name,
+            profile=ctx.profile,
+            repo=ctx.repo,
+            target=ctx.target,
+            dry_run=ctx.dry_run,
+        ):
+            log.error("Post-build failed for project: %s", project_name)
+            return False
 
-    if not _collect_artifacts(ctx):
-        return False
+    with execution_step(
+        env,
+        make_step_id("build", project_name, "artifacts"),
+        "Collect artifacts",
+    ):
+        if not _collect_artifacts(ctx):
+            return False
 
     log.info("Build succeeded for project: %s", project_name)
     return True

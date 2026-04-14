@@ -11,6 +11,7 @@ import subprocess
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.execution import execution_step, make_step_id
 from src.log_manager import log
 from src.operations.registry import register
 from src.plan_utils import emit_plan_json, parse_emit_plan
@@ -223,6 +224,7 @@ def build_po_apply_plan(
 
     repositories = env.get("repositories", [])
     runtime = PoPluginRuntime(
+        env=env,
         board_name=board_name,
         project_name=project_name,
         repositories=repositories,
@@ -371,6 +373,7 @@ def build_po_revert_plan(
 
     repositories = env.get("repositories", [])
     runtime = PoPluginRuntime(
+        env=env,
         board_name=board_name,
         project_name=project_name,
         repositories=repositories,
@@ -631,25 +634,40 @@ def po_apply(
             else:
                 log.info("po '%s' starting to apply %s%s", ctx.po_name, plugin.name, suffix)
 
-            if not plugin.apply(ctx, runtime):
-                log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
-                return False
+            with execution_step(
+                env,
+                make_step_id("po_apply", project_name, ctx.po_name, plugin.name),
+                f"PO {ctx.po_name}: apply {plugin.name}",
+            ):
+                if not plugin.apply(ctx, runtime):
+                    log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
+                    return False
 
     # Stage 2: apply per-po plugins (may dirty working tree).
     for ctx in ctxs:
         log.info("po '%s' starting to apply patch and override%s", ctx.po_name, " (dry-run)" if dry_run else "")
 
         for plugin in per_po_plugins:
-            if not plugin.apply(ctx, runtime):
-                log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
-                return False
+            with execution_step(
+                env,
+                make_step_id("po_apply", project_name, ctx.po_name, plugin.name),
+                f"PO {ctx.po_name}: apply {plugin.name}",
+            ):
+                if not plugin.apply(ctx, runtime):
+                    log.error("po apply aborted due to error in po: '%s'", ctx.po_name)
+                    return False
 
-        if not dry_run and ctx.applied_records:
-            try:
-                runtime.finalize_records(ctx)
-            except OSError as exc:
-                log.error("Failed to finalize applied record for po '%s': '%s'", ctx.po_name, exc)
-                return False
+        with execution_step(
+            env,
+            make_step_id("po_apply", project_name, ctx.po_name, "finalize"),
+            f"PO {ctx.po_name}: finalize applied records",
+        ):
+            if not dry_run and ctx.applied_records:
+                try:
+                    runtime.finalize_records(ctx)
+                except OSError as exc:
+                    log.error("Failed to finalize applied record for po '%s': '%s'", ctx.po_name, exc)
+                    return False
 
         log.info("po '%s' has been processed", ctx.po_name)
 
@@ -735,6 +753,7 @@ def po_revert(
 
     repositories = env.get("repositories", [])
     runtime = PoPluginRuntime(
+        env=env,
         board_name=board_name,
         project_name=project_name,
         repositories=repositories,
@@ -771,9 +790,14 @@ def po_revert(
         )
 
         for plugin in per_po_plugins:
-            if not plugin.revert(ctx, runtime):
-                log.error("po revert aborted due to %s error in po: '%s'", plugin.name, po_name)
-                return False
+            with execution_step(
+                env,
+                make_step_id("po_revert", project_name, po_name, plugin.name),
+                f"PO {po_name}: revert {plugin.name}",
+            ):
+                if not plugin.revert(ctx, runtime):
+                    log.error("po revert aborted due to %s error in po: '%s'", plugin.name, po_name)
+                    return False
 
     # Stage 2: revert commit patches (git revert requires clean index).
     for po_name in reversed(apply_pos):
@@ -794,29 +818,39 @@ def po_revert(
         )
 
         for plugin in global_post_plugins:
-            if not plugin.revert(ctx, runtime):
-                log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
-                return False
+            with execution_step(
+                env,
+                make_step_id("po_revert", project_name, po_name, plugin.name),
+                f"PO {po_name}: revert {plugin.name}",
+            ):
+                if not plugin.revert(ctx, runtime):
+                    log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
+                    return False
 
         # Clear applied flag so the PO can be applied again after a successful revert.
-        po_applied_flag_path = os.path.join(po_dir, po_name, "po_applied")
-        if not dry_run and os.path.isfile(po_applied_flag_path):
-            try:
-                os.remove(po_applied_flag_path)
-                log.debug("Removed po_applied flag: '%s'", po_applied_flag_path)
-            except OSError as e:
-                log.warning("Failed to remove po_applied flag '%s': %s", po_applied_flag_path, e)
-
-        log.info("po '%s' has been reverted", po_name)
-        if not dry_run:
-            for repo_path, _repo_name in repositories or []:
-                record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+        with execution_step(
+            env,
+            make_step_id("po_revert", project_name, po_name, "finalize"),
+            f"PO {po_name}: finalize revert",
+        ):
+            po_applied_flag_path = os.path.join(po_dir, po_name, "po_applied")
+            if not dry_run and os.path.isfile(po_applied_flag_path):
                 try:
-                    if os.path.exists(record_path):
-                        os.remove(record_path)
-                except OSError:
-                    # Best-effort cleanup only.
-                    pass
+                    os.remove(po_applied_flag_path)
+                    log.debug("Removed po_applied flag: '%s'", po_applied_flag_path)
+                except OSError as e:
+                    log.warning("Failed to remove po_applied flag '%s': %s", po_applied_flag_path, e)
+
+            log.info("po '%s' has been reverted", po_name)
+            if not dry_run:
+                for repo_path, _repo_name in repositories or []:
+                    record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+                    try:
+                        if os.path.exists(record_path):
+                            os.remove(record_path)
+                    except OSError:
+                        # Best-effort cleanup only.
+                        pass
 
     log.info("po revert finished for project: '%s'", project_name)
     return True
@@ -2037,6 +2071,7 @@ def po_status(
         return []
 
     runtime = PoPluginRuntime(
+        env=env,
         board_name=board_name,
         project_name=project_name,
         repositories=env.get("repositories", []),
@@ -2299,6 +2334,7 @@ def po_list(
     apply_pos = filtered
 
     runtime = PoPluginRuntime(
+        env=env,
         board_name=board_name,
         project_name=project_name,
         repositories=env.get("repositories", []),

@@ -19,7 +19,14 @@ from typing import Any, List, Optional, Tuple
 import configupdater
 
 import src.plugins.upgrader  # pylint: disable=unused-import
-from src.log_manager import log
+from src.execution import (
+    ExecutionSession,
+    RawOutputRenderer,
+    describe_operation,
+    execute_operation_with_session,
+    resolve_render_mode,
+)
+from src.log_manager import log, mute_console_logging, restore_console_logging
 from src.operations.registry import get_registered_operations
 from src.profiler import func_cprofile, func_time
 from src.utils import get_version
@@ -455,11 +462,24 @@ def _parse_args_and_plugin_args(builtin_operations):
             projman <operate> [name] [--flags...]
         """
 
-        # Skip global options before <operate>. Today we only have boolean flags
-        # (`--perf-analyze`) plus early-exit flags (`--help/--version`).
+        global_flags = {
+            "--perf-analyze",
+            "--load-scripts",
+            "--no-fuzzy",
+            "--safe-mode",
+            "--allow-network",
+            "--raw-output",
+            "-h",
+            "--help",
+            "--version",
+            "-y",
+            "--yes",
+        }
+
+        # Skip global options before <operate>.
         operate_idx = None
         for idx, token in enumerate(argv):
-            if token in {"-h", "--help", "--version", "--perf-analyze"}:
+            if token in global_flags:
                 continue
             if token.startswith("-"):
                 # Unknown option before <operate>; treat as global and ignore.
@@ -473,13 +493,24 @@ def _parse_args_and_plugin_args(builtin_operations):
 
         start_idx = operate_idx + 1
         parsed_name: Optional[str] = None
-        if start_idx < len(argv):
-            candidate = argv[start_idx]
-            if not candidate.startswith("-"):
-                parsed_name = candidate
-                start_idx += 1
+        plugin_tokens: List[str] = []
+        saw_plugin_flag = False
+        idx = start_idx
+        while idx < len(argv):
+            token = argv[idx]
+            if token in global_flags:
+                idx += 1
+                continue
+            if parsed_name is None and not saw_plugin_flag and not token.startswith("-"):
+                parsed_name = token
+                idx += 1
+                continue
+            if token.startswith("-"):
+                saw_plugin_flag = True
+            plugin_tokens.append(token)
+            idx += 1
 
-        return parsed_name, argv[start_idx:]
+        return parsed_name, plugin_tokens
 
     def get_supported_flags(sig):
         return [
@@ -588,6 +619,11 @@ def _parse_args_and_plugin_args(builtin_operations):
         "--safe-mode",
         action="store_true",
         help="Enable safe mode for untrusted workspaces (blocks env-based script loading; requires confirmation for destructive ops; blocks network update/upgrade unless allowed).",
+    )
+    parser.add_argument(
+        "--raw-output",
+        action="store_true",
+        help="Disable the interactive execution UI and emit stable line-oriented step output.",
     )
     parser.add_argument(
         "--allow-network",
@@ -1086,17 +1122,61 @@ def main():
             env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
+        render_mode = resolve_render_mode(operate, args_dict, parsed_kwargs)
+        env["render_mode"] = render_mode
         try:
-            result = func(*func_args, **func_kwargs)
+            if render_mode == "direct_output":
+                result = func(*func_args, **func_kwargs)
+            else:
+                session = ExecutionSession(title=describe_operation(operate, name), mode=render_mode)
+                env["execution_session"] = session
+                result = _run_operation_with_session(session, operate, func, func_args, func_kwargs)
             if result is False:
                 log.error("Operation '%s' failed", operate)
                 sys.exit(1)
         except TypeError as e:
             log.error("Failed to call operation '%s': %s", operate, e)
             sys.exit(1)
+        finally:
+            env.pop("execution_session", None)
     else:
         log.error("Operation '%s' is not supported.", operate)
         sys.exit(1)
+
+
+def _run_operation_with_session(
+    session: ExecutionSession,
+    operate: str,
+    func,
+    func_args: List[Any],
+    func_kwargs: Dict[str, Any],
+) -> Any:
+    operation = lambda: func(*func_args, **func_kwargs)
+    if session.mode == "raw_output":
+        session.add_renderer(RawOutputRenderer())
+        return execute_operation_with_session(session, operate, operation)
+
+    saved_handlers = mute_console_logging()
+    try:
+        try:
+            from src.execution_textual import TextualUnavailable, run_textual_session
+        except ModuleNotFoundError:
+            session.add_renderer(RawOutputRenderer())
+            restore_console_logging(saved_handlers)
+            saved_handlers = []
+            return execute_operation_with_session(session, operate, operation)
+
+        try:
+            return run_textual_session(session, lambda: execute_operation_with_session(session, operate, operation))
+        except TextualUnavailable as exc:
+            log.warning("%s", exc)
+            session.add_renderer(RawOutputRenderer())
+            restore_console_logging(saved_handlers)
+            saved_handlers = []
+            return execute_operation_with_session(session, operate, operation)
+    finally:
+        if saved_handlers:
+            restore_console_logging(saved_handlers)
 
 
 if __name__ == "__main__":

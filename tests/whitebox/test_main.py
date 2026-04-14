@@ -75,6 +75,7 @@ class TestArgParsing:
             load_scripts=False,
             no_fuzzy=False,
             safe_mode=False,
+            raw_output=False,
             allow_network=False,
             yes=False,
         )
@@ -100,6 +101,37 @@ class TestArgParsing:
         assert parsed_args == []
         assert parsed_kwargs.get("dry_run") is True
         assert parsed_kwargs.get("prefix") == "/tmp/bin"
+
+    def test_parse_args_treats_raw_output_as_global_even_after_operation(self):
+        """Ensure `--raw-output` after the operation is not forwarded as a plugin kwarg."""
+
+        def dummy_build(env, projects_info, dry_run: bool = False):  # noqa: ARG001
+            _ = dry_run
+            return True
+
+        builtin_ops = {"project_build": {"func": dummy_build, "desc": "Build project"}}
+
+        with patch.object(
+            sys,
+            "argv",
+            ["projman", "project_build", "--raw-output", "projA", "--dry-run"],
+        ):
+            operate, name, parsed_args, parsed_kwargs, args_dict = self.main_mod._parse_args_and_plugin_args(
+                builtin_ops
+            )
+
+        assert operate == "project_build"
+        assert name == "projA"
+        assert parsed_args == []
+        assert parsed_kwargs == {"dry_run": True}
+        assert args_dict.get("raw_output") is True
+
+    def test_resolve_render_mode_prefers_direct_output_for_json_and_emit_plan(self):
+        """Machine-readable plugin flags must bypass the execution UI."""
+        from src.execution import resolve_render_mode
+
+        assert resolve_render_mode("doctor", {"raw_output": False}, {"json": True}) == "direct_output"
+        assert resolve_render_mode("project_build", {"raw_output": False}, {"emit_plan": True}) == "direct_output"
 
 
 class TestLoadAllProjects:

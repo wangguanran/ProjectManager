@@ -203,6 +203,24 @@ class LogManager:
 log = LogManager().get_logger()
 
 
+def mute_console_logging() -> list[tuple[logging.Handler, int]]:
+    """Temporarily raise console handlers above CRITICAL, preserving file logging."""
+    saved: list[tuple[logging.Handler, int]] = []
+    for handler in list(log.handlers):
+        if isinstance(handler, logging.FileHandler):
+            continue
+        if isinstance(handler, logging.StreamHandler):
+            saved.append((handler, handler.level))
+            handler.setLevel(logging.CRITICAL + 1)
+    return saved
+
+
+def restore_console_logging(saved: list[tuple[logging.Handler, int]]) -> None:
+    """Restore console handler levels saved by `mute_console_logging()`."""
+    for handler, level in saved:
+        handler.setLevel(level)
+
+
 def log_cmd_event(
     logger: logging.Logger,
     *,

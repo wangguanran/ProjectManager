@@ -1,3 +1,3 @@
 # TODO
 
-- [ ] Review the default execution TUI spec before implementation planning.
+- [ ] Replace the legacy `questionary` selection flow in `po_new` / `po_update` with the shared Textual pre-execution selection phase from the default execution TUI design.

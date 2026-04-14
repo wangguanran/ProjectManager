@@ -20,6 +20,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Mapping, Optional
 
+from src.execution import execution_log, execution_step, make_step_id
 from src.log_manager import log
 from src.operations.registry import register
 
@@ -566,7 +567,13 @@ def _upgrade_impl(  # noqa: PLR0913
         return True
 
     try:
-        payload = _http_get_json(api_url, auth_token)
+        with execution_step(
+            env,
+            make_step_id(operation, "release_metadata"),
+            "Fetch release metadata",
+        ):
+            execution_log(env, f"Fetching release metadata from {api_url}")
+            payload = _http_get_json(api_url, auth_token)
     except RuntimeError as exc:
         log.error("Failed to fetch %s release metadata: %s", channel, exc)
         print(f"Error: {exc}")
@@ -585,7 +592,12 @@ def _upgrade_impl(  # noqa: PLR0913
             return False
         release_data = payload
 
-    asset = _select_release_asset(release_data, platform_name, arch)
+    with execution_step(
+        env,
+        make_step_id(operation, "select_asset"),
+        "Select release asset",
+    ):
+        asset = _select_release_asset(release_data, platform_name, arch)
     if not asset:
         asset_names = [str(item.get("name") or "") for item in (release_data.get("assets") or [])]
         log.error(
@@ -614,21 +626,32 @@ def _upgrade_impl(  # noqa: PLR0913
     temp_path = ""
     checksum_path = ""
     try:
-        os.makedirs(install_dir, exist_ok=True)
-        temp_path = _download_file(download_url, auth_token)
+        with execution_step(
+            env,
+            make_step_id(operation, "download_asset"),
+            "Download release asset",
+        ):
+            os.makedirs(install_dir, exist_ok=True)
+            execution_log(env, f"Downloading asset: {asset_name}")
+            temp_path = _download_file(download_url, auth_token)
 
         checksum_asset = _select_checksum_asset(release_data, asset_name)
         if checksum_asset:
             checksum_url = str(checksum_asset.get("browser_download_url") or "").strip()
             if checksum_url:
-                checksum_path = _download_file(checksum_url, auth_token)
-                expected = _parse_sha256sum_file(checksum_path)
-                actual = _sha256_file(temp_path)
-                if actual.lower() != expected.lower():
-                    raise RuntimeError(
-                        f"sha256 mismatch for '{asset_name}': expected {expected}, got {actual}. "
-                        "Refusing to install."
-                    )
+                with execution_step(
+                    env,
+                    make_step_id(operation, "verify_checksum"),
+                    "Verify checksum",
+                ):
+                    checksum_path = _download_file(checksum_url, auth_token)
+                    expected = _parse_sha256sum_file(checksum_path)
+                    actual = _sha256_file(temp_path)
+                    if actual.lower() != expected.lower():
+                        raise RuntimeError(
+                            f"sha256 mismatch for '{asset_name}': expected {expected}, got {actual}. "
+                            "Refusing to install."
+                        )
         else:
             if bool(require_checksum):
                 raise RuntimeError(f"sha256 checksum asset not found for '{asset_name}'. Refusing to install.")
@@ -636,14 +659,16 @@ def _upgrade_impl(  # noqa: PLR0913
                 "sha256 checksum asset not found for '%s'; proceeding without integrity verification.", asset_name
             )
 
-        _ensure_executable(temp_path, platform_name)
-        # Verify the downloaded candidate before replacing the existing binary.
-        # This prevents ending up with a broken install on incompatible systems.
-        version_output = _verify_binary(temp_path)
-
-        os.replace(temp_path, target_path)
-        temp_path = ""
-        _ensure_executable(target_path, platform_name)
+        with execution_step(
+            env,
+            make_step_id(operation, "install_binary"),
+            "Install downloaded binary",
+        ):
+            _ensure_executable(temp_path, platform_name)
+            version_output = _verify_binary(temp_path)
+            os.replace(temp_path, target_path)
+            temp_path = ""
+            _ensure_executable(target_path, platform_name)
     except PermissionError as exc:
         log.error("Permission denied while installing binary: %s", exc)
         print(

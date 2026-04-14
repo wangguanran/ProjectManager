@@ -103,3 +103,16 @@ def test_cli_009_missing_required_param(workspace_a: Path) -> None:
     result = run_cli(["project_new"], cwd=workspace_a, check=False)
     assert result.returncode != 0
     assert "required" in result.stderr.lower()
+
+
+def test_cli_019_project_build_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: Path) -> None:
+    result = run_cli(["project_build", "projA", "--dry-run", "--no-po", "--no-diff"], cwd=workspace_a)
+    assert "STEP_START id=operation.project_build" in result.stdout
+    assert "SESSION_END state=success" in result.stdout
+    assert "\x1b[?1049h" not in result.stdout
+
+
+def test_cli_020_emit_plan_keeps_direct_json_output(workspace_a: Path) -> None:
+    result = run_cli(["project_build", "projA", "--emit-plan"], cwd=workspace_a)
+    assert result.stdout.lstrip().startswith("{")
+    assert "STEP_START" not in result.stdout
