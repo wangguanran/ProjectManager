@@ -778,12 +778,12 @@ def _collect_artifacts(ctx: BuildContext, rules_override: Optional[str] = None) 
             base_dir = _glob_base_dir(pattern_safe)
             base_dir_safe = _safe_relpath(base_dir) if base_dir else ""
             base_abs = os.path.join(ctx.root_path, base_dir_safe) if base_dir_safe else ctx.root_path
-            matches = glob.glob(os.path.join(ctx.root_path, pattern_safe), recursive=True)
-            if not matches:
+            glob_matches = glob.glob(os.path.join(ctx.root_path, pattern_safe), recursive=True)
+            if not glob_matches:
                 log.warning("No artifact matches for glob rule: %s", rule)
                 continue
 
-            for match in sorted(set(matches)):
+            for match in sorted(set(glob_matches)):
                 rel_from_base = os.path.relpath(match, base_abs)
                 rel_from_base_safe = _safe_relpath(rel_from_base)
                 if not rel_from_base_safe:
@@ -888,20 +888,20 @@ def _collect_artifacts(ctx: BuildContext, rules_override: Optional[str] = None) 
                 log.error("Invalid regex pattern '%s': %s", pattern, exc)
                 return False
 
-            matches: List[str] = []
+            regex_matches: List[str] = []
             for current_root, _, files in os.walk(root_abs):
                 for fname in files:
                     abs_path = os.path.join(current_root, fname)
                     rel_from_root = os.path.relpath(abs_path, root_abs)
                     rel_posix = rel_from_root.replace(os.sep, "/")
                     if compiled.search(rel_posix):
-                        matches.append(rel_from_root)
+                        regex_matches.append(rel_from_root)
 
-            if not matches:
+            if not regex_matches:
                 log.warning("No artifact matches for regex rule: %s", rule)
                 continue
 
-            for rel_from_root in sorted(set(matches)):
+            for rel_from_root in sorted(set(regex_matches)):
                 rel_safe = _safe_relpath(rel_from_root)
                 if not rel_safe:
                     log.error("Unsafe regex match path: %s", rel_from_root)

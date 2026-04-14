@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from difflib import SequenceMatcher
 from importlib import import_module
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import configupdater
 
@@ -1151,7 +1151,9 @@ def _run_operation_with_session(
     func_args: List[Any],
     func_kwargs: Dict[str, Any],
 ) -> Any:
-    operation = lambda: func(*func_args, **func_kwargs)
+    def operation():
+        return func(*func_args, **func_kwargs)
+
     if session.mode == "raw_output":
         session.add_renderer(RawOutputRenderer())
         return execute_operation_with_session(session, operate, operation)

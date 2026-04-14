@@ -1,5 +1,8 @@
 """Textual renderer for interactive execution sessions."""
 
+# mypy: disable-error-code=import-not-found
+# pylint: disable=missing-function-docstring,missing-class-docstring,too-many-instance-attributes,broad-exception-caught
+
 from __future__ import annotations
 
 import threading
@@ -128,7 +131,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
         def _run_in_worker(self) -> None:
             try:
                 self._result = self._run_operation()
-            except BaseException as exc:  # pragma: no cover - the UI only relays the error
+            except Exception as exc:  # pragma: no cover - the UI only relays the error
                 self._error = exc
             finally:
                 self.call_from_thread(self._handle_operation_finished)
@@ -216,7 +219,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
         def _on_step_started(self, event: Dict[str, Any]) -> None:
             step_id = event["step_id"]
             parent_id = event.get("parent_id")
-            parent_node = self._nodes.get(parent_id, self.steps.root)
+            parent_node = self.steps.root if parent_id is None else self._nodes.get(str(parent_id), self.steps.root)
             node = parent_node.add(self._node_label_for_event(event), data=step_id, expand=False)
             if parent_id is None:
                 node.expand()

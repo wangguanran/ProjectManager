@@ -1,9 +1,10 @@
 """Shared execution session, render-mode selection, and raw-output rendering."""
 
+# pylint: disable=missing-function-docstring,too-many-instance-attributes
+
 from __future__ import annotations
 
 import json
-import os
 import sys
 import threading
 import time
@@ -342,8 +343,7 @@ class ExecutionSession:
             except Exception as exc:
                 self.finish_step(step_id, state="failed", summary=str(exc))
                 raise
-            else:
-                self.finish_step(step_id, state="success", summary=summary)
+            self.finish_step(step_id, state="success", summary=summary)
 
     def log(self, text: Any, *, stream: str = "stdout", step_id: Optional[str] = None) -> None:
         message = "" if text is None else str(text)
