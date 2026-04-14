@@ -397,7 +397,7 @@ def build_po_revert_plan(
             record = runtime.load_applied_record(repo_root, po_name)
             commits = (record or {}).get("commits") or []
             for entry in reversed(commits):
-                if entry.get("status") == "already_applied":
+                if entry.get("status") in {"already_applied", "already_in_history"}:
                     continue
                 shas = entry.get("commit_shas") or []
                 if not shas and entry.get("head_after"):

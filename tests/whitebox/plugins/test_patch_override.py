@@ -2311,6 +2311,67 @@ class TestPatchOverrideUpdate:
             assert any(item.get("cmd", "").startswith("cp -rf") for item in commands)
             assert any(item.get("description") == "Copy override file" for item in commands)
 
+    def test_po_apply_commit_patch_skips_when_commit_sha_exists_in_history(self):
+        """Commit patches should be skipped before git am when the original SHA already exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            projects_path = os.path.join(tmpdir, "projects")
+            board_name = "board"
+            po_name = "po1"
+            project_name = "proj"
+
+            repo_root = os.path.join(tmpdir, "repo_root")
+            os.makedirs(repo_root, exist_ok=True)
+
+            def _git(*args: str, capture: bool = False) -> str:
+                result = subprocess.run(
+                    ["git", *args],
+                    cwd=repo_root,
+                    check=True,
+                    text=True,
+                    capture_output=capture,
+                )
+                return result.stdout if capture else ""
+
+            _git("init")
+            _git("config", "user.email", "test@example.com")
+            _git("config", "user.name", "Test User")
+
+            target_rel = "tracked.txt"
+            target_abs = os.path.join(repo_root, target_rel)
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("base\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "base")
+
+            with open(target_abs, "w", encoding="utf-8") as f:
+                f.write("base\nfeature\n")
+            _git("add", target_rel)
+            _git("commit", "-m", "feature")
+            feature_sha = _git("rev-parse", "HEAD", capture=True).strip()
+            patch_text = _git("format-patch", "-1", "HEAD", "--stdout", capture=True)
+
+            commits_dir = os.path.join(projects_path, board_name, "po", po_name, "commits")
+            os.makedirs(commits_dir, exist_ok=True)
+            patch_file = os.path.join(commits_dir, "feature.patch")
+            with open(patch_file, "w", encoding="utf-8") as f:
+                f.write(patch_text)
+
+            env = {"projects_path": projects_path, "repositories": [(repo_root, "root")], "po_configs": {}}
+            projects_info = {project_name: {"board_name": board_name, "config": {"PROJECT_PO_CONFIG": po_name}}}
+
+            assert self.PatchOverride.po_apply(env, projects_info, project_name, force=True) is True
+
+            record_path = self.PatchOverride._po_applied_record_path(repo_root, board_name, project_name, po_name)
+            assert os.path.exists(record_path)
+            with open(record_path, "r", encoding="utf-8") as f:
+                record = json.load(f)
+
+            commits = record.get("commits", [])
+            assert len(commits) == 1
+            assert commits[0]["status"] == "already_in_history"
+            assert commits[0]["original_commit_sha"] == feature_sha
+            assert not any("git am" in item.get("cmd", "") for item in record.get("commands", []))
+
     def test_po_apply_uses_cp_command_instead_of_shutil(self):
         """Test that po_apply uses cp command instead of shutil.copy2."""
         with tempfile.TemporaryDirectory() as tmpdir:

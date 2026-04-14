@@ -1,5 +1,6 @@
 # TODO
 
+- [x] F-0013: Skip commit patches already present in target repo history by patch header SHA
 - [x] F-0011: Avoid stdout writes during log initialization (MCP-safe)
 - [x] NF-0007: AI code review for git diff (ai_review)
 - [x] NF-0008: MCP server MVP (read-only tools)
