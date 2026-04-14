@@ -24,6 +24,20 @@ def test_cli_001_help_lists_operations(workspace_a: Path) -> None:
     assert "supported operations" in result.stdout
 
 
+def test_cli_001a_help_omits_removed_ai_and_mcp_operations(workspace_a: Path) -> None:
+    result = run_cli(["--help"], cwd=workspace_a)
+    for name in (
+        "ai_review",
+        "ai_explain",
+        "ai_docs",
+        "ai_test",
+        "ai_index",
+        "ai_search",
+        "mcp_server",
+    ):
+        assert name not in result.stdout
+
+
 def test_cli_002_version_matches_pyproject(workspace_a: Path) -> None:
     result = run_cli(["--version"], cwd=workspace_a)
     version = result.stdout.strip()
