@@ -964,6 +964,644 @@ def po_analyze(
     return True
 
 
+ModifiedFile = Tuple[str, str, str]
+
+
+def _confirm_po_creation(po_name: str, po_path: str, board_path: str) -> bool:
+    """Show PO creation details and confirm with the user."""
+    print("\n=== PO Creation Confirmation ===")
+    print(f"PO Name: {po_name}")
+    print(f"PO Path: {po_path}")
+    print(f"Board Path: {board_path}")
+
+    print("\nThis will create:")
+    print("  1. PO directory structure with patches/ and overrides/ subdirectories")
+    print("  2. Option to select modified files to include in the PO")
+
+    while True:
+        response = input(f"\nDo you want to create PO '{po_name}'? (yes/no): ").strip().lower()
+        if response in ["yes", "y"]:
+            return True
+        if response in ["no", "n"]:
+            return False
+        print("Please enter 'yes' or 'no'.")
+
+
+def _load_ignore_patterns(project_cfg: Dict[str, Any]) -> List[str]:
+    """Load ignore patterns from project configuration and the workspace .gitignore."""
+    patterns: List[str] = []
+
+    if project_cfg:
+        po_ignore_config = str(project_cfg.get("PROJECT_PO_IGNORE", "") or "").strip()
+        log.debug("po_ignore_config: '%s'", po_ignore_config)
+        if po_ignore_config:
+            config_patterns = [p.strip() for p in po_ignore_config.split() if p.strip()]
+            patterns.extend(config_patterns)
+
+            enhanced_patterns = []
+            for pattern in config_patterns:
+                if any(char in pattern for char in ["*", "?", "[", "]"]):
+                    continue
+                enhanced_patterns.extend(
+                    [
+                        f"*{pattern}*",
+                        f"*{pattern}/*",
+                        f"*/{pattern}/*",
+                        f"*/{pattern}",
+                    ]
+                )
+            patterns.extend(enhanced_patterns)
+            log.debug("Loaded ignore patterns from project config: %s", config_patterns)
+            log.debug("Added enhanced patterns for path containment: %s", enhanced_patterns)
+
+    gitignore_file = os.path.join(os.getcwd(), ".gitignore")
+    if os.path.exists(gitignore_file):
+        try:
+            with open(gitignore_file, "r", encoding="utf-8") as file_obj:
+                for line in file_obj:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        patterns.append(line)
+            log.debug("Loaded ignore patterns from file: %s", gitignore_file)
+        except OSError as exc:
+            log.warning("Failed to read ignore file %s: %s", gitignore_file, exc)
+
+    log.debug("Loaded ignore patterns: %s", patterns)
+    return patterns
+
+
+def _get_modified_files(repo_path: str, repo_name: str, ignore_patterns: List[str]) -> Optional[List[ModifiedFile]]:
+    """Get modified files in one repository, including staged, working, and deleted paths."""
+    modified_files: List[ModifiedFile] = []
+
+    try:
+        staged_result = subprocess.run(
+            ["git", "diff", "--name-only", "--cached"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        working_result = subprocess.run(
+            ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        deleted_result = subprocess.run(
+            ["git", "ls-files", "--deleted"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.error("Failed to get modified files for repository %s: %s", repo_name, exc)
+        print(f"Warning: Failed to get modified files for repository {repo_name}: {exc}")
+        return None
+
+    staged_files = set(staged_result.stdout.strip().splitlines()) if staged_result.stdout.strip() else set()
+    working_files = set(working_result.stdout.strip().splitlines()) if working_result.stdout.strip() else set()
+    deleted_files = set(deleted_result.stdout.strip().splitlines()) if deleted_result.stdout.strip() else set()
+
+    def is_ignored(file_path: str) -> bool:
+        full_path = f"{repo_name}/{file_path}" if repo_name != "root" else file_path
+        for pattern in ignore_patterns:
+            if fnmatch.fnmatch(file_path, pattern) or fnmatch.fnmatch(full_path, pattern):
+                return True
+        return False
+
+    for file_path in staged_files | working_files | deleted_files:
+        if not file_path.strip() or is_ignored(file_path):
+            continue
+
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain", file_path],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status_result.returncode == 0 and status_result.stdout.strip():
+            status = status_result.stdout.strip()[:2]
+            if file_path in deleted_files:
+                status = f"{status} (staged+deleted)" if file_path in staged_files else f"{status} (deleted)"
+            elif file_path in staged_files and file_path in working_files:
+                status = f"{status} (staged+modified)"
+            elif file_path in staged_files:
+                status = f"{status} (staged)"
+            else:
+                status = f"{status} (working)"
+        else:
+            status = "?? (unknown)"
+
+        modified_files.append((repo_name, file_path, status))
+
+    return modified_files
+
+
+def _scan_po_modified_files(
+    repositories: List[Tuple[str, str]], project_cfg: Dict[str, Any]
+) -> Optional[List[ModifiedFile]]:
+    """Collect modified files across all project repositories."""
+    ignore_patterns = _load_ignore_patterns(project_cfg)
+    all_modified_files: List[ModifiedFile] = []
+
+    for repo_path, repo_name in repositories:
+        modified_files = _get_modified_files(repo_path, repo_name, ignore_patterns)
+        if modified_files is None:
+            return None
+        if modified_files:
+            all_modified_files.extend(modified_files)
+
+    return all_modified_files
+
+
+def _find_repo_path_by_name(repositories: List[Tuple[str, str]], repo_name: str) -> Optional[str]:
+    """Find the repository root path for a named repo."""
+    for repo_path, current_name in repositories:
+        if current_name == repo_name:
+            return repo_path
+    return None
+
+
+def _create_patch_for_file(
+    repositories: List[Tuple[str, str]],
+    repo_name: str,
+    file_path: str,
+    patches_dir: str,
+    *,
+    force: bool = False,
+) -> bool:
+    """Create a patch file for one modified file."""
+    repo_path = _find_repo_path_by_name(repositories, repo_name)
+    if not repo_path:
+        return False
+
+    try:
+        staged_result = subprocess.run(
+            ["git", "diff", "--name-only", "--cached"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.error("Failed to inspect staged files for %s: %s", file_path, exc)
+        return False
+
+    staged_files = staged_result.stdout.strip().splitlines() if staged_result.stdout.strip() else []
+    is_staged = file_path in staged_files
+    use_staged = is_staged and force
+
+    if is_staged and not force:
+        print(f"    File {file_path} is staged. Choose patch source:")
+        print("      1. Use staged changes (git diff --cached)")
+        print("      2. Use working directory changes (git diff)")
+        while True:
+            choice = input("    Choice (1/2): ").strip()
+            if choice == "1":
+                use_staged = True
+                break
+            if choice == "2":
+                use_staged = False
+                break
+            print("    Invalid choice. Please enter 1 or 2.")
+
+    default_filename = os.path.basename(file_path)
+    filename = default_filename
+    if not force:
+        print(f"    Default patch name: {default_filename}.patch")
+        custom_name = input("    Enter custom patch name (or press Enter for default): ").strip()
+        if custom_name:
+            filename = custom_name[:-6] if custom_name.endswith(".patch") else custom_name
+
+    patch_file_path = (
+        os.path.join(patches_dir, f"{filename}.patch")
+        if repo_name == "root"
+        else os.path.join(patches_dir, repo_name, f"{filename}.patch")
+    )
+    os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
+
+    try:
+        if use_staged:
+            result = subprocess.run(
+                ["git", "diff", "--cached", "--", file_path],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            print(f"    Generating patch from staged changes for {file_path}")
+        else:
+            result = subprocess.run(
+                ["git", "diff", "--", file_path],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            print(f"    Generating patch from working directory for {file_path}")
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.error("Failed to create patch for file %s: %s", file_path, exc)
+        return False
+
+    if result.returncode == 0 and result.stdout.strip():
+        with open(patch_file_path, "w", encoding="utf-8") as file_obj:
+            file_obj.write(result.stdout)
+        return True
+
+    print(f"    Warning: No changes found for {file_path}")
+    return False
+
+
+def _create_override_for_file(
+    repositories: List[Tuple[str, str]],
+    repo_name: str,
+    file_path: str,
+    overrides_dir: str,
+) -> bool:
+    """Copy one modified file into the PO overrides tree."""
+    repo_path = _find_repo_path_by_name(repositories, repo_name)
+    if not repo_path:
+        return False
+
+    src_file = os.path.join(repo_path, file_path)
+    if not os.path.exists(src_file):
+        print(f"    Warning: File {file_path} does not exist")
+        return False
+
+    dest_file = (
+        os.path.join(overrides_dir, file_path)
+        if repo_name == "root"
+        else os.path.join(overrides_dir, repo_name, file_path)
+    )
+    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+
+    try:
+        shutil.copy2(src_file, dest_file)
+    except (OSError, shutil.Error) as exc:
+        log.error("Failed to create override for file %s: %s", file_path, exc)
+        return False
+    return True
+
+
+def _create_remove_file_for_deleted_file(
+    repo_name: str,
+    file_path: str,
+    overrides_dir: str,
+    all_file_infos: Optional[List[ModifiedFile]] = None,
+) -> bool:
+    """Create a .remove or .gitkeep marker for deleted content."""
+    deleted_files_in_same_dir = []
+    for other_repo, other_path, other_status in all_file_infos or []:
+        if other_repo != repo_name or other_path == file_path or "deleted" not in other_status:
+            continue
+        if os.path.dirname(other_path) == os.path.dirname(file_path):
+            deleted_files_in_same_dir.append(other_path)
+
+    is_directory_deletion = len(deleted_files_in_same_dir) > 0
+
+    try:
+        if is_directory_deletion:
+            dir_path = os.path.dirname(file_path)
+            if repo_name == "root":
+                dest_dir = os.path.join(overrides_dir, dir_path) if dir_path else overrides_dir
+            else:
+                dest_dir = (
+                    os.path.join(overrides_dir, repo_name, dir_path)
+                    if dir_path
+                    else os.path.join(overrides_dir, repo_name)
+                )
+            os.makedirs(dest_dir, exist_ok=True)
+            gitkeep_file = os.path.join(dest_dir, ".gitkeep")
+            with open(gitkeep_file, "w", encoding="utf-8") as file_obj:
+                file_obj.write("# Directory preservation marker\n")
+                file_obj.write(f"# Original directory: {dir_path}\n")
+                file_obj.write(f"# Repository: {repo_name}\n")
+                file_obj.write(f"# Created by po_new on {datetime.now().isoformat()}\n")
+                file_obj.write("# This directory was deleted, .gitkeep prevents it from being removed\n")
+            return True
+
+        dest_file = (
+            os.path.join(overrides_dir, f"{file_path}.remove")
+            if repo_name == "root"
+            else os.path.join(overrides_dir, repo_name, f"{file_path}.remove")
+        )
+        os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+        with open(dest_file, "w", encoding="utf-8") as file_obj:
+            file_obj.write(f"# Remove marker for deleted file: {file_path}\n")
+            file_obj.write(f"# This file was deleted from repository: {repo_name}\n")
+            file_obj.write(f"# Created by po_new on {datetime.now().isoformat()}\n")
+        return True
+    except OSError as exc:
+        log.error("Failed to create remove file for %s: %s", file_path, exc)
+        return False
+
+
+def _batch_create_patches(file_infos: List[ModifiedFile], po_path: str, repositories: List[Tuple[str, str]]) -> int:
+    """Create patch files for the selected modified files."""
+    patches_dir = os.path.join(po_path, "patches")
+    success_count = 0
+
+    print("  Creating patches for all selected files...")
+    for repo_name, file_path, _ in file_infos:
+        if _create_patch_for_file(repositories, repo_name, file_path, patches_dir, force=True):
+            print(f"    ✓ Created patch for {file_path}")
+            success_count += 1
+        else:
+            print(f"    ✗ Failed to create patch for {file_path}")
+
+    print(f"  Completed: {success_count}/{len(file_infos)} patches created")
+    return success_count
+
+
+def _batch_create_overrides(file_infos: List[ModifiedFile], po_path: str, repositories: List[Tuple[str, str]]) -> int:
+    """Create override files for the selected modified files."""
+    overrides_dir = os.path.join(po_path, "overrides")
+    success_count = 0
+
+    print("  Creating overrides for all selected files...")
+    for repo_name, file_path, _ in file_infos:
+        if _create_override_for_file(repositories, repo_name, file_path, overrides_dir):
+            print(f"    ✓ Created override for {file_path}")
+            success_count += 1
+        else:
+            print(f"    ✗ Failed to create override for {file_path}")
+
+    print(f"  Completed: {success_count}/{len(file_infos)} overrides created")
+    return success_count
+
+
+def _batch_create_remove_files(file_infos: List[ModifiedFile], po_path: str) -> int:
+    """Create remove markers for deleted files from the selection."""
+    overrides_dir = os.path.join(po_path, "overrides")
+    success_count = 0
+    deleted_total = len([item for item in file_infos if "deleted" in item[2]])
+
+    print("  Creating remove files for deleted files...")
+    for repo_name, file_path, status in file_infos:
+        if "deleted" not in status:
+            print(f"    - Skipped {file_path} (not deleted)")
+            continue
+        if _create_remove_file_for_deleted_file(repo_name, file_path, overrides_dir, file_infos):
+            print(f"    ✓ Created remove file for {file_path}")
+            success_count += 1
+        else:
+            print(f"    ✗ Failed to create remove file for {file_path}")
+
+    print(f"  Completed: {success_count}/{deleted_total} remove files created")
+    return success_count
+
+
+def _apply_po_selection(
+    file_infos: List[ModifiedFile],
+    po_path: str,
+    action: str,
+    repositories: List[Tuple[str, str]],
+) -> bool:
+    """Write the selected PO files to disk using one shared action."""
+    if action == "skip":
+        print("Skipped selected files.")
+        return True
+
+    os.makedirs(po_path, exist_ok=True)
+    log.info("Created po directory: '%s'", po_path)
+
+    if action == "patches":
+        _batch_create_patches(file_infos, po_path, repositories)
+        return True
+    if action == "overrides":
+        _batch_create_overrides(file_infos, po_path, repositories)
+        return True
+    if action == "remove":
+        _batch_create_remove_files(file_infos, po_path)
+        return True
+
+    log.error("Unknown PO selection action: %s", action)
+    return False
+
+
+def _process_multiple_files(file_infos: List[ModifiedFile], po_path: str, repositories: List[Tuple[str, str]]) -> int:
+    """Process one or more files with a single shared action."""
+    if not file_infos:
+        return 0
+
+    print(f"\nFiles to process ({len(file_infos)}):")
+    for index, (repo_name, file_path, status) in enumerate(file_infos, 1):
+        print(f"  {index:2d}. [{repo_name}] {file_path} ({status})")
+
+    has_deleted_files = any("deleted" in status for _repo_name, _file_path, status in file_infos)
+    print("\nChoose action for ALL selected files:")
+    print("  1. Create patches (for tracked files with modifications)")
+    print("  2. Create overrides (for any file)")
+    if has_deleted_files:
+        print("  3. Create remove files (for deleted files)")
+        print("  4. Skip all files")
+    else:
+        print("  3. Skip all files")
+
+    while True:
+        if has_deleted_files:
+            choice = input("Choice (1/2/3/4): ").strip()
+            if choice == "1":
+                return _batch_create_patches(file_infos, po_path, repositories)
+            if choice == "2":
+                return _batch_create_overrides(file_infos, po_path, repositories)
+            if choice == "3":
+                return _batch_create_remove_files(file_infos, po_path)
+            if choice == "4":
+                print("  - Skipped all files")
+                return 0
+            print("Invalid choice. Please enter 1, 2, 3, or 4.")
+            continue
+
+        choice = input("Choice (1/2/3): ").strip()
+        if choice == "1":
+            return _batch_create_patches(file_infos, po_path, repositories)
+        if choice == "2":
+            return _batch_create_overrides(file_infos, po_path, repositories)
+        if choice == "3":
+            print("  - Skipped all files")
+            return 0
+        print("Invalid choice. Please enter 1, 2, or 3.")
+
+
+def _run_console_po_file_selection(
+    po_path: str,
+    repositories: List[Tuple[str, str]],
+    project_cfg: Dict[str, Any],
+) -> bool:
+    """Interactive console file selection for PO creation/update."""
+    print("\n=== File Selection for PO ===")
+    print("Scanning for modified files in repositories...")
+
+    if not repositories:
+        print("No git repositories found.")
+        return True
+
+    project_config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
+    all_modified_files = _scan_po_modified_files(repositories, project_config)
+    if all_modified_files is None:
+        return False
+    if not all_modified_files:
+        print("No modified files found in any repository.")
+        return True
+
+    processed_files: set[ModifiedFile] = set()
+    remaining_files = all_modified_files.copy()
+
+    while True:
+        print(f"\n=== File Selection (Remaining: {len(remaining_files)}/{len(all_modified_files)}) ===")
+        if remaining_files:
+            print("Remaining files to process:")
+            for index, (repo_name, file_path, status) in enumerate(remaining_files, 1):
+                print(f"  {index:2d}. [{repo_name}] {file_path} ({status})")
+        else:
+            print("All files have been processed!")
+            break
+
+        if processed_files:
+            print(f"\nProcessed files ({len(processed_files)}):")
+            for repo_name, file_path, status in sorted(processed_files):
+                print(f"  ✓ [{repo_name}] {file_path} ({status})")
+
+        print("\nOptions:")
+        print("  Enter file number to process (e.g., '1')")
+        print("  Enter multiple numbers separated by comma or space (e.g., '1,3,5' or '1 3 5')")
+        print("  Enter 'all' to process all remaining files")
+        print("  Enter 'q' to quit and finish")
+
+        selection = input("\nSelection: ").strip()
+        if selection.lower() == "q":
+            print("File selection finished.")
+            return True
+
+        if selection.lower() == "all":
+            files_to_process = remaining_files.copy()
+            processed_count = _process_multiple_files(files_to_process, po_path, repositories)
+            if processed_count > 0:
+                for file_info in files_to_process:
+                    processed_files.add(file_info)
+            remaining_files.clear()
+            continue
+
+        try:
+            values = selection.replace(",", " ").split()
+            valid_indices = []
+            for number in values:
+                index = int(number) - 1
+                if 0 <= index < len(remaining_files):
+                    valid_indices.append(index)
+                else:
+                    print(f"Invalid file number: {number}")
+
+            if not valid_indices:
+                print("No valid file numbers provided")
+                continue
+
+            selected_files = [remaining_files[index] for index in valid_indices]
+            processed_count = _process_multiple_files(selected_files, po_path, repositories)
+            for index in sorted(set(valid_indices), reverse=True):
+                remaining_files.pop(index)
+            if processed_count > 0:
+                for file_info in selected_files:
+                    processed_files.add(file_info)
+        except ValueError:
+            print("Invalid input. Please enter a number, 'all', or 'q'.")
+
+    return True
+
+
+def prepare_po_textual_selection(
+    env: Dict[str, Any],
+    projects_info: Dict[str, Any],
+    project_name: str,
+    po_name: str,
+    *,
+    update_mode: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Collect Textual pre-selection state for `po_new` / `po_update` before the execution shell starts."""
+    project_cfg = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    board_name = project_cfg.get("board_name") if isinstance(project_cfg, dict) else None
+    if not board_name:
+        return None
+
+    repositories = env.get("repositories", [])
+    board_path = os.path.join(env["projects_path"], board_name)
+    po_path = os.path.join(board_path, "po", po_name)
+
+    if not repositories:
+        return {
+            "project_name": project_name,
+            "po_name": po_name,
+            "po_path": po_path,
+            "status": "noop",
+            "message": "No git repositories found.",
+        }
+
+    project_config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
+    modified_files = _scan_po_modified_files(repositories, project_config)
+    if modified_files is None:
+        return {
+            "project_name": project_name,
+            "po_name": po_name,
+            "po_path": po_path,
+            "status": "error",
+            "message": "Failed to scan modified files.",
+        }
+    if not modified_files:
+        return {
+            "project_name": project_name,
+            "po_name": po_name,
+            "po_path": po_path,
+            "status": "noop",
+            "message": "No modified files found in any repository.",
+        }
+
+    from src.execution_textual import run_po_selection_dialog
+
+    result = run_po_selection_dialog(
+        po_name=po_name,
+        po_path=po_path,
+        modified_files=modified_files,
+        update_mode=update_mode,
+    )
+    status = str(result.get("status") or "cancelled")
+    payload: Dict[str, Any] = {
+        "project_name": project_name,
+        "po_name": po_name,
+        "po_path": po_path,
+        "status": status,
+    }
+
+    if status == "apply":
+        indexes = [int(index) for index in result.get("selected_indexes", [])]
+        payload["action"] = str(result.get("action") or "patches")
+        payload["selected_files"] = [modified_files[index] for index in indexes]
+        return payload
+    if status == "skip":
+        payload["message"] = "Skipped selected files."
+        return payload
+    if status == "noop":
+        payload["message"] = "No files selected."
+        return payload
+
+    payload["message"] = "Cancelled."
+    return payload
+
+
+def _consume_po_textual_selection(env: Dict[str, Any], project_name: str, po_name: str) -> Optional[Dict[str, Any]]:
+    """Pop the prepared Textual PO selection if it matches this invocation."""
+    payload = env.pop("po_textual_selection", None)
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("project_name") != project_name or payload.get("po_name") != po_name:
+        return None
+    return payload
+
+
 @register("po_new", needs_repositories=True, desc="Create a new PO for a project")
 def po_new(
     env: Dict,
@@ -986,6 +1624,7 @@ def po_new(
     Returns:
         bool: True if success, otherwise False.
     """
+    _ = tui  # `--tui` remains a compatibility alias for the default Textual flow.
     log.info("start po_new for project: '%s', po_name: '%s'", project_name, po_name)
     if not re.match(r"^po[a-z0-9_]*$", po_name):
         log.error(
@@ -993,9 +1632,9 @@ def po_new(
             po_name,
         )
         return False
-    project_cfg = projects_info.get(project_name, {})
-    board_name = project_cfg.get("board_name")
-    board_path = project_cfg.get("board_path")
+    project_cfg = projects_info.get(project_name, {}) if isinstance(projects_info, dict) else {}
+    board_name = project_cfg.get("board_name") if isinstance(project_cfg, dict) else None
+    board_path = project_cfg.get("board_path") if isinstance(project_cfg, dict) else None
     if not board_name or not board_path:
         log.error("Board info missing for project '%s'", project_name)
         return False
@@ -1025,725 +1664,43 @@ def po_new(
             log.error("PO directory '%s' already exists", po_path)
             return False
 
-    # Define helper functions as local functions
-    def __confirm_creation(po_name, po_path, board_path):
-        """Show creation information and ask for user confirmation."""
-        print("\n=== PO Creation Confirmation ===")
-        print(f"PO Name: {po_name}")
-        print(f"PO Path: {po_path}")
-        print(f"Board Path: {board_path}")
+    selection_plan = _consume_po_textual_selection(env, project_name, po_name)
 
-        print("\nThis will create:")
-        print("  1. PO directory structure with patches/ and overrides/ subdirectories")
-        print("  2. Option to select modified files to include in the PO")
-
-        while True:
-            response = input(f"\nDo you want to create PO '{po_name}'? (yes/no): ").strip().lower()
-            if response in ["yes", "y"]:
-                return True
-            if response in ["no", "n"]:
-                return False
-            print("Please enter 'yes' or 'no'.")
-
-    def __get_modified_files(repo_path, repo_name, ignore_patterns):
-        """Get modified files in a repository including staged files, with ignore support."""
-        modified_files = []
-        try:
-            # Get staged files (files in index)
-            staged_result = subprocess.run(
-                ["git", "diff", "--name-only", "--cached"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            staged_files = set()
-            if staged_result.returncode == 0 and staged_result.stdout.strip():
-                staged_files = set(staged_result.stdout.strip().split("\n"))
-
-            # Get modified and untracked files (files in working directory)
-            working_result = subprocess.run(
-                ["git", "ls-files", "--modified", "--others", "--exclude-standard"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            working_files = set()
-            if working_result.returncode == 0 and working_result.stdout.strip():
-                working_files = set(working_result.stdout.strip().split("\n"))
-
-            # Get deleted files (files that were tracked but are now missing)
-            deleted_result = subprocess.run(
-                ["git", "ls-files", "--deleted"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            deleted_files = set()
-            if deleted_result.returncode == 0 and deleted_result.stdout.strip():
-                deleted_files = set(deleted_result.stdout.strip().split("\n"))
-
-            # Process all files
-            all_files = staged_files | working_files | deleted_files
-
-            def is_ignored(file_path):
-                # Create full path for matching: repo_name/file_path
-                full_path = f"{repo_name}/{file_path}" if repo_name != "root" else file_path
-
-                for pattern in ignore_patterns:
-                    if fnmatch.fnmatch(file_path, pattern) or fnmatch.fnmatch(full_path, pattern):
-                        return True
-                return False
-
-            for file_path in all_files:
-                if not file_path.strip():
-                    continue
-                if is_ignored(file_path):
-                    continue
-
-                # Determine file status
-                status_result = subprocess.run(
-                    ["git", "status", "--porcelain", file_path],
-                    cwd=repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if status_result.returncode == 0 and status_result.stdout.strip():
-                    status = status_result.stdout.strip()[:2]
-
-                    # Enhance status description for better understanding
-                    if file_path in deleted_files:
-                        if file_path in staged_files:
-                            status = f"{status} (staged+deleted)"
-                        else:
-                            status = f"{status} (deleted)"
-                    elif file_path in staged_files and file_path in working_files:
-                        status = f"{status} (staged+modified)"
-                    elif file_path in staged_files:
-                        status = f"{status} (staged)"
-                    else:
-                        status = f"{status} (working)"
-                else:
-                    status = "?? (unknown)"
-
-                modified_files.append((repo_name, file_path, status))
-
-        except (OSError, subprocess.SubprocessError) as e:
-            log.error("Failed to get modified files for repository %s: %s", repo_name, e)
-            print(f"Warning: Failed to get modified files for repository {repo_name}: {e}")
-            return None
-
-        return modified_files
-
-    def __find_repo_path_by_name(repo_name):
-        """Find repository path by name."""
-        # 直接用env['repositories']
-        for repo_path, rname in env.get("repositories", []):
-            if rname == repo_name:
-                return repo_path
-        return None
-
-    def __create_patch_for_file(repo_name, file_path, patches_dir, force=False):
-        """Create a patch file for the specified file."""
-        try:
-            # Find the repository path
-            repo_path = __find_repo_path_by_name(repo_name)
-            if not repo_path:
-                return False
-
-            # Check if file is staged
-            staged_result = subprocess.run(
-                ["git", "diff", "--name-only", "--cached"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            is_staged = False
-            if staged_result.returncode == 0 and staged_result.stdout.strip():
-                staged_files = staged_result.stdout.strip().split("\n")
-                is_staged = file_path in staged_files
-
-            # Determine patch source (staged vs working directory)
-            use_staged = False
-            if is_staged and not force:
-                print(f"    File {file_path} is staged. Choose patch source:")
-                print("      1. Use staged changes (git diff --cached)")
-                print("      2. Use working directory changes (git diff)")
-
-                while True:
-                    choice = input("    Choice (1/2): ").strip()
-                    if choice == "1":
-                        use_staged = True
-                        break
-                    if choice == "2":
-                        use_staged = False
-                        break
-                    print("    Invalid choice. Please enter 1 or 2.")
-            elif is_staged and force:
-                # In force mode, default to staged for staged files
-                use_staged = True
-
-            # Ask user for custom patch name
-            default_filename = os.path.basename(file_path)
-            print(f"    Default patch name: {default_filename}.patch")
-            custom_name = input("    Enter custom patch name (or press Enter for default): ").strip()
-
-            if custom_name:
-                # Remove .patch extension if user included it
-                if custom_name.endswith(".patch"):
-                    custom_name = custom_name[:-6]
-                filename = custom_name
-            else:
-                filename = default_filename
-
-            # Create patch file path: patches_dir/repo_name/file_path.patch
-            if repo_name == "root":
-                # For root repository, patch is based on root directory, use only filename
-                patch_file_path = os.path.join(patches_dir, f"{filename}.patch")
-            else:
-                # For other repositories, patch is based on repo root directory, use only filename
-                patch_file_path = os.path.join(patches_dir, repo_name, f"{filename}.patch")
-
-            # Create patches directory and subdirectories if they don't exist
-            os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
-
-            # Generate patch using appropriate git diff command
-            if use_staged:
-                result = subprocess.run(
-                    ["git", "diff", "--cached", "--", file_path],
-                    cwd=repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                print(f"    Generating patch from staged changes for {file_path}")
-            else:
-                result = subprocess.run(
-                    ["git", "diff", "--", file_path],
-                    cwd=repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                print(f"    Generating patch from working directory for {file_path}")
-
-            if result.returncode == 0 and result.stdout.strip():
-                # Write patch file
-                with open(patch_file_path, "w", encoding="utf-8") as f:
-                    f.write(result.stdout)
-
-                return True
-            print(f"    Warning: No changes found for {file_path}")
-            return False
-
-        except (OSError, subprocess.SubprocessError) as e:
-            log.error("Failed to create patch for file %s: %s", file_path, e)
-            return False
-
-    def __create_override_for_file(repo_name, file_path, overrides_dir):
-        """Create an override file for the specified file."""
-        try:
-            # Find the repository path
-            repo_path = __find_repo_path_by_name(repo_name)
-            if not repo_path:
-                return False
-
-            # Source file path
-            src_file = os.path.join(repo_path, file_path)
-            if not os.path.exists(src_file):
-                print(f"    Warning: File {file_path} does not exist")
-                return False
-
-            # Destination file path in overrides directory
-            if repo_name == "root":
-                # For root repository, use the full relative path
-                dest_file = os.path.join(overrides_dir, file_path)
-            else:
-                dest_file = os.path.join(overrides_dir, repo_name, file_path)
-
-            # Create overrides directory and subdirectories if they don't exist
-            os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-
-            # Copy file
-            shutil.copy2(src_file, dest_file)
-            return True
-
-        except (OSError, shutil.Error) as e:
-            log.error("Failed to create override for file %s: %s", file_path, e)
-            return False
-
-    def __create_remove_file_for_deleted_file(repo_name, file_path, overrides_dir, all_file_infos=None):
-        """Create a .remove file for a deleted file or .gitkeep for deleted directory."""
-        try:
-            # Check if this is a directory deletion by looking for other deleted files in the same directory
-            # This is a heuristic approach - if multiple files in the same directory are deleted,
-            # it might indicate a directory deletion
-            deleted_files_in_same_dir = []
-            if all_file_infos:
-                for other_repo, other_path, other_status in all_file_infos:
-                    if other_repo == repo_name and "deleted" in other_status:
-                        other_dir = os.path.dirname(other_path)
-                        current_dir = os.path.dirname(file_path)
-                        if other_dir == current_dir and other_path != file_path:
-                            deleted_files_in_same_dir.append(other_path)
-
-            # If there are multiple deleted files in the same directory, treat as directory deletion
-            is_directory_deletion = len(deleted_files_in_same_dir) > 0
-
-            if is_directory_deletion:
-                # For directory deletion, create .gitkeep file to preserve the directory structure
-                dir_path = os.path.dirname(file_path)
-                if repo_name == "root":
-                    dest_dir = os.path.join(overrides_dir, dir_path) if dir_path else overrides_dir
-                else:
-                    dest_dir = (
-                        os.path.join(overrides_dir, repo_name, dir_path)
-                        if dir_path
-                        else os.path.join(overrides_dir, repo_name)
-                    )
-
-                # Create directory structure
-                os.makedirs(dest_dir, exist_ok=True)
-
-                # Create .gitkeep file
-                gitkeep_file = os.path.join(dest_dir, ".gitkeep")
-                with open(gitkeep_file, "w", encoding="utf-8") as f:
-                    f.write("# Directory preservation marker\n")
-                    f.write(f"# Original directory: {dir_path}\n")
-                    f.write(f"# Repository: {repo_name}\n")
-                    f.write(f"# Created by po_new on {__import__('datetime').datetime.now().isoformat()}\n")
-                    f.write("# This directory was deleted, .gitkeep prevents it from being removed\n")
-
-                return True
-
-            # For individual file deletion, create .remove file
-            if repo_name == "root":
-                # For root repository, use the full relative path
-                dest_file = os.path.join(overrides_dir, f"{file_path}.remove")
-            else:
-                dest_file = os.path.join(overrides_dir, repo_name, f"{file_path}.remove")
-
-            # Create overrides directory and subdirectories if they don't exist
-            os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-
-            # Create empty .remove file as a marker
-            with open(dest_file, "w", encoding="utf-8") as f:
-                f.write(f"# Remove marker for deleted file: {file_path}\n")
-                f.write(f"# This file was deleted from repository: {repo_name}\n")
-                f.write(f"# Created by po_new on {__import__('datetime').datetime.now().isoformat()}\n")
-
-            return True
-
-        except (OSError, IOError) as e:
-            log.error("Failed to create remove file for %s: %s", file_path, e)
-            return False
-
-    def __process_multiple_files(file_infos, po_path):
-        """Process multiple files with a single choice for all files."""
-        if not file_infos:
-            return 0
-
-        # Create po directory when first file is selected
-        os.makedirs(po_path, exist_ok=True)
-        log.info("Created po directory: '%s'", po_path)
-
-        # Show all files to be processed
-        print(f"\nFiles to process ({len(file_infos)}):")
-        for i, (repo_name, file_path, status) in enumerate(file_infos, 1):
-            print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
-
-        # Check if there are any deleted files
-        has_deleted_files = any("deleted" in status for _, _, status in file_infos)
-
-        print("\nChoose action for ALL selected files:")
-        print("  1. Create patches (for tracked files with modifications)")
-        print("  2. Create overrides (for any file)")
-        if has_deleted_files:
-            print("  3. Create remove files (for deleted files)")
-            print("  4. Skip all files")
-        else:
-            print("  3. Skip all files")
-
-        while True:
-            if has_deleted_files:
-                choice = input("Choice (1/2/3/4): ").strip()
-                if choice == "1":
-                    return __batch_create_patches(file_infos, po_path)
-                if choice == "2":
-                    return __batch_create_overrides(file_infos, po_path)
-                if choice == "3":
-                    return __batch_create_remove_files(file_infos, po_path)
-                if choice == "4":
-                    print("  - Skipped all files")
-                    return 0
-                print("Invalid choice. Please enter 1, 2, 3, or 4.")
-            else:
-                choice = input("Choice (1/2/3): ").strip()
-                if choice == "1":
-                    return __batch_create_patches(file_infos, po_path)
-                if choice == "2":
-                    return __batch_create_overrides(file_infos, po_path)
-                if choice == "3":
-                    print("  - Skipped all files")
-                    return 0
-                print("Invalid choice. Please enter 1, 2, or 3.")
-
-    def __batch_create_patches(file_infos, po_path):
-        """Create patches for multiple files."""
-        patches_dir = os.path.join(po_path, "patches")
-        success_count = 0
-
-        print("  Creating patches for all selected files...")
-        for repo_name, file_path, _ in file_infos:
-            if __create_patch_for_file(repo_name, file_path, patches_dir, force=True):
-                print(f"    ✓ Created patch for {file_path}")
-                success_count += 1
-            else:
-                print(f"    ✗ Failed to create patch for {file_path}")
-
-        print(f"  Completed: {success_count}/{len(file_infos)} patches created")
-        return success_count
-
-    def __batch_create_overrides(file_infos, po_path):
-        """Create overrides for multiple files."""
-        overrides_dir = os.path.join(po_path, "overrides")
-        success_count = 0
-
-        print("  Creating overrides for all selected files...")
-        for repo_name, file_path, _ in file_infos:
-            if __create_override_for_file(repo_name, file_path, overrides_dir):
-                print(f"    ✓ Created override for {file_path}")
-                success_count += 1
-            else:
-                print(f"    ✗ Failed to create override for {file_path}")
-
-        print(f"  Completed: {success_count}/{len(file_infos)} overrides created")
-        return success_count
-
-    def __batch_create_remove_files(file_infos, po_path):
-        """Create remove files for deleted files."""
-        overrides_dir = os.path.join(po_path, "overrides")
-        success_count = 0
-
-        print("  Creating remove files for deleted files...")
-        for repo_name, file_path, status in file_infos:
-            if "deleted" in status:
-                if __create_remove_file_for_deleted_file(repo_name, file_path, overrides_dir, file_infos):
-                    print(f"    ✓ Created remove file for {file_path}")
-                    success_count += 1
-                else:
-                    print(f"    ✗ Failed to create remove file for {file_path}")
-            else:
-                print(f"    - Skipped {file_path} (not deleted)")
-
-        print(f"  Completed: {success_count}/{len([f for f in file_infos if 'deleted' in f[2]])} remove files created")
-        return success_count
-
-    def __interactive_file_selection(po_path, repositories, project_cfg):
-        """Interactive file selection for PO creation."""
-        print("\n=== File Selection for PO ===")
-        print("Scanning for modified files in repositories...")
-
-        # 直接使用传入的repositories参数
-        if not repositories:
-            print("No git repositories found.")
-            return
-
-        # Load ignore patterns once for all repositories
-        # project_cfg contains the full project info, config is in project_cfg["config"]
-        project_config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
-        ignore_patterns = __load_ignore_patterns(project_config)
-
-        all_modified_files = []
-        for repo_path, repo_name in repositories:
-            modified_files = __get_modified_files(repo_path, repo_name, ignore_patterns)
-            if modified_files is None:
-                return
-            if modified_files:
-                all_modified_files.extend(modified_files)
-
-        if not all_modified_files:
-            print("No modified files found in any repository.")
-            return
-
-        # Track processed files
-        processed_files = set()
-        remaining_files = all_modified_files.copy()
-
-        while True:
-            print(f"\n=== File Selection (Remaining: {len(remaining_files)}/{len(all_modified_files)}) ===")
-
-            # Show remaining files
-            if remaining_files:
-                print("Remaining files to process:")
-                for i, (repo_name, file_path, status) in enumerate(remaining_files, 1):
-                    print(f"  {i:2d}. [{repo_name}] {file_path} ({status})")
-            else:
-                print("All files have been processed!")
-                break
-
-            # Show processed files summary
-            if processed_files:
-                print(f"\nProcessed files ({len(processed_files)}):")
-                for repo_name, file_path, status in sorted(processed_files):
-                    print(f"  ✓ [{repo_name}] {file_path} ({status})")
-
-            print("\nOptions:")
-            print("  Enter file number to process (e.g., '1')")
-            print("  Enter multiple numbers separated by comma or space (e.g., '1,3,5' or '1 3 5')")
-            print("  Enter 'all' to process all remaining files")
-            print("  Enter 'q' to quit and finish")
-
-            selection = input("\nSelection: ").strip()
-            if selection.lower() == "q":
-                print("File selection finished.")
-                break
-
-            if selection.lower() == "all":
-                # Process all remaining files
-                files_to_process = remaining_files.copy()
-                processed_count = __process_multiple_files(files_to_process, po_path)
-                if processed_count > 0:
-                    for file_info in files_to_process:
-                        processed_files.add(file_info)
-                remaining_files.clear()
-                continue
-
-            try:
-                # Check if input contains multiple numbers (e.g., "1,3,5" or "1 3 5")
-                if "," in selection or " " in selection:
-                    # Split by comma or space and process multiple files
-                    separators = [",", " "]
-                    numbers = selection
-                    for sep in separators:
-                        if sep in numbers:
-                            numbers = numbers.replace(sep, " ")
-                    number_list = numbers.split()
-
-                    # Validate all numbers first
-                    valid_indices = []
-                    for num_str in number_list:
-                        try:
-                            index = int(num_str) - 1
-                            if 0 <= index < len(remaining_files):
-                                valid_indices.append(index)
-                            else:
-                                print(f"Invalid file number: {num_str}")
-                        except ValueError:
-                            print(f"Invalid number format: {num_str}")
-
-                    if valid_indices:
-                        # Get all selected files
-                        selected_files = [remaining_files[index] for index in valid_indices]
-
-                        # Process all files with single choice
-                        processed_count = __process_multiple_files(selected_files, po_path)
-
-                        # Remove processed files from remaining_files
-                        valid_indices.sort(reverse=True)
-                        for index in valid_indices:
-                            remaining_files.pop(index)
-
-                        # Add to processed_files if any were successfully processed
-                        if processed_count > 0:
-                            for file_info in selected_files:
-                                processed_files.add(file_info)
-                    else:
-                        print("No valid file numbers provided")
-                else:
-                    # Single number processing - treat as single file selection
-                    index = int(selection) - 1
-                    if 0 <= index < len(remaining_files):
-                        file_info = remaining_files[index]
-                        processed_count = __process_multiple_files([file_info], po_path)
-                        if processed_count > 0:
-                            processed_files.add(file_info)
-                        remaining_files.pop(index)
-                    else:
-                        print("Invalid file number. Please try again.")
-            except ValueError:
-                print("Invalid input. Please enter a number, 'all', or 'q'.")
-
-    def __tui_file_selection(po_path, repositories, project_cfg) -> bool:
-        """TUI file selection for PO creation."""
-        print("\n=== TUI File Selection for PO ===")
-        print("Scanning for modified files in repositories...")
-
-        if not repositories:
-            print("No git repositories found.")
-            return True
-
-        project_config = project_cfg.get("config", {}) if isinstance(project_cfg, dict) else {}
-        ignore_patterns = __load_ignore_patterns(project_config)
-
-        all_modified_files = []
-        for repo_path, repo_name in repositories:
-            modified_files = __get_modified_files(repo_path, repo_name, ignore_patterns)
-            if modified_files is None:
-                return False
-            if modified_files:
-                all_modified_files.extend(modified_files)
-
-        if not all_modified_files:
-            print("No modified files found in any repository.")
-            return True
-
-        try:
-            from src.tui_utils import TuiUnavailable, get_questionary
-
-            questionary = get_questionary()
-        except TuiUnavailable as exc:
-            log.error("%s", exc)
-            print(str(exc))
-            return False
-
-        # Use stable indexes as values to keep choices simple.
-        choices = [
-            {"name": f"[{repo_name}] {file_path} ({status})", "value": i}
-            for i, (repo_name, file_path, status) in enumerate(all_modified_files)
-        ]
-        selected = questionary.checkbox(
-            "Select files to include in the PO (space to toggle, enter to confirm):",
-            choices=choices,
-        ).ask()
-
-        if not selected:
-            print("No files selected.")
-            return True
-
-        selected_files = [all_modified_files[i] for i in selected]
-        has_deleted_files = any("deleted" in status for _repo, _path, status in selected_files)
-
-        action_choices = [
-            {"name": "Create patches", "value": "patches"},
-            {"name": "Create overrides", "value": "overrides"},
-        ]
-        if has_deleted_files:
-            action_choices.append({"name": "Create remove files (deleted only)", "value": "remove"})
-        action_choices.append({"name": "Skip", "value": "skip"})
-
-        action = questionary.select("Choose action for selected files:", choices=action_choices).ask()
-        if not action or action == "skip":
-            print("Skipped selected files.")
-            return True
-
-        print("\n=== TUI Preview ===")
-        print(f"Action: {action}")
-        print(f"PO Path: {po_path}")
-        print(f"Files: {len(selected_files)}")
-        for repo_name, file_path, status in selected_files:
-            print(f"- [{repo_name}] {file_path} ({status})")
-
-        proceed = questionary.confirm("Proceed to write changes to the PO directory?", default=False).ask()
-        if not proceed:
-            print("Cancelled.")
-            return True
-
-        os.makedirs(po_path, exist_ok=True)
-        log.info("Created po directory: '%s'", po_path)
-
-        if action == "patches":
-            __batch_create_patches(selected_files, po_path)
-        elif action == "overrides":
-            __batch_create_overrides(selected_files, po_path)
-        elif action == "remove":
-            __batch_create_remove_files(selected_files, po_path)
-        else:  # pragma: no cover
-            log.error("Unknown TUI action: %s", action)
-            return False
-        return True
-
-    def __load_ignore_patterns(project_cfg):
-        """Load ignore patterns from project configuration or .gitignore."""
-        patterns = []
-
-        # First, try to get ignore patterns from project configuration
-        log.debug("project_cfg type: %s, content: %s", type(project_cfg), project_cfg)
-        if project_cfg:
-            po_ignore_config = project_cfg.get("PROJECT_PO_IGNORE", "").strip()
-            log.debug("po_ignore_config: '%s'", po_ignore_config)
-            if po_ignore_config:
-                config_patterns = [p.strip() for p in po_ignore_config.split() if p.strip()]
-                patterns.extend(config_patterns)
-
-                # Add enhanced patterns for path containment matching
-                enhanced_patterns = []
-                for pattern in config_patterns:
-                    # Skip patterns that already contain wildcards or special characters
-                    if any(char in pattern for char in ["*", "?", "[", "]"]):
-                        continue
-
-                    # Add patterns to match repositories and files containing the pattern in their path
-                    enhanced_patterns.extend(
-                        [
-                            # Match any path containing the pattern
-                            f"*{pattern}*",
-                            # Match directories starting with the pattern
-                            f"*{pattern}/*",
-                            # Match directories containing the pattern
-                            f"*/{pattern}/*",
-                            # Match files/directories ending with the pattern
-                            f"*/{pattern}",
-                        ]
-                    )
-
-                patterns.extend(enhanced_patterns)
-                log.debug(
-                    "Loaded ignore patterns from project config: %s",
-                    config_patterns,
-                )
-                log.debug(
-                    "Added enhanced patterns for path containment: %s",
-                    enhanced_patterns,
-                )
-
-        # Then load from .gitignore file
-        gitignore_file = os.path.join(os.getcwd(), ".gitignore")
-        if os.path.exists(gitignore_file):
-            try:
-                with open(gitignore_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            patterns.append(line)
-                log.debug("Loaded ignore patterns from file: %s", gitignore_file)
-            except OSError as e:
-                log.warning("Failed to read ignore file %s: %s", gitignore_file, e)
-
-        log.debug("Loaded ignore patterns: %s", patterns)
-        return patterns
-
-    # Show creation information and ask for confirmation
-    if not force:
-        if not __confirm_creation(po_name, po_path, board_path):
+    if not force and selection_plan is None:
+        if not _confirm_po_creation(po_name, po_path, board_path):
             log.info("po_new cancelled by user")
             return False
 
     try:
-        # Interactive file selection first
-        if not force:
-            if tui:
-                if not __tui_file_selection(po_path, env.get("repositories", []), project_cfg):
-                    return False
-            else:
-                # Pass env["repositories"] and project_cfg for interactive selection.
-                __interactive_file_selection(po_path, env.get("repositories", []), project_cfg)
+        repositories = env.get("repositories", [])
+        if selection_plan is not None:
+            message = selection_plan.get("message")
+            if message:
+                print(message)
+            if selection_plan.get("status") == "error":
+                return False
+            if selection_plan.get("status") != "apply":
+                log.info(
+                    "po_new finished without writing files for project: '%s', po_name: '%s'", project_name, po_name
+                )
+                return True
 
-        # In force mode, create empty directory structure
+            action = str(selection_plan.get("action") or "patches")
+            selected_files = selection_plan.get("selected_files", [])
+            with execution_step(
+                env,
+                make_step_id("po_new", project_name, po_name, action),
+                f"PO {po_name}: create {action}",
+            ):
+                if not _apply_po_selection(selected_files, po_path, action, repositories):
+                    return False
+        elif not force:
+            if not _run_console_po_file_selection(po_path, repositories, project_cfg):
+                return False
+
         if force:
-            # Create po directory
             os.makedirs(po_path, exist_ok=True)
             log.info("Created po directory: '%s'", po_path)
-
             for plugin in get_po_plugins():
                 plugin.ensure_structure(po_path, True)
 
@@ -1754,8 +1711,8 @@ def po_new(
         )
         return True
 
-    except OSError as e:
-        log.error("Failed to create po directory structure for '%s': '%s'", po_name, e)
+    except OSError as exc:
+        log.error("Failed to create po directory structure for '%s': '%s'", po_name, exc)
         return False
 
 
@@ -2376,33 +2333,33 @@ def po_list(
     if not po_infos:
         print("  No configured PO found.")
     elif short:
-        for po in po_infos:
-            print(f"  {po['name']}")
+        for item in po_infos:
+            print(f"  {item['name']}")
     else:
-        for po in po_infos:
-            print(f"\nPO: {po['name']}")
+        for item in po_infos:
+            print(f"\nPO: {item['name']}")
             print("  commits:")
-            if po.get("commit_files"):
-                for cf in po["commit_files"]:
+            if item.get("commit_files"):
+                for cf in item["commit_files"]:
                     print(f"    - {cf}")
             else:
                 print("    (none)")
             print("  patches:")
-            if po["patch_files"]:
-                for pf in po["patch_files"]:
+            if item["patch_files"]:
+                for pf in item["patch_files"]:
                     print(f"    - {pf}")
             else:
                 print("    (none)")
             print("  overrides:")
-            if po["override_files"]:
-                for of in po["override_files"]:
+            if item["override_files"]:
+                for of in item["override_files"]:
                     print(f"    - {of}")
             else:
                 print("    (none)")
 
             # Show custom directories if any
-            if po["custom_dirs"]:
-                for custom_dir_info in po["custom_dirs"]:
+            if item["custom_dirs"]:
+                for custom_dir_info in item["custom_dirs"]:
                     print(f"  {custom_dir_info['section']} ({custom_dir_info['dir']}):")
                     print(f"    file copy config: {custom_dir_info['file_copy_config']}")
                     print("    files:")

@@ -452,8 +452,7 @@ python -m src po_new <project-name> <po-name> [--force] [--tui]
 
 **Options**
 - `--force`: Skip confirmation prompts and create an empty directory structure.
-- `--tui`: Use an interactive TUI (checkbox file picker + action preview) instead of the prompt-based selection flow.
-  - Requires: `questionary` (install with `pip install -e ".[tui]"`).
+- `--tui`: Compatibility alias for the default Textual-based picker in interactive terminals. If the Textual renderer cannot start, the command falls back to the standard console/raw flow.
 
 **Generated structure**
 ```
@@ -486,7 +485,7 @@ python -m src po_update <project-name> <po-name> [--force] [--tui]
 
 **Options**
 - `--force`: Skip confirmation prompts.
-- `--tui`: Use an interactive TUI (checkbox file picker + action preview). Requires `questionary` (`pip install -e ".[tui]"`).
+- `--tui`: Compatibility alias for the default Textual-based picker in interactive terminals. If the Textual renderer cannot start, the command falls back to the standard console/raw flow.
 
 **Example**
 ```bash

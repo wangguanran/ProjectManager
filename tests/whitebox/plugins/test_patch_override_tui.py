@@ -1,125 +1,100 @@
 import builtins
-from types import SimpleNamespace
 
 
-class _StubAsk:
-    def __init__(self, value):
-        self._value = value
-
-    def ask(self):
-        return self._value
-
-
-class _StubQuestionary:
-    def __init__(self, *, checkbox_value=None, select_value=None, confirm_value=None):
-        self._checkbox_value = checkbox_value
-        self._select_value = select_value
-        self._confirm_value = confirm_value
-
-    def checkbox(self, *_args, **_kwargs):
-        return _StubAsk(self._checkbox_value)
-
-    def select(self, *_args, **_kwargs):
-        return _StubAsk(self._select_value)
-
-    def confirm(self, *_args, **_kwargs):
-        return _StubAsk(self._confirm_value)
-
-
-def _fake_git_run_factory(*, working_file: str):
-    def _run(cmd, cwd=None, capture_output=None, text=None, check=None):  # noqa: ARG001
-        # Minimal subset used by po_new -> __get_modified_files.
-        if cmd[:4] == ["git", "diff", "--name-only", "--cached"]:
-            return SimpleNamespace(returncode=0, stdout="")
-        if cmd[:4] == ["git", "ls-files", "--modified", "--others"]:
-            return SimpleNamespace(returncode=0, stdout=f"{working_file}\n")
-        if cmd[:3] == ["git", "ls-files", "--deleted"]:
-            return SimpleNamespace(returncode=0, stdout="")
-        if cmd[:3] == ["git", "status", "--porcelain"]:
-            return SimpleNamespace(returncode=0, stdout=f"?? {working_file}\n")
-        return SimpleNamespace(returncode=1, stdout="")
-
-    return _run
-
-
-def test_po_new_tui_skips_selected_files(monkeypatch, tmp_path, capsys):
-    from src.plugins.patch_override import po_new
-
-    # Auto-confirm creation prompt.
-    monkeypatch.setattr(builtins, "input", lambda _prompt="": "yes")
-
-    # Provide one modified file via stubbed git commands.
-    working_file = "tui_test_file.txt"
-    monkeypatch.setattr(
-        "src.plugins.patch_override.subprocess.run",
-        _fake_git_run_factory(working_file=working_file),
-    )
-
-    # Stub TUI interactions: select the first file, then choose "skip".
-    stub_q = _StubQuestionary(checkbox_value=[0], select_value="skip", confirm_value=False)
-    monkeypatch.setattr("src.tui_utils.get_questionary", lambda **_kwargs: stub_q)
+def test_prepare_po_textual_selection_maps_selected_files(monkeypatch, tmp_path):
+    from src.plugins.patch_override import prepare_po_textual_selection
 
     projects_root = tmp_path / "projects"
-    (projects_root / "boardA").mkdir(parents=True)
-
-    repo_path = tmp_path / "repo1"
-    repo_path.mkdir()
+    (projects_root / "boardA" / "po").mkdir(parents=True)
 
     env = {
         "projects_path": str(projects_root),
-        "repositories": [(str(repo_path), "repo1")],
+        "repositories": [(str(tmp_path / "repo1"), "repo1")],
     }
     projects_info = {
         "projA": {
             "board_name": "boardA",
-            "board_path": "unused-but-required",
-            "config": {"PROJECT_PO_CONFIG": ""},
+            "board_path": "unused",
+            "config": {},
         }
     }
+    modified_files = [
+        ("repo1", "alpha.txt", "M  (working)"),
+        ("repo1", "beta.txt", "D  (deleted)"),
+    ]
 
-    assert po_new(env, projects_info, "projA", "po_tui", tui=True) is True
-
-    out = capsys.readouterr().out
-    assert "=== TUI File Selection for PO ===" in out
-    assert "Skipped selected files." in out
-
-
-def test_po_new_tui_errors_when_unavailable(monkeypatch, tmp_path, capsys):
-    from src.plugins.patch_override import po_new
-    from src.tui_utils import TuiUnavailable
-
-    monkeypatch.setattr(builtins, "input", lambda _prompt="": "yes")
-
-    working_file = "tui_test_file.txt"
+    monkeypatch.setattr("src.plugins.patch_override._scan_po_modified_files", lambda *_args, **_kwargs: modified_files)
     monkeypatch.setattr(
-        "src.plugins.patch_override.subprocess.run",
-        _fake_git_run_factory(working_file=working_file),
+        "src.execution_textual.run_po_selection_dialog",
+        lambda **_kwargs: {"status": "apply", "action": "remove", "selected_indexes": [1]},
     )
 
-    def _raise_unavailable(**_kwargs):
-        raise TuiUnavailable('TUI dependency is not installed. Install it with: pip install -e ".[tui]"')
+    result = prepare_po_textual_selection(env, projects_info, "projA", "po_tui", update_mode=True)
 
-    monkeypatch.setattr("src.tui_utils.get_questionary", _raise_unavailable)
+    assert result is not None
+    assert result["status"] == "apply"
+    assert result["action"] == "remove"
+    assert result["selected_files"] == [modified_files[1]]
+    assert result["po_path"].endswith("boardA/po/po_tui")
+
+
+def test_po_new_consumes_preselected_skip_without_prompt(monkeypatch, tmp_path, capsys):
+    from src.plugins.patch_override import po_new
+
+    def _unexpected_input(_prompt=""):
+        raise AssertionError("po_new should not prompt when a textual preselection is present")
+
+    monkeypatch.setattr(builtins, "input", _unexpected_input)
 
     projects_root = tmp_path / "projects"
     (projects_root / "boardA").mkdir(parents=True)
 
-    repo_path = tmp_path / "repo1"
-    repo_path.mkdir()
-
     env = {
         "projects_path": str(projects_root),
-        "repositories": [(str(repo_path), "repo1")],
+        "repositories": [],
+        "po_textual_selection": {
+            "project_name": "projA",
+            "po_name": "po_tui",
+            "po_path": str(projects_root / "boardA" / "po" / "po_tui"),
+            "status": "skip",
+            "message": "Skipped selected files.",
+        },
     }
     projects_info = {
         "projA": {
             "board_name": "boardA",
-            "board_path": "unused-but-required",
-            "config": {"PROJECT_PO_CONFIG": ""},
+            "board_path": "unused",
+            "config": {},
         }
     }
 
-    assert po_new(env, projects_info, "projA", "po_tui", tui=True) is False
+    assert po_new(env, projects_info, "projA", "po_tui") is True
+    assert "Skipped selected files." in capsys.readouterr().out
+    assert not (projects_root / "boardA" / "po" / "po_tui").exists()
 
-    out = capsys.readouterr().out
-    assert "Install it with:" in out
+
+def test_prepare_po_textual_selection_returns_noop_when_no_files(monkeypatch, tmp_path):
+    from src.plugins.patch_override import prepare_po_textual_selection
+
+    projects_root = tmp_path / "projects"
+    (projects_root / "boardA" / "po").mkdir(parents=True)
+
+    env = {
+        "projects_path": str(projects_root),
+        "repositories": [(str(tmp_path / "repo1"), "repo1")],
+    }
+    projects_info = {
+        "projA": {
+            "board_name": "boardA",
+            "board_path": "unused",
+            "config": {},
+        }
+    }
+
+    monkeypatch.setattr("src.plugins.patch_override._scan_po_modified_files", lambda *_args, **_kwargs: [])
+
+    result = prepare_po_textual_selection(env, projects_info, "projA", "po_empty")
+
+    assert result is not None
+    assert result["status"] == "noop"
+    assert result["message"] == "No modified files found in any repository."

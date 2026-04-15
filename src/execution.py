@@ -8,23 +8,37 @@ import json
 import sys
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional
 
 SUPPORTED_EXECUTION_UI_OPERATIONS = {
+    "board_del",
+    "board_new",
+    "doctor",
     "project_build",
+    "project_del",
+    "project_diff",
+    "project_new",
     "project_pre_build",
     "project_do_build",
     "project_post_build",
     "po_apply",
+    "po_analyze",
+    "po_clear",
+    "po_del",
+    "po_list",
+    "po_new",
     "po_revert",
+    "po_status",
+    "po_update",
     "update",
     "upgrade",
 }
 DIRECT_OUTPUT_FLAGS = {"json", "emit_plan"}
+RAW_OUTPUT_FALLBACK_OPERATIONS = {"po_del"}
 _CURRENT_STEP_ID: ContextVar[Optional[str]] = ContextVar("projman_current_step_id", default=None)
 
 
@@ -56,6 +70,9 @@ def resolve_render_mode(operate: str, args_dict: Dict[str, Any], parsed_kwargs: 
         return "direct_output"
 
     if not is_interactive_tty():
+        return "raw_output"
+
+    if operate in RAW_OUTPUT_FALLBACK_OPERATIONS and not _truthy(parsed_kwargs.get("force")):
         return "raw_output"
 
     return "interactive_tui"
@@ -202,6 +219,41 @@ class RawOutputRenderer(ExecutionRenderer):
                     ]
                 )
             )
+
+
+class _ExecutionLogStream:
+    """Redirect `print()` output into the active execution step log."""
+
+    def __init__(self, session: "ExecutionSession", stream_name: str) -> None:
+        self._session = session
+        self._stream_name = stream_name
+        self._buffer = ""
+        self._lock = threading.Lock()
+
+    def write(self, text: Any) -> int:
+        value = "" if text is None else str(text)
+        if not value:
+            return 0
+
+        with self._lock:
+            self._buffer += value
+            while "\n" in self._buffer:
+                line, self._buffer = self._buffer.split("\n", 1)
+                if line:
+                    self._session.log(line, stream=self._stream_name)
+        return len(value)
+
+    def flush(self) -> None:
+        with self._lock:
+            if self._buffer:
+                self._session.log(self._buffer, stream=self._stream_name)
+                self._buffer = ""
+
+    def isatty(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
 
 
 class ExecutionSession:
@@ -476,16 +528,26 @@ def execute_operation_with_session(session: ExecutionSession, operate: str, oper
     """Run one operation under the session root step and emit the final summary."""
     root_step_id = make_step_id("operation", operate)
     session.start_step(root_step_id, session.title)
+    stdout_stream = _ExecutionLogStream(session, "stdout")
+    stderr_stream = _ExecutionLogStream(session, "stderr")
 
     try:
-        with session.bind_step(root_step_id):
+        with (
+            session.bind_step(root_step_id),
+            redirect_stdout(stdout_stream),
+            redirect_stderr(stderr_stream),
+        ):
             result = operation()
     except Exception as exc:
+        stdout_stream.flush()
+        stderr_stream.flush()
         session.log(str(exc), stream="stderr", step_id=root_step_id)
         session.finish_step(root_step_id, state="failed", summary=str(exc))
         session.emit_summary(state="failed")
         raise
 
+    stdout_stream.flush()
+    stderr_stream.flush()
     if result is False:
         session.finish_step(root_step_id, state="failed", summary="Operation returned failure status.")
         session.emit_summary(state="failed")

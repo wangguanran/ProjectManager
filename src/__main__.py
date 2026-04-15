@@ -1124,6 +1124,8 @@ def main():
         func_kwargs = parsed_kwargs
         render_mode = resolve_render_mode(operate, args_dict, parsed_kwargs)
         env["render_mode"] = render_mode
+        if render_mode == "interactive_tui":
+            _prepare_textual_preflight(env, projects_info, operate, user_args, func_kwargs)
         try:
             if render_mode == "direct_output":
                 result = func(*func_args, **func_kwargs)
@@ -1142,6 +1144,41 @@ def main():
     else:
         log.error("Operation '%s' is not supported.", operate)
         sys.exit(1)
+
+
+def _prepare_textual_preflight(
+    env: Dict[str, Any],
+    projects_info: Dict[str, Any],
+    operate: str,
+    user_args: List[Any],
+    func_kwargs: Dict[str, Any],
+) -> None:
+    """Run any pre-execution Textual prompts before the execution session starts."""
+    if operate not in {"po_new", "po_update"}:
+        return
+    if _arg_truthy(func_kwargs.get("force")):
+        return
+    if len(user_args) < 2:
+        return
+
+    try:
+        from src.execution_textual import TextualUnavailable
+        from src.plugins.patch_override import prepare_po_textual_selection
+    except ModuleNotFoundError:
+        return
+
+    project_name = str(user_args[0])
+    po_name = str(user_args[1])
+    try:
+        env["po_textual_selection"] = prepare_po_textual_selection(
+            env,
+            projects_info,
+            project_name,
+            po_name,
+            update_mode=operate == "po_update",
+        )
+    except TextualUnavailable as exc:
+        log.warning("%s", exc)
 
 
 def _run_operation_with_session(
@@ -1163,6 +1200,7 @@ def _run_operation_with_session(
         try:
             from src.execution_textual import TextualUnavailable, run_textual_session
         except ModuleNotFoundError:
+            session.mode = "raw_output"
             session.add_renderer(RawOutputRenderer())
             restore_console_logging(saved_handlers)
             saved_handlers = []
@@ -1172,6 +1210,7 @@ def _run_operation_with_session(
             return run_textual_session(session, lambda: execute_operation_with_session(session, operate, operation))
         except TextualUnavailable as exc:
             log.warning("%s", exc)
+            session.mode = "raw_output"
             session.add_renderer(RawOutputRenderer())
             restore_console_logging(saved_handlers)
             saved_handlers = []

@@ -112,6 +112,14 @@ def test_cli_019_project_build_uses_raw_output_when_stdout_is_not_a_tty(workspac
     assert "\x1b[?1049h" not in result.stdout
 
 
+def test_cli_019a_po_list_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: Path) -> None:
+    result = run_cli(["po_list", "projA", "--short"], cwd=workspace_a)
+    assert "STEP_START id=operation.po_list" in result.stdout
+    assert 'text="po_base"' in result.stdout or "po_base" in result.stdout
+    assert "SESSION_END state=success" in result.stdout
+    assert "\x1b[?1049h" not in result.stdout
+
+
 def test_cli_020_emit_plan_keeps_direct_json_output(workspace_a: Path) -> None:
     result = run_cli(["project_build", "projA", "--emit-plan"], cwd=workspace_a)
     assert result.stdout.lstrip().startswith("{")

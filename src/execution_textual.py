@@ -6,13 +6,219 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.execution import ExecutionRenderer, ExecutionSession, RawOutputRenderer
 
 
 class TextualUnavailable(RuntimeError):
     """Raised when the interactive Textual renderer cannot be started."""
+
+
+def run_po_selection_dialog(
+    *,
+    po_name: str,
+    po_path: str,
+    modified_files: List[Tuple[str, str, str]],
+    update_mode: bool = False,
+) -> Dict[str, Any]:
+    """Collect PO file-selection input with a small Textual app."""
+    try:
+        from textual.app import App, ComposeResult
+        from textual.binding import Binding
+        from textual.containers import Horizontal
+        from textual.widgets import Footer, Header, ListItem, ListView, Static
+    except ModuleNotFoundError as exc:  # pragma: no cover - exercised only when dependency is missing
+        raise TextualUnavailable("Textual is not installed. Re-run with --raw-output or install the package.") from exc
+
+    class PoSelectionApp(App[Dict[str, Any]]):
+        CSS = """
+        Screen {
+            layout: vertical;
+        }
+
+        #body {
+            height: 1fr;
+        }
+
+        #files {
+            width: 58%;
+            border: solid $panel;
+        }
+
+        #details {
+            width: 42%;
+            border: solid $panel;
+            padding: 0 1;
+        }
+        """
+
+        BINDINGS = [
+            Binding("space", "toggle_file", "Toggle file"),
+            Binding("x", "toggle_all", "Toggle all"),
+            Binding("p", "choose_patches", "Patches"),
+            Binding("o", "choose_overrides", "Overrides"),
+            Binding("r", "choose_remove", "Remove"),
+            Binding("s", "choose_skip", "Skip"),
+            Binding("enter", "confirm", "Confirm"),
+            Binding("q", "cancel", "Cancel"),
+        ]
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._selected: set[int] = set()
+            self._result: Dict[str, Any] = {"status": "cancelled"}
+            self._message = "Select files, choose an action, then press Enter."
+            self._action = "patches"
+            self._items: List[ListItem] = []
+
+        def compose(self) -> ComposeResult:
+            yield Header(show_clock=True)
+            with Horizontal(id="body"):
+                yield ListView(id="files")
+                yield Static(id="details")
+            yield Footer()
+
+        def on_mount(self) -> None:
+            mode = "Update" if update_mode else "Create"
+            self.title = f"{mode} PO: {po_name}"
+            self.sub_title = po_path
+            self.file_list = self.query_one("#files", ListView)
+            self.details = self.query_one("#details", Static)
+            for index in range(len(modified_files)):
+                item = ListItem(Static(self._item_label(index)))
+                self.file_list.append(item)
+                self._items.append(item)
+            self.file_list.focus()
+            self._refresh_details()
+
+        def _item_label(self, index: int) -> str:
+            repo_name, file_path, status = modified_files[index]
+            marker = "[x]" if index in self._selected else "[ ]"
+            return f"{marker} [{repo_name}] {file_path} ({status})"
+
+        def _refresh_items(self) -> None:
+            for index, item in enumerate(self._items):
+                item.query_one(Static).update(self._item_label(index))
+
+        def _selected_files(self) -> List[Tuple[str, str, str]]:
+            return [modified_files[index] for index in sorted(self._selected)]
+
+        def _action_allowed(self, action: str) -> bool:
+            selected_files = self._selected_files()
+            if action != "remove":
+                return True
+            return any("deleted" in status for _repo, _path, status in selected_files)
+
+        def _preview_lines(self) -> List[str]:
+            selected_files = self._selected_files()
+            mode = "update" if update_mode else "create"
+            lines = [
+                f"Mode: {mode}",
+                f"PO: {po_name}",
+                f"Path: {po_path}",
+                f"Selected: {len(selected_files)}/{len(modified_files)}",
+                f"Action: {self._action}",
+                "",
+                "Keys: space toggle, x toggle all, p/o/r/s action, enter confirm, q cancel",
+                f"Status: {self._message}",
+                "",
+                "Preview:",
+            ]
+            if not selected_files:
+                lines.append("- No files selected")
+            else:
+                for repo_name, file_path, status in selected_files[:12]:
+                    lines.append(f"- [{repo_name}] {file_path} ({status})")
+                if len(selected_files) > 12:
+                    lines.append(f"- ... and {len(selected_files) - 12} more")
+            return lines
+
+        def _refresh_details(self) -> None:
+            self.details.update("\n".join(self._preview_lines()))
+
+        def _current_index(self) -> Optional[int]:
+            index = getattr(self.file_list, "index", None)
+            if index is None:
+                return None
+            if index < 0 or index >= len(modified_files):
+                return None
+            return int(index)
+
+        def action_toggle_file(self) -> None:
+            index = self._current_index()
+            if index is None:
+                return
+            if index in self._selected:
+                self._selected.remove(index)
+            else:
+                self._selected.add(index)
+            self._refresh_items()
+            self._refresh_details()
+
+        def action_toggle_all(self) -> None:
+            if len(self._selected) == len(modified_files):
+                self._selected.clear()
+            else:
+                self._selected = set(range(len(modified_files)))
+            self._refresh_items()
+            self._refresh_details()
+
+        def _set_action(self, action: str) -> None:
+            if action == "remove" and not self._action_allowed("remove"):
+                self._message = "Remove files is only available for deleted selections."
+                self._refresh_details()
+                return
+            self._action = action
+            self._message = f"Selected action: {action}"
+            self._refresh_details()
+
+        def action_choose_patches(self) -> None:
+            self._set_action("patches")
+
+        def action_choose_overrides(self) -> None:
+            self._set_action("overrides")
+
+        def action_choose_remove(self) -> None:
+            self._set_action("remove")
+
+        def action_choose_skip(self) -> None:
+            self._set_action("skip")
+
+        def action_confirm(self) -> None:
+            selected_indexes = sorted(self._selected)
+            if not selected_indexes:
+                self._result = {"status": "noop", "reason": "no_selection"}
+                self.exit(self._result)
+                return
+            if self._action == "skip":
+                self._result = {"status": "skip", "selected_indexes": selected_indexes}
+                self.exit(self._result)
+                return
+            if self._action == "remove" and not self._action_allowed("remove"):
+                self._message = "Remove files is only available for deleted selections."
+                self._refresh_details()
+                return
+            self._result = {
+                "status": "apply",
+                "action": self._action,
+                "selected_indexes": selected_indexes,
+            }
+            self.exit(self._result)
+
+        def action_cancel(self) -> None:
+            self._result = {"status": "cancelled"}
+            self.exit(self._result)
+
+        def on_list_view_selected(self, _event) -> None:  # pragma: no cover - exercised only in live UI
+            self.action_toggle_file()
+
+        def on_list_view_highlighted(self, _event) -> None:  # pragma: no cover - exercised only in live UI
+            self._refresh_details()
+
+    app = PoSelectionApp()
+    result = app.run()
+    return result or {"status": "cancelled"}
 
 
 def run_textual_session(session: ExecutionSession, operation) -> Any:
@@ -84,7 +290,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
             self.active_step_id: Optional[str] = None
             self.selected_step_id: Optional[str] = None
             self.failed_step_id: Optional[str] = None
-            self._nodes: Dict[str, Any] = {}
+            self._step_nodes: Dict[str, Any] = {}
             self._step_state: Dict[str, Dict[str, Any]] = {}
 
         def compose(self) -> ComposeResult:
@@ -208,7 +414,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
 
         def _select_step(self, step_id: str) -> None:
             self.selected_step_id = step_id
-            node = self._nodes.get(step_id)
+            node = self._step_nodes.get(step_id)
             if node is not None:
                 if hasattr(self.steps, "select_node"):
                     self.steps.select_node(node)
@@ -219,12 +425,14 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
         def _on_step_started(self, event: Dict[str, Any]) -> None:
             step_id = event["step_id"]
             parent_id = event.get("parent_id")
-            parent_node = self.steps.root if parent_id is None else self._nodes.get(str(parent_id), self.steps.root)
+            parent_node = (
+                self.steps.root if parent_id is None else self._step_nodes.get(str(parent_id), self.steps.root)
+            )
             node = parent_node.add(self._node_label_for_event(event), data=step_id, expand=False)
             if parent_id is None:
                 node.expand()
 
-            self._nodes[step_id] = node
+            self._step_nodes[step_id] = node
             self._step_state[step_id] = {
                 "title": event.get("title", step_id),
                 "state": "running",
@@ -299,7 +507,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
                 if self.auto_follow:
                     self._select_step(step_id)
 
-            node = self._nodes.get(step_id)
+            node = self._step_nodes.get(step_id)
             if node is not None:
                 node.set_label(self._node_label(step_id))
 

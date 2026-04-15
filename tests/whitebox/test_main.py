@@ -133,6 +133,25 @@ class TestArgParsing:
         assert resolve_render_mode("doctor", {"raw_output": False}, {"json": True}) == "direct_output"
         assert resolve_render_mode("project_build", {"raw_output": False}, {"emit_plan": True}) == "direct_output"
 
+    def test_resolve_render_mode_uses_execution_ui_for_additional_supported_commands(self, monkeypatch):
+        """Human-facing commands added by the design doc should enter the execution UI."""
+        from src.execution import resolve_render_mode
+
+        monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
+
+        assert resolve_render_mode("po_list", {"raw_output": False}, {}) == "interactive_tui"
+        assert resolve_render_mode("project_new", {"raw_output": False}, {}) == "interactive_tui"
+        assert resolve_render_mode("doctor", {"raw_output": False}, {}) == "interactive_tui"
+
+    def test_resolve_render_mode_falls_back_to_raw_output_for_prompting_po_del(self, monkeypatch):
+        """Commands that still require stdin prompts should not enter the full-screen UI by default."""
+        from src.execution import resolve_render_mode
+
+        monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
+
+        assert resolve_render_mode("po_del", {"raw_output": False}, {"force": False}) == "raw_output"
+        assert resolve_render_mode("po_del", {"raw_output": False}, {"force": True}) == "interactive_tui"
+
 
 class TestLoadAllProjects:
     """
