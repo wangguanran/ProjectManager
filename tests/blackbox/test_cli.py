@@ -42,7 +42,7 @@ def test_cli_002_version_matches_pyproject(workspace_a: Path) -> None:
     result = run_cli(["--version"], cwd=workspace_a)
     version = result.stdout.strip()
     base_version = toml.load(str(REPO_ROOT / "pyproject.toml"))["project"]["version"]
-    assert re.fullmatch(rf"{re.escape(base_version)}(\+g[0-9a-f]{{7,}})?", version)
+    assert re.fullmatch(rf"{re.escape(base_version)}(\+(?:(?:stable|beta)\.)?g[0-9a-f]{{7,}})?", version)
 
 
 def test_cli_002a_version_no_projects_dir_no_warnings(empty_workspace: Path) -> None:

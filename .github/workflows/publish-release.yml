@@ -27,6 +27,8 @@ jobs:
 
       - name: Build project
         shell: bash
+        env:
+          PROJMAN_RELEASE_CHANNEL: stable
         run: bash build.sh
 
       - name: Run tests
@@ -58,6 +60,8 @@ jobs:
 
       - name: Build project
         shell: bash
+        env:
+          PROJMAN_RELEASE_CHANNEL: stable
         run: bash build.sh
 
       - name: Compute artifact metadata

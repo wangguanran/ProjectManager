@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def test_util_001_version_matches_pyproject(workspace_a: Path) -> None:
     base_version = toml.load(str(REPO_ROOT / "pyproject.toml"))["project"]["version"]
-    assert re.fullmatch(rf"{re.escape(base_version)}(\+g[0-9a-f]{{7,}})?", get_version())
+    assert re.fullmatch(rf"{re.escape(base_version)}(\+(?:(?:stable|beta)\.)?g[0-9a-f]{{7,}})?", get_version())
 
 
 def test_util_002_version_fallback(tmp_path: Path) -> None:
@@ -29,7 +29,7 @@ def test_util_002_version_fallback(tmp_path: Path) -> None:
     pyproject.rename(pyproject.with_suffix(".bak"))
     try:
         version = get_version()
-        assert version == "0.0.0-dev" or re.fullmatch(r"\d+\.\d+\.\d+(\+g[0-9a-f]{7,})?", version)
+        assert version == "0.0.0-dev" or re.fullmatch(r"\d+\.\d+\.\d+(\+(?:(?:stable|beta)\.)?g[0-9a-f]{7,})?", version)
     finally:
         pyproject.with_suffix(".bak").rename(pyproject)
 

@@ -21,6 +21,30 @@ def _run(cmd: list[str], cwd: Path) -> str:
     return cp.stdout.strip()
 
 
+def _has_stable_tag(repo_root: Path) -> bool:
+    tags = _run(["git", "tag", "--points-at", "HEAD"], cwd=repo_root)
+    if not tags:
+        return False
+    return any(tag.strip().startswith("v") for tag in tags.splitlines())
+
+
+def _resolve_release_channel(repo_root: Path) -> str:
+    explicit = os.environ.get("PROJMAN_RELEASE_CHANNEL", "").strip().lower()
+    if explicit in {"stable", "beta"}:
+        return explicit
+
+    github_ref = os.environ.get("GITHUB_REF", "").strip()
+    github_ref_type = os.environ.get("GITHUB_REF_TYPE", "").strip().lower()
+    if github_ref_type == "tag" and github_ref.startswith("refs/tags/v"):
+        return "stable"
+
+    if _has_stable_tag(repo_root):
+        return "stable"
+
+    # Untagged repository builds are prerelease/dev builds by default.
+    return "beta"
+
+
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     out_path = repo_root / "src" / "_build_info.py"
@@ -39,10 +63,8 @@ def main() -> int:
 
     build_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     # Release channel marker for display/version semantics (stable|beta).
-    # Default to stable unless explicitly set by CI/pipeline.
-    release_channel = os.environ.get("PROJMAN_RELEASE_CHANNEL", "").strip().lower() or "stable"
-    if release_channel not in {"stable", "beta"}:
-        release_channel = "stable"
+    # Stable is reserved for tagged release builds or explicit CI overrides.
+    release_channel = _resolve_release_channel(repo_root)
 
     content = "\n".join(
         [

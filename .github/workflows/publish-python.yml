@@ -25,6 +25,8 @@ jobs:
           pip install build twine
 
       - name: Build package
+        env:
+          PROJMAN_RELEASE_CHANNEL: stable
         run: |
           python scripts/write_build_info.py
           python -m build
