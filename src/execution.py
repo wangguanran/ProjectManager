@@ -532,12 +532,10 @@ def execute_operation_with_session(session: ExecutionSession, operate: str, oper
     stderr_stream = _ExecutionLogStream(session, "stderr")
 
     try:
-        with (
-            session.bind_step(root_step_id),
-            redirect_stdout(stdout_stream),
-            redirect_stderr(stderr_stream),
-        ):
-            result = operation()
+        with session.bind_step(root_step_id):
+            with redirect_stdout(stdout_stream):
+                with redirect_stderr(stderr_stream):
+                    result = operation()
     except Exception as exc:
         stdout_stream.flush()
         stderr_stream.flush()
