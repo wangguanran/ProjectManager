@@ -15,6 +15,21 @@ class TextualUnavailable(RuntimeError):
     """Raised when the interactive Textual renderer cannot be started."""
 
 
+def _format_execution_sub_title(state: str, duration: float, *, awaiting_exit_confirmation: bool = False) -> str:
+    if state == "success":
+        base = f"Completed in {duration:.2f}s"
+        if awaiting_exit_confirmation:
+            return f"{base}; press Enter to exit"
+        return base
+    if state == "failed":
+        return f"Failed after {duration:.2f}s"
+    return ""
+
+
+def _should_exit_on_enter(*, awaiting_exit_confirmation: bool, worker_is_alive: bool) -> bool:
+    return awaiting_exit_confirmation and not worker_is_alive
+
+
 def run_po_selection_dialog(
     *,
     po_name: str,
@@ -274,7 +289,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
             Binding("q", "detach", "Detach"),
             Binding("f", "focus_active", "Follow active"),
             Binding("a", "toggle_auto_follow", "Auto-follow"),
-            Binding("enter", "toggle_selected", "Expand/collapse"),
+            Binding("enter", "primary_enter", "Exit / expand"),
             Binding("space", "toggle_selected", "Expand/collapse"),
         ]
 
@@ -292,6 +307,9 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
             self.failed_step_id: Optional[str] = None
             self._step_nodes: Dict[str, Any] = {}
             self._step_state: Dict[str, Dict[str, Any]] = {}
+            self._session_state = "running"
+            self._session_duration = 0.0
+            self._awaiting_exit_confirmation = False
 
         def compose(self) -> ComposeResult:
             yield Header(show_clock=True)
@@ -348,7 +366,13 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
                     self._select_step(self.failed_step_id)
                 self.sub_title = "Execution failed; inspect logs and press q to detach"
                 return
-            self.exit(True)
+            self._session_state = "success"
+            self._awaiting_exit_confirmation = True
+            self.sub_title = _format_execution_sub_title(
+                self._session_state,
+                self._session_duration,
+                awaiting_exit_confirmation=self._awaiting_exit_confirmation,
+            )
 
         def apply_session_event(self, event: Dict[str, Any]) -> None:
             event_type = event.get("type")
@@ -515,12 +539,13 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
                 self._refresh_log_and_details()
 
         def _on_session_summary(self, event: Dict[str, Any]) -> None:
-            state = event.get("state", "success")
-            duration = float(event.get("duration", 0.0) or 0.0)
-            if state == "success":
-                self.sub_title = f"Completed in {duration:.2f}s"
-            else:
-                self.sub_title = f"Failed after {duration:.2f}s"
+            self._session_state = event.get("state", "success")
+            self._session_duration = float(event.get("duration", 0.0) or 0.0)
+            self.sub_title = _format_execution_sub_title(
+                self._session_state,
+                self._session_duration,
+                awaiting_exit_confirmation=self._awaiting_exit_confirmation,
+            )
 
         def action_detach(self) -> None:
             self.detached = True
@@ -537,6 +562,15 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
             self.sub_title = "Auto-follow on" if self.auto_follow else "Auto-follow off"
             if self.auto_follow and self.active_step_id:
                 self._select_step(self.active_step_id)
+
+        def action_primary_enter(self) -> None:
+            if _should_exit_on_enter(
+                awaiting_exit_confirmation=self._awaiting_exit_confirmation,
+                worker_is_alive=self.worker_is_alive(),
+            ):
+                self.exit(True)
+                return
+            self.action_toggle_selected()
 
         def action_toggle_selected(self) -> None:
             node = self.steps.cursor_node

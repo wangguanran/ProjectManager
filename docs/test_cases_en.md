@@ -95,6 +95,7 @@
 | CLI-018 | CLI/Arg Parsing | `--no-fuzzy` requires exact operation match | Dataset A completed | 1. Run `python -m src --no-fuzzy buil projA`.<br>2. Run `python -m src --no-fuzzy po projA`. | Each exits non-zero without executing any operation; error indicates fuzzy matching is disabled. | P2 | Safety |
 | CLI-019 | CLI/Execution UI | Non-interactive runs fall back to raw step output | Dataset A completed | 1. Run `python -m src project_build projA --dry-run --no-po --no-diff` from a non-interactive stdout context (for example via subprocess capture or shell redirection).<br>2. Inspect stdout. | Output is line-oriented `STEP_START` / `STEP_END` / `SESSION_END` records with no full-screen TUI control codes. | P1 | DX |
 | CLI-020 | CLI/Execution UI | `--emit-plan` bypasses execution UI | Dataset A completed | 1. Run `python -m src project_build projA --emit-plan`.<br>2. Parse stdout as JSON. | Stdout remains pure JSON and does not contain `STEP_START` / `SESSION_END` records. | P1 | DX |
+| CLI-021 | CLI/Execution UI | Successful interactive TUI waits for Enter before exit | Dataset A completed in an interactive terminal | 1. Run a successful human-facing command such as `python -m src po_apply projA` in a real TTY.<br>2. Wait for execution to finish.<br>3. Observe the completed TUI, then press `Enter`. | The full-screen TUI remains visible after success, shows a completion hint, and exits only after `Enter` is pressed. | P2 | DX |
 
 ## 2. Config Loading & Project Index (src/__main__.py)
 
