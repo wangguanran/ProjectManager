@@ -12,10 +12,10 @@ import re
 import sys
 from typing import TYPE_CHECKING, Any, Optional
 
+from src.utils import get_filename
+
 if TYPE_CHECKING:
     from src.execution import ExecutionSession
-
-from src.utils import get_filename
 
 LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
 LATEST_LOG_LINK = os.path.join(os.getcwd(), ".cache", "latest.log")
@@ -217,7 +217,7 @@ class ExecutionSessionLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             message = self.format(record)
-        except Exception:  # pragma: no cover - logging handlers must never raise
+        except Exception:  # pylint: disable=broad-exception-caught  # pragma: no cover
             self.handleError(record)
             return
 
