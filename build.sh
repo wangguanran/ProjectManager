@@ -108,6 +108,7 @@ PYINSTALLER_ARGS=(
     --hidden-import=git
     --hidden-import=git.cmd
     --hidden-import=git.repo
+    --hidden-import=src.execution_textual
     --hidden-import=src.plugins.project_manager
     --hidden-import=src.plugins.project_builder
     --hidden-import=src.plugins.patch_override
@@ -120,6 +121,7 @@ PYINSTALLER_ARGS=(
     --hidden-import=src.utils
     --hidden-import=src._build_info
     --collect-all=git
+    --collect-all=textual
     --add-data "${PYPROJECT_ABS_PATH}${ADD_DATA_SEP}."
     --distpath "$BINARY_DIR"
     --workpath "$BINARY_DIR/build"
