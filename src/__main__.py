@@ -26,7 +26,13 @@ from src.execution import (
     execute_operation_with_session,
     resolve_render_mode,
 )
-from src.log_manager import log, mute_console_logging, restore_console_logging
+from src.log_manager import (
+    attach_execution_session_logging,
+    detach_execution_session_logging,
+    log,
+    mute_console_logging,
+    restore_console_logging,
+)
 from src.operations.registry import get_registered_operations
 from src.profiler import func_cprofile, func_time
 from src.utils import get_version
@@ -1196,6 +1202,7 @@ def _run_operation_with_session(
         return execute_operation_with_session(session, operate, operation)
 
     saved_handlers = mute_console_logging()
+    session_log_handler = None
     try:
         try:
             from src.execution_textual import TextualUnavailable, run_textual_session
@@ -1206,9 +1213,12 @@ def _run_operation_with_session(
             saved_handlers = []
             return execute_operation_with_session(session, operate, operation)
 
+        session_log_handler = attach_execution_session_logging(session)
         try:
             return run_textual_session(session, lambda: execute_operation_with_session(session, operate, operation))
         except TextualUnavailable as exc:
+            detach_execution_session_logging(session_log_handler)
+            session_log_handler = None
             log.warning("%s", exc)
             session.mode = "raw_output"
             session.add_renderer(RawOutputRenderer())
@@ -1216,6 +1226,7 @@ def _run_operation_with_session(
             saved_handlers = []
             return execute_operation_with_session(session, operate, operation)
     finally:
+        detach_execution_session_logging(session_log_handler)
         if saved_handlers:
             restore_console_logging(saved_handlers)
 

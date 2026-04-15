@@ -10,7 +10,10 @@ import logging.config
 import os
 import re
 import sys
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from src.execution import ExecutionSession
 
 from src.utils import get_filename
 
@@ -201,6 +204,46 @@ class LogManager:
 
 
 log = LogManager().get_logger()
+
+
+class ExecutionSessionLogHandler(logging.Handler):
+    """Route logger records into the active execution-session step."""
+
+    def __init__(self, session: "ExecutionSession") -> None:
+        super().__init__(level=logging.INFO)
+        self._session = session
+        self.setFormatter(RedactingFormatter("[%(levelname)-8s] %(message)s"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = self.format(record)
+        except Exception:  # pragma: no cover - logging handlers must never raise
+            self.handleError(record)
+            return
+
+        stream = "stderr" if record.levelno >= logging.WARNING else "stdout"
+        self._session.log(message, stream=stream)
+
+
+def attach_execution_session_logging(
+    session: "ExecutionSession", *, logger: Optional[logging.Logger] = None
+) -> ExecutionSessionLogHandler:
+    """Attach a temporary logger handler that forwards records into an execution session."""
+    target_logger = logger or log
+    handler = ExecutionSessionLogHandler(session)
+    target_logger.addHandler(handler)
+    return handler
+
+
+def detach_execution_session_logging(
+    handler: Optional[ExecutionSessionLogHandler], *, logger: Optional[logging.Logger] = None
+) -> None:
+    """Remove a previously-attached execution-session log handler."""
+    if handler is None:
+        return
+    target_logger = logger or log
+    target_logger.removeHandler(handler)
+    handler.close()
 
 
 def mute_console_logging() -> list[tuple[logging.Handler, int]]:

@@ -351,3 +351,36 @@ class TestGlobalLog:
         # Check handler types
         handler_types = [type(handler) for handler in self.log.handlers]
         assert logging.StreamHandler in handler_types or logging.FileHandler in handler_types
+
+
+class TestExecutionSessionLogHandler:
+    """Tests for routing standard logger output into execution-session logs."""
+
+    def setup_method(self):
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+
+    def test_attach_execution_session_logging_routes_info_and_warning(self):
+        from src.execution import ExecutionSession
+        from src.log_manager import (
+            attach_execution_session_logging,
+            detach_execution_session_logging,
+            log,
+        )
+
+        session = ExecutionSession(title="test", mode="interactive_tui")
+        step_id = session.start_step("operation.test", "test")
+        handler = attach_execution_session_logging(session)
+        try:
+            with session.bind_step(step_id):
+                log.info("hello info")
+                log.warning("hello warning")
+        finally:
+            detach_execution_session_logging(handler)
+
+        snapshot = session.snapshot_steps()
+        logs = snapshot[step_id].logs
+
+        assert any(item["stream"] == "stdout" and "hello info" in item["text"] for item in logs)
+        assert any(item["stream"] == "stderr" and "hello warning" in item["text"] for item in logs)
