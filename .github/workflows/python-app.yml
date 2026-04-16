@@ -51,7 +51,13 @@ jobs:
         python3 --version
         bash build.sh
     - name: Verify release binary
-      run: python scripts/check_linux_standalone_binary.py out/binary/projman
+      shell: bash
+      run: |
+        validator_python="venv/bin/python"
+        if [ -x "venv/Scripts/python.exe" ]; then
+          validator_python="venv/Scripts/python.exe"
+        fi
+        "$validator_python" scripts/check_linux_standalone_binary.py out/binary/projman
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:

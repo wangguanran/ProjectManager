@@ -79,7 +79,11 @@ jobs:
         shell: bash
         run: |
           binary_path="$(cat out/projman_binary_path.txt)"
-          python scripts/check_linux_standalone_binary.py "$binary_path"
+          validator_python="venv/bin/python"
+          if [ -x "venv/Scripts/python.exe" ]; then
+            validator_python="venv/Scripts/python.exe"
+          fi
+          "$validator_python" scripts/check_linux_standalone_binary.py "$binary_path"
 
       - name: Compute artifact metadata
         id: meta
