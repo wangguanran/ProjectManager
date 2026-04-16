@@ -1,10 +1,9 @@
-"""Shared execution session, render-mode selection, and raw-output rendering."""
+"""Shared execution session, render-mode selection, and raw renderers."""
 
 # pylint: disable=missing-function-docstring,too-many-instance-attributes
 
 from __future__ import annotations
 
-import json
 import sys
 import threading
 import time
@@ -61,15 +60,21 @@ def is_interactive_tty() -> bool:
 
 
 def resolve_render_mode(operate: str, args_dict: Dict[str, Any], parsed_kwargs: Dict[str, Any]) -> str:
-    """Choose `interactive_tui`, `raw_output`, `plain_output`, or `direct_output` for this run."""
-    if _truthy(args_dict.get("raw_output")):
-        return "plain_output"
+    """Choose `interactive_tui`, `raw_output`, or `direct_output` for this run."""
+    output_mode = str(args_dict.get("output") or "").strip().lower()
+    if output_mode == "raw":
+        return "raw_output"
 
     if any(_truthy(parsed_kwargs.get(flag)) for flag in DIRECT_OUTPUT_FLAGS):
         return "direct_output"
 
     if operate not in SUPPORTED_EXECUTION_UI_OPERATIONS:
         return "direct_output"
+
+    if output_mode == "tui" and is_interactive_tty():
+        if operate in RAW_OUTPUT_FALLBACK_OPERATIONS and not _truthy(parsed_kwargs.get("force")):
+            return "raw_output"
+        return "interactive_tui"
 
     if not is_interactive_tty():
         return "raw_output"
@@ -128,90 +133,78 @@ class ExecutionRenderer:
 
 
 class RawOutputRenderer(ExecutionRenderer):
-    """Machine-safe line-oriented stdout renderer."""
+    """Human-readable line renderer similar to `docker build` progress output."""
 
     def __init__(self, stream=None) -> None:
         self.stream = stream or sys.stdout
         self._lock = threading.Lock()
+        self._step_numbers: Dict[str, int] = {}
+        self._next_step_number = 0
 
-    @staticmethod
-    def _quote(value: Any) -> str:
-        return json.dumps("" if value is None else str(value), ensure_ascii=False)
+    def _step_label(self, step_id: str) -> str:
+        with self._lock:
+            if step_id not in self._step_numbers:
+                self._next_step_number += 1
+                self._step_numbers[step_id] = self._next_step_number
+            return f"#{self._step_numbers[step_id]}"
 
     def _write(self, line: str) -> None:
         with self._lock:
             print(line, file=self.stream, flush=True)
 
+    @staticmethod
+    def _iter_lines(text: Any) -> List[str]:
+        value = "" if text is None else str(text)
+        if not value:
+            return []
+        lines = value.splitlines()
+        if not lines and value:
+            lines = [value]
+        return [line for line in lines if line]
+
     def on_event(self, event: Dict[str, Any]) -> None:
         event_type = event.get("type")
         if event_type == "step_started":
-            parts = [
-                "STEP_START",
-                f"id={event['step_id']}",
-                f"title={self._quote(event.get('title', ''))}",
-            ]
-            if event.get("parent_id"):
-                parts.append(f"parent={event['parent_id']}")
-            self._write(" ".join(parts))
+            label = self._step_label(str(event["step_id"]))
+            title = str(event.get("title") or "").strip()
+            self._write(f"{label} [{title}]")
             return
 
         if event_type == "step_log":
-            text = str(event.get("text") or "")
-            lines = text.splitlines() or ([text] if text else [])
-            for line in lines:
-                self._write(line)
+            label = self._step_label(str(event["step_id"]))
+            for line in self._iter_lines(event.get("text")):
+                self._write(f"{label} {line}")
             return
 
         if event_type == "step_command_started":
-            self._write(
-                " ".join(
-                    [
-                        "COMMAND_START",
-                        f"id={event['step_id']}",
-                        f"desc={self._quote(event.get('description', ''))}",
-                        f"cwd={self._quote(event.get('cwd', ''))}",
-                        f"cmd={self._quote(event.get('command', ''))}",
-                    ]
-                )
-            )
+            label = self._step_label(str(event["step_id"]))
+            description = str(event.get("description") or "").strip()
+            command = str(event.get("command") or "").strip()
+            if description and command:
+                self._write(f"{label} RUN {description}: {command}")
+            elif command:
+                self._write(f"{label} RUN {command}")
             return
 
         if event_type == "step_command_finished":
-            parts = [
-                "COMMAND_END",
-                f"id={event['step_id']}",
-                f"rc={int(event.get('returncode', 0))}",
-            ]
-            if event.get("description"):
-                parts.append(f"desc={self._quote(event['description'])}")
-            self._write(" ".join(parts))
+            label = self._step_label(str(event["step_id"]))
+            returncode = int(event.get("returncode", 0))
+            if returncode != 0:
+                self._write(f"{label} ERROR rc={returncode}")
             return
 
         if event_type == "step_finished":
-            parts = [
-                "STEP_END",
-                f"id={event['step_id']}",
-                f"state={event.get('state', 'success')}",
-                f"duration={event.get('duration', 0.0):.2f}s",
-            ]
-            if event.get("exit_code") is not None:
-                parts.append(f"rc={int(event['exit_code'])}")
-            if event.get("summary"):
-                parts.append(f"summary={self._quote(event['summary'])}")
-            self._write(" ".join(parts))
-            return
-
-        if event_type == "session_summary":
-            self._write(
-                " ".join(
-                    [
-                        "SESSION_END",
-                        f"state={event.get('state', 'success')}",
-                        f"duration={event.get('duration', 0.0):.2f}s",
-                        f"title={self._quote(event.get('title', ''))}",
-                    ]
-                )
-            )
+            label = self._step_label(str(event["step_id"]))
+            state = str(event.get("state") or "success")
+            duration = float(event.get("duration", 0.0))
+            summary = str(event.get("summary") or "").strip()
+            if state == "success":
+                self._write(f"{label} DONE {duration:.2f}s")
+            else:
+                line = f"{label} FAILED {duration:.2f}s"
+                if summary:
+                    line = f"{line} {summary}"
+                self._write(line)
 
 
 class _ExecutionLogStream:
@@ -544,30 +537,37 @@ def execution_log(env: Dict[str, Any], text: Any, *, stream: str = "stdout") -> 
 
 
 def execution_log_info(env: Dict[str, Any], text: Any) -> None:
-    """Emit an info log line for active session steps or explicit plain-output runs."""
+    """Emit an info log line for active session steps."""
     session = get_execution_session(env)
-    if session is not None or env.get("render_mode") == "plain_output":
+    if session is not None:
         log.info("%s", text, stacklevel=2)
 
 
 def execution_log_warning(env: Dict[str, Any], text: Any) -> None:
-    """Emit a warning log line for active session steps or explicit plain-output runs."""
+    """Emit a warning log line for active session steps."""
     session = get_execution_session(env)
-    if session is not None or env.get("render_mode") == "plain_output":
+    if session is not None:
         log.warning("%s", text, stacklevel=2)
 
 
 def execution_log_error(env: Dict[str, Any], text: Any) -> None:
-    """Emit an error log line for active session steps or explicit plain-output runs."""
+    """Emit an error log line for active session steps."""
     session = get_execution_session(env)
-    if session is not None or env.get("render_mode") == "plain_output":
+    if session is not None:
         log.error("%s", text, stacklevel=2)
 
 
-def execute_operation_with_session(session: ExecutionSession, operate: str, operation) -> Any:
+def execute_operation_with_session(
+    session: ExecutionSession,
+    operate: str,
+    operation,
+    *,
+    root_step_id: Optional[str] = None,
+) -> Any:
     """Run one operation under the session root step and emit the final summary."""
-    root_step_id = make_step_id("operation", operate)
-    session.start_step(root_step_id, session.title)
+    root_step_id = root_step_id or make_step_id("operation", operate)
+    if root_step_id not in session.snapshot_steps():
+        session.start_step(root_step_id, session.title)
     stdout_stream = _ExecutionLogStream(session, "stdout")
     stderr_stream = _ExecutionLogStream(session, "stderr")
 

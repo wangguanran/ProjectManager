@@ -75,7 +75,7 @@ class TestArgParsing:
             load_scripts=False,
             no_fuzzy=False,
             safe_mode=False,
-            raw_output=False,
+            output=None,
             allow_network=False,
             yes=False,
         )
@@ -102,8 +102,8 @@ class TestArgParsing:
         assert parsed_kwargs.get("dry_run") is True
         assert parsed_kwargs.get("prefix") == "/tmp/bin"
 
-    def test_parse_args_treats_raw_output_as_global_even_after_operation(self):
-        """Ensure `--raw-output` after the operation is not forwarded as a plugin kwarg."""
+    def test_parse_args_treats_output_as_global_even_after_operation(self):
+        """Ensure `--output=raw` after the operation is not forwarded as a plugin kwarg."""
 
         def dummy_build(env, projects_info, dry_run: bool = False):  # noqa: ARG001
             _ = dry_run
@@ -114,7 +114,7 @@ class TestArgParsing:
         with patch.object(
             sys,
             "argv",
-            ["projman", "project_build", "--raw-output", "projA", "--dry-run"],
+            ["projman", "project_build", "--output=raw", "projA", "--dry-run"],
         ):
             operate, name, parsed_args, parsed_kwargs, args_dict = self.main_mod._parse_args_and_plugin_args(
                 builtin_ops
@@ -124,20 +124,52 @@ class TestArgParsing:
         assert name == "projA"
         assert parsed_args == []
         assert parsed_kwargs == {"dry_run": True}
-        assert args_dict.get("raw_output") is True
+        assert args_dict.get("output") == "raw"
+
+    def test_parse_args_treats_output_value_form_as_global_even_after_operation(self):
+        """Ensure `--output raw` after the operation is not forwarded as a plugin kwarg."""
+
+        def dummy_build(env, projects_info, dry_run: bool = False):  # noqa: ARG001
+            _ = dry_run
+            return True
+
+        builtin_ops = {"project_build": {"func": dummy_build, "desc": "Build project"}}
+
+        with patch.object(
+            sys,
+            "argv",
+            ["projman", "project_build", "--output", "raw", "projA", "--dry-run"],
+        ):
+            operate, name, parsed_args, parsed_kwargs, args_dict = self.main_mod._parse_args_and_plugin_args(
+                builtin_ops
+            )
+
+        assert operate == "project_build"
+        assert name == "projA"
+        assert parsed_args == []
+        assert parsed_kwargs == {"dry_run": True}
+        assert args_dict.get("output") == "raw"
 
     def test_resolve_render_mode_prefers_direct_output_for_json_and_emit_plan(self):
         """Machine-readable plugin flags must bypass the execution UI."""
         from src.execution import resolve_render_mode
 
-        assert resolve_render_mode("doctor", {"raw_output": False}, {"json": True}) == "direct_output"
-        assert resolve_render_mode("project_build", {"raw_output": False}, {"emit_plan": True}) == "direct_output"
+        assert resolve_render_mode("doctor", {"output": None}, {"json": True}) == "direct_output"
+        assert resolve_render_mode("project_build", {"output": None}, {"emit_plan": True}) == "direct_output"
 
-    def test_resolve_render_mode_prefers_plain_output_for_explicit_raw_output_flag(self):
-        """Explicit `--raw-output` should bypass session events and use plain logger output."""
+    def test_resolve_render_mode_prefers_raw_output_for_explicit_output_raw(self):
+        """Explicit `--output=raw` should force the docker-style raw renderer."""
         from src.execution import resolve_render_mode
 
-        assert resolve_render_mode("po_apply", {"raw_output": True}, {}) == "plain_output"
+        assert resolve_render_mode("po_apply", {"output": "raw"}, {}) == "raw_output"
+
+    def test_resolve_render_mode_prefers_tui_for_explicit_output_tui(self, monkeypatch):
+        """Explicit `--output=tui` should prefer the interactive renderer in a real TTY."""
+        from src.execution import resolve_render_mode
+
+        monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
+
+        assert resolve_render_mode("po_apply", {"output": "tui"}, {}) == "interactive_tui"
 
     def test_resolve_render_mode_uses_execution_ui_for_additional_supported_commands(self, monkeypatch):
         """Human-facing commands added by the design doc should enter the execution UI."""
@@ -145,9 +177,9 @@ class TestArgParsing:
 
         monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
 
-        assert resolve_render_mode("po_list", {"raw_output": False}, {}) == "interactive_tui"
-        assert resolve_render_mode("project_new", {"raw_output": False}, {}) == "interactive_tui"
-        assert resolve_render_mode("doctor", {"raw_output": False}, {}) == "interactive_tui"
+        assert resolve_render_mode("po_list", {"output": None}, {}) == "interactive_tui"
+        assert resolve_render_mode("project_new", {"output": None}, {}) == "interactive_tui"
+        assert resolve_render_mode("doctor", {"output": None}, {}) == "interactive_tui"
 
     def test_resolve_render_mode_falls_back_to_raw_output_for_prompting_po_del(self, monkeypatch):
         """Commands that still require stdin prompts should not enter the full-screen UI by default."""
@@ -155,8 +187,8 @@ class TestArgParsing:
 
         monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
 
-        assert resolve_render_mode("po_del", {"raw_output": False}, {"force": False}) == "raw_output"
-        assert resolve_render_mode("po_del", {"raw_output": False}, {"force": True}) == "interactive_tui"
+        assert resolve_render_mode("po_del", {"output": None}, {"force": False}) == "raw_output"
+        assert resolve_render_mode("po_del", {"output": None}, {"force": True}) == "interactive_tui"
 
 
 class TestLoadAllProjects:

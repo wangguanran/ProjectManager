@@ -452,7 +452,7 @@ python -m src po_new <project-name> <po-name> [--force] [--tui]
 
 **Options**
 - `--force`: Skip confirmation prompts and create an empty directory structure.
-- `--tui`: Compatibility alias for the default Textual-based picker in interactive terminals. If the Textual renderer cannot start, the command falls back to the standard console/raw flow.
+- `--tui`: Compatibility alias for the default Textual-based picker in interactive terminals. If the Textual renderer cannot start, the command falls back to the standard console / `--output=raw` flow.
 
 **Generated structure**
 ```
@@ -485,7 +485,7 @@ python -m src po_update <project-name> <po-name> [--force] [--tui]
 
 **Options**
 - `--force`: Skip confirmation prompts.
-- `--tui`: Compatibility alias for the default Textual-based picker in interactive terminals. If the Textual renderer cannot start, the command falls back to the standard console/raw flow.
+- `--tui`: Compatibility alias for the default Textual-based picker in interactive terminals. If the Textual renderer cannot start, the command falls back to the standard console / `--output=raw` flow.
 
 **Example**
 ```bash

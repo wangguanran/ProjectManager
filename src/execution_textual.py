@@ -44,7 +44,7 @@ def run_po_selection_dialog(
         from textual.containers import Horizontal
         from textual.widgets import Footer, Header, ListItem, ListView, Static
     except ModuleNotFoundError as exc:  # pragma: no cover - exercised only when dependency is missing
-        raise TextualUnavailable("Textual is not installed. Re-run with --raw-output or install the package.") from exc
+        raise TextualUnavailable("Textual is not installed. Re-run with --output=raw or install the package.") from exc
 
     class PoSelectionApp(App[Dict[str, Any]]):
         CSS = """
@@ -244,7 +244,7 @@ def run_textual_session(session: ExecutionSession, operation) -> Any:
         from textual.containers import Horizontal, Vertical
         from textual.widgets import Footer, Header, RichLog, Static, Tree
     except ModuleNotFoundError as exc:  # pragma: no cover - exercised only when dependency is missing
-        raise TextualUnavailable("Textual is not installed. Re-run with --raw-output or install the package.") from exc
+        raise TextualUnavailable("Textual is not installed. Re-run with --output=raw or install the package.") from exc
 
     class _TextualSessionRenderer(ExecutionRenderer):
         def __init__(self, app: "ExecutionTextualApp") -> None:

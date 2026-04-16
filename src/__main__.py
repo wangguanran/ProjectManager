@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from contextlib import nullcontext
 from datetime import datetime
 from difflib import SequenceMatcher
 from importlib import import_module
@@ -24,13 +25,12 @@ from src.execution import (
     RawOutputRenderer,
     describe_operation,
     execute_operation_with_session,
+    make_step_id,
     resolve_render_mode,
 )
 from src.log_manager import (
     attach_execution_session_logging,
-    attach_raw_output_logging,
     detach_execution_session_logging,
-    detach_raw_output_logging,
     log,
     mute_console_logging,
     restore_console_logging,
@@ -470,7 +470,7 @@ def _parse_args_and_plugin_args(builtin_operations):
             projman <operate> [name] [--flags...]
         """
 
-        global_flags = {
+        global_switch_flags = {
             "--perf-analyze",
             "--load-scripts",
             "--no-fuzzy",
@@ -483,18 +483,33 @@ def _parse_args_and_plugin_args(builtin_operations):
             "-y",
             "--yes",
         }
+        global_value_flags = {"--output"}
+
+        def _is_global_value_flag(token: str) -> bool:
+            return any(token.startswith(f"{flag}=") for flag in global_value_flags)
 
         # Skip global options before <operate>.
         operate_idx = None
-        for idx, token in enumerate(argv):
-            if token in global_flags:
+        idx = 0
+        while idx < len(argv):
+            token = argv[idx]
+            if token in global_switch_flags:
+                idx += 1
+                continue
+            if token in global_value_flags:
+                idx += 2
+                continue
+            if _is_global_value_flag(token):
+                idx += 1
                 continue
             if token.startswith("-"):
                 # Unknown option before <operate>; treat as global and ignore.
+                idx += 1
                 continue
             if operate_idx is None:
                 operate_idx = idx
-                continue
+                break
+            idx += 1
 
         if operate_idx is None:
             return None, []
@@ -506,7 +521,13 @@ def _parse_args_and_plugin_args(builtin_operations):
         idx = start_idx
         while idx < len(argv):
             token = argv[idx]
-            if token in global_flags:
+            if token in global_switch_flags:
+                idx += 1
+                continue
+            if token in global_value_flags:
+                idx += 2
+                continue
+            if _is_global_value_flag(token):
                 idx += 1
                 continue
             if parsed_name is None and not saw_plugin_flag and not token.startswith("-"):
@@ -629,10 +650,11 @@ def _parse_args_and_plugin_args(builtin_operations):
         help="Enable safe mode for untrusted workspaces (blocks env-based script loading; requires confirmation for destructive ops; blocks network update/upgrade unless allowed).",
     )
     parser.add_argument(
-        "--raw-output",
-        action="store_true",
-        help="Disable the interactive execution UI and emit stable line-oriented step output.",
+        "--output",
+        choices=["tui", "raw"],
+        help="Select execution output mode: `tui` for the interactive terminal UI, `raw` for docker-style line output.",
     )
+    parser.add_argument("--raw-output", dest="output", action="store_const", const="raw", help=argparse.SUPPRESS)
     parser.add_argument(
         "--allow-network",
         action="store_true",
@@ -1127,28 +1149,47 @@ def main():
             sys.exit(1)
         render_mode = resolve_render_mode(operate, args_dict, parsed_kwargs)
         env["render_mode"] = render_mode
-        saved_raw_handlers = []
-        raw_output_handler = None
-        if render_mode in {"raw_output", "plain_output"}:
-            saved_raw_handlers = mute_console_logging()
-            raw_output_handler = attach_raw_output_logging()
+        session = None
+        root_step_id = None
+        saved_console_handlers = []
+        session_log_handler = None
+        if render_mode in {"interactive_tui", "raw_output"}:
+            session = ExecutionSession(title=describe_operation(operate, name), mode=render_mode)
+            root_step_id = make_step_id("operation", operate)
+            env["execution_session"] = session
+            saved_console_handlers = mute_console_logging()
+            session_log_handler = attach_execution_session_logging(session)
+            if render_mode == "raw_output":
+                session.add_renderer(RawOutputRenderer())
+            session.start_step(root_step_id, session.title)
         if get_operation_meta_flag(func, operate, "needs_repositories"):
-            log.info("Operation '%s' requires repositories, loading repositories...", operate)
-            env["repositories"] = _find_repositories()
+            bind_context = (
+                session.bind_step(root_step_id) if session is not None and root_step_id is not None else nullcontext()
+            )
+            with bind_context:
+                log.info("Operation '%s' requires repositories, loading repositories...", operate)
+                env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
         if render_mode == "interactive_tui":
-            _prepare_textual_preflight(env, projects_info, operate, user_args, func_kwargs)
+            bind_context = (
+                session.bind_step(root_step_id) if session is not None and root_step_id is not None else nullcontext()
+            )
+            with bind_context:
+                _prepare_textual_preflight(env, projects_info, operate, user_args, func_kwargs)
         try:
-            if render_mode in {"direct_output", "plain_output"}:
+            if render_mode == "direct_output":
                 result = func(*func_args, **func_kwargs)
             else:
-                if render_mode == "raw_output" and raw_output_handler is not None:
-                    detach_raw_output_logging(raw_output_handler)
-                    raw_output_handler = None
-                session = ExecutionSession(title=describe_operation(operate, name), mode=render_mode)
-                env["execution_session"] = session
-                result = _run_operation_with_session(session, operate, func, func_args, func_kwargs)
+                assert session is not None
+                result = _run_operation_with_session(
+                    session,
+                    operate,
+                    func,
+                    func_args,
+                    func_kwargs,
+                    root_step_id=root_step_id,
+                )
             if result is False:
                 log.error("Operation '%s' failed", operate)
                 sys.exit(1)
@@ -1157,9 +1198,9 @@ def main():
             sys.exit(1)
         finally:
             env.pop("execution_session", None)
-            detach_raw_output_logging(raw_output_handler)
-            if saved_raw_handlers:
-                restore_console_logging(saved_raw_handlers)
+            detach_execution_session_logging(session_log_handler)
+            if saved_console_handlers:
+                restore_console_logging(saved_console_handlers)
     else:
         log.error("Operation '%s' is not supported.", operate)
         sys.exit(1)
@@ -1206,46 +1247,38 @@ def _run_operation_with_session(
     func,
     func_args: List[Any],
     func_kwargs: Dict[str, Any],
+    *,
+    root_step_id: Optional[str] = None,
 ) -> Any:
     def operation():
         return func(*func_args, **func_kwargs)
 
     if session.mode == "raw_output":
-        session_log_handler = attach_execution_session_logging(session, include_metadata=True)
-        try:
-            session.add_renderer(RawOutputRenderer())
-            return execute_operation_with_session(session, operate, operation)
-        finally:
-            detach_execution_session_logging(session_log_handler)
+        return execute_operation_with_session(session, operate, operation, root_step_id=root_step_id)
 
-    saved_handlers = mute_console_logging()
-    session_log_handler = None
     try:
-        try:
-            from src.execution_textual import TextualUnavailable, run_textual_session
-        except ModuleNotFoundError:
-            session.mode = "raw_output"
+        from src.execution_textual import TextualUnavailable, run_textual_session
+    except ModuleNotFoundError:
+        session.mode = "raw_output"
+        if not any(
+            isinstance(renderer, RawOutputRenderer) for renderer in session._renderers
+        ):  # pylint: disable=protected-access
             session.add_renderer(RawOutputRenderer())
-            restore_console_logging(saved_handlers)
-            saved_handlers = []
-            return execute_operation_with_session(session, operate, operation)
+        return execute_operation_with_session(session, operate, operation, root_step_id=root_step_id)
 
-        session_log_handler = attach_execution_session_logging(session)
-        try:
-            return run_textual_session(session, lambda: execute_operation_with_session(session, operate, operation))
-        except TextualUnavailable as exc:
-            detach_execution_session_logging(session_log_handler)
-            session_log_handler = None
-            log.warning("%s", exc)
-            session.mode = "raw_output"
+    try:
+        return run_textual_session(
+            session,
+            lambda: execute_operation_with_session(session, operate, operation, root_step_id=root_step_id),
+        )
+    except TextualUnavailable as exc:
+        log.warning("%s", exc)
+        session.mode = "raw_output"
+        if not any(
+            isinstance(renderer, RawOutputRenderer) for renderer in session._renderers
+        ):  # pylint: disable=protected-access
             session.add_renderer(RawOutputRenderer())
-            restore_console_logging(saved_handlers)
-            saved_handlers = []
-            return execute_operation_with_session(session, operate, operation)
-    finally:
-        detach_execution_session_logging(session_log_handler)
-        if saved_handlers:
-            restore_console_logging(saved_handlers)
+        return execute_operation_with_session(session, operate, operation, root_step_id=root_step_id)
 
 
 if __name__ == "__main__":

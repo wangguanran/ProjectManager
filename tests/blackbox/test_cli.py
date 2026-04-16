@@ -107,30 +107,30 @@ def test_cli_009_missing_required_param(workspace_a: Path) -> None:
 
 def test_cli_019_project_build_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: Path) -> None:
     result = run_cli(["project_build", "projA", "--dry-run", "--no-po", "--no-diff"], cwd=workspace_a)
-    assert "STEP_START id=operation.project_build" in result.stdout
-    assert "SESSION_END state=success" in result.stdout
+    assert "#1 [project build: projA]" in result.stdout
+    assert "#1 DONE " in result.stdout
     assert "\x1b[?1049h" not in result.stdout
 
 
 def test_cli_019a_po_list_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: Path) -> None:
     result = run_cli(["po_list", "projA", "--short"], cwd=workspace_a)
-    assert "STEP_START id=operation.po_list" in result.stdout
-    assert 'text="po_base"' in result.stdout or "po_base" in result.stdout
-    assert "SESSION_END state=success" in result.stdout
+    assert "#1 [po list: projA]" in result.stdout
+    assert "#1 po_base" in result.stdout or "po_base" in result.stdout
+    assert "#1 DONE " in result.stdout
     assert "\x1b[?1049h" not in result.stdout
 
 
-def test_cli_019b_raw_output_uses_plain_logger_output_without_step_events(workspace_a: Path) -> None:
-    result = run_cli(["po_apply", "projA", "--raw-output"], cwd=workspace_a, check=False)
+def test_cli_019b_output_raw_uses_docker_style_progress_output(workspace_a: Path) -> None:
+    result = run_cli(["po_apply", "projA", "--output=raw"], cwd=workspace_a, check=False)
     combined = result.stdout + result.stderr
-    ansi_prefix = r"(?:\x1b\[[0-9;]*m)*"
 
     assert "STEP_START" not in combined
     assert "SESSION_END" not in combined
-    assert "\x1b[32m" in combined
-    assert re.search(rf"^{ansi_prefix}\[[0-9:, -]+\] \[INFO\s+\] \[__main__\.py", combined, re.MULTILINE)
-    assert re.search(rf"^{ansi_prefix}\[[0-9:, -]+\] \[INFO\s+\] \[patch_override\.py", combined, re.MULTILINE)
-    assert "LOG_INFO" not in combined
+    assert "[__main__.py" not in combined
+    assert "#1 [po apply: projA]" in combined
+    assert "#1 Operation 'po_apply' requires repositories, loading repositories..." in combined
+    assert "#2 [PO po_base: apply commits]" in combined
+    assert re.search(r"^#\d+ DONE \d+\.\d{2}s$", combined, re.MULTILINE)
 
 
 def test_cli_020_emit_plan_keeps_direct_json_output(workspace_a: Path) -> None:

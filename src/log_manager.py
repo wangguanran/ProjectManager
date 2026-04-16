@@ -241,7 +241,7 @@ def attach_execution_session_logging(
 
 
 def attach_raw_output_logging(*, logger: Optional[logging.Logger] = None, stream=None) -> logging.StreamHandler:
-    """Attach a temporary plain formatter handler for `--raw-output` pre-session logs."""
+    """Attach a temporary colored console handler for `--output=raw` pre-session logs."""
     target_logger = logger or log
     handler = logging.StreamHandler(stream or sys.stdout)
     handler.setLevel(logging.INFO)
