@@ -34,7 +34,7 @@ jobs:
           python3 --version
           bash build.sh
 
-      - name: Verify Linux standalone binary
+      - name: Verify release binary
         run: python scripts/check_linux_standalone_binary.py out/binary/projman
 
       - name: Run tests
@@ -75,9 +75,11 @@ jobs:
           fi
           bash build.sh
 
-      - name: Verify Linux standalone binary
-        if: runner.os == 'Linux'
-        run: python scripts/check_linux_standalone_binary.py out/binary/projman
+      - name: Verify release binary
+        shell: bash
+        run: |
+          binary_path="$(cat out/projman_binary_path.txt)"
+          python scripts/check_linux_standalone_binary.py "$binary_path"
 
       - name: Compute artifact metadata
         id: meta

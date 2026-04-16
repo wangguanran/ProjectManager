@@ -64,7 +64,10 @@
 - 默认在 `venv/` 中执行（不存在则自动创建）
 - Python 包输出到 `out/package/`
 - 独立二进制输出到 `out/binary/`
-- 仅 Linux：要求 `staticx` + `patchelf`，若产物仍依赖外部共享库则构建失败
+- 所有发布二进制都会在 CI 中校验为单文件产物
+- Linux：要求 `staticx` + `patchelf`，若产物仍依赖外部共享库则构建失败
+- macOS：若二进制链接了非系统动态库/Framework，则构建失败
+- Windows：若二进制导入了非系统 DLL，则构建失败
 - 只会构建当前系统/架构的二进制；跨平台产物请用 GitHub Actions Release 工作流
 
 ### `release.sh`

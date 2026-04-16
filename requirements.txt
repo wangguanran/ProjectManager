@@ -22,3 +22,6 @@ pre-commit>=3.3.0
 
 # Terminal UI support
 textual>=0.61.0
+
+# Platform-specific release-binary validation
+pefile>=2023.2.7; platform_system == "Windows"

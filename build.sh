@@ -76,6 +76,11 @@ if [ "$PLATFORM" = "linux" ]; then
     fi
 fi
 
+VERIFY_RELEASE_BINARY=1
+if is_truthy "${PROJMAN_SKIP_BINARY_VALIDATION:-0}"; then
+    VERIFY_RELEASE_BINARY=0
+fi
+
 ensure_venv
 
 python -m pip install -U pip setuptools wheel
@@ -248,8 +253,8 @@ if [ "$PLATFORM" != "windows" ]; then
     chmod 755 "$RELEASE_BINARY_PATH" 2>/dev/null || true
 fi
 
-if [ "$PLATFORM" = "linux" ] && [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
-    echo -e "\033[32m--- Verifying Linux standalone binary ---\033[0m"
+if [ "$VERIFY_RELEASE_BINARY" -eq 1 ]; then
+    echo -e "\033[32m--- Verifying release binary ---\033[0m"
     python scripts/check_linux_standalone_binary.py "$BINARY_PATH"
 fi
 

@@ -64,7 +64,10 @@ Builds the Python package and the standalone `projman` binary (PyInstaller).
 - Automatically runs inside `venv/` (creates it if missing)
 - Builds Python packages into `out/package/`
 - Builds the standalone binary into `out/binary/`
-- Linux-only: requires `staticx` + `patchelf` and fails if the output still depends on external shared libraries
+- All release binaries are validated as single-file artifacts in CI
+- Linux builds require `staticx` + `patchelf` and fail if the output still depends on external shared libraries
+- macOS builds fail if the binary links non-system dynamic libraries/frameworks
+- Windows builds fail if the binary imports non-system DLLs
 - Builds only for the current OS/arch; use GitHub Actions release workflow for multi-platform binaries
 
 ### `release.sh`
