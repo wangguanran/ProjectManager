@@ -156,11 +156,13 @@ class RawOutputRenderer(ExecutionRenderer):
         if event_type == "step_log":
             text = str(event.get("text") or "")
             lines = text.splitlines() or ([text] if text else [])
+            kind = str(event.get("kind") or event.get("stream") or "stdout").strip().upper() or "STDOUT"
+            safe_kind = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in kind)
             for line in lines:
                 self._write(
                     " ".join(
                         [
-                            "LOG",
+                            f"LOG_{safe_kind}",
                             f"id={event['step_id']}",
                             f"stream={event.get('stream', 'stdout')}",
                             f"text={self._quote(line)}",
@@ -240,13 +242,13 @@ class _ExecutionLogStream:
             while "\n" in self._buffer:
                 line, self._buffer = self._buffer.split("\n", 1)
                 if line:
-                    self._session.log(line, stream=self._stream_name)
+                    self._session.log(line, stream=self._stream_name, kind=self._stream_name)
         return len(value)
 
     def flush(self) -> None:
         with self._lock:
             if self._buffer:
-                self._session.log(self._buffer, stream=self._stream_name)
+                self._session.log(self._buffer, stream=self._stream_name, kind=self._stream_name)
                 self._buffer = ""
 
     def isatty(self) -> bool:
@@ -397,7 +399,14 @@ class ExecutionSession:
                 raise
             self.finish_step(step_id, state="success", summary=summary)
 
-    def log(self, text: Any, *, stream: str = "stdout", step_id: Optional[str] = None) -> None:
+    def log(
+        self,
+        text: Any,
+        *,
+        stream: str = "stdout",
+        step_id: Optional[str] = None,
+        kind: Optional[str] = None,
+    ) -> None:
         message = "" if text is None else str(text)
         if not message:
             return
@@ -409,7 +418,10 @@ class ExecutionSession:
         with self._lock:
             record = self._steps.get(target_step)
             if record is not None:
-                record.logs.append({"stream": stream, "text": message})
+                item = {"stream": stream, "text": message}
+                if kind:
+                    item["kind"] = kind
+                record.logs.append(item)
 
         self._emit(
             {
@@ -417,8 +429,24 @@ class ExecutionSession:
                 "step_id": target_step,
                 "stream": stream,
                 "text": message,
+                "kind": kind or stream,
             }
         )
+
+    def log_stdout(self, text: Any, *, step_id: Optional[str] = None) -> None:
+        self.log(text, stream="stdout", step_id=step_id, kind="stdout")
+
+    def log_stderr(self, text: Any, *, step_id: Optional[str] = None) -> None:
+        self.log(text, stream="stderr", step_id=step_id, kind="stderr")
+
+    def log_info(self, text: Any, *, step_id: Optional[str] = None) -> None:
+        self.log(text, stream="stdout", step_id=step_id, kind="info")
+
+    def log_warning(self, text: Any, *, step_id: Optional[str] = None) -> None:
+        self.log(text, stream="stderr", step_id=step_id, kind="warning")
+
+    def log_error(self, text: Any, *, step_id: Optional[str] = None) -> None:
+        self.log(text, stream="stderr", step_id=step_id, kind="error")
 
     def command_started(
         self,
@@ -473,8 +501,8 @@ class ExecutionSession:
                 record.command.update(payload)
 
         self._emit({"type": "step_command_finished", "step_id": target_step, **payload})
-        self.log(stdout, stream="stdout", step_id=target_step)
-        self.log(stderr, stream="stderr", step_id=target_step)
+        self.log_stdout(stdout, step_id=target_step)
+        self.log_stderr(stderr, step_id=target_step)
 
     def emit_summary(self, *, state: str) -> None:
         self._emit(
@@ -521,7 +549,28 @@ def execution_log(env: Dict[str, Any], text: Any, *, stream: str = "stdout") -> 
     """Append log text to the active execution step when a session exists."""
     session = get_execution_session(env)
     if session is not None:
-        session.log(text, stream=stream)
+        session.log(text, stream=stream, kind=stream)
+
+
+def execution_log_info(env: Dict[str, Any], text: Any) -> None:
+    """Append an info log line to the active execution step when a session exists."""
+    session = get_execution_session(env)
+    if session is not None:
+        session.log_info(text)
+
+
+def execution_log_warning(env: Dict[str, Any], text: Any) -> None:
+    """Append a warning log line to the active execution step when a session exists."""
+    session = get_execution_session(env)
+    if session is not None:
+        session.log_warning(text)
+
+
+def execution_log_error(env: Dict[str, Any], text: Any) -> None:
+    """Append an error log line to the active execution step when a session exists."""
+    session = get_execution_session(env)
+    if session is not None:
+        session.log_error(text)
 
 
 def execute_operation_with_session(session: ExecutionSession, operate: str, operation) -> Any:
@@ -539,7 +588,7 @@ def execute_operation_with_session(session: ExecutionSession, operate: str, oper
     except Exception as exc:
         stdout_stream.flush()
         stderr_stream.flush()
-        session.log(str(exc), stream="stderr", step_id=root_step_id)
+        session.log_error(str(exc), step_id=root_step_id)
         session.finish_step(root_step_id, state="failed", summary=str(exc))
         session.emit_summary(state="failed")
         raise

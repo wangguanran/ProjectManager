@@ -96,7 +96,7 @@ def test_cli_007_short_flag_parsed(workspace_a: Path) -> None:
 def test_cli_008_unsupported_param_raises(workspace_a: Path) -> None:
     result = run_cli(["po_list", "projA", "--unknown-flag", "1"], cwd=workspace_a, check=False)
     assert result.returncode != 0
-    assert "unexpected keyword argument" in result.stderr
+    assert "unexpected keyword argument" in (result.stdout + result.stderr)
 
 
 def test_cli_009_missing_required_param(workspace_a: Path) -> None:
@@ -118,6 +118,17 @@ def test_cli_019a_po_list_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: 
     assert 'text="po_base"' in result.stdout or "po_base" in result.stdout
     assert "SESSION_END state=success" in result.stdout
     assert "\x1b[?1049h" not in result.stdout
+
+
+def test_cli_019b_raw_output_routes_logger_messages_into_structured_log_events(workspace_a: Path) -> None:
+    result = run_cli(["po_apply", "projA", "--raw-output"], cwd=workspace_a, check=False)
+    combined = result.stdout + result.stderr
+
+    assert "STEP_START id=operation.po_apply" in result.stdout
+    assert "LOG_INFO id=operation.po_apply" in result.stdout
+    assert "SESSION_END state=success" in result.stdout
+    assert "[INFO" not in combined
+    assert "[ERROR" not in combined
 
 
 def test_cli_020_emit_plan_keeps_direct_json_output(workspace_a: Path) -> None:

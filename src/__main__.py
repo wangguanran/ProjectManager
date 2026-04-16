@@ -1123,13 +1123,14 @@ def main():
             )
             log.error("Required parameters: %s", ", ".join(required_cli_params))
             sys.exit(1)
+        render_mode = resolve_render_mode(operate, args_dict, parsed_kwargs)
+        env["render_mode"] = render_mode
+        saved_raw_handlers = mute_console_logging() if render_mode == "raw_output" else []
         if get_operation_meta_flag(func, operate, "needs_repositories"):
             log.info("Operation '%s' requires repositories, loading repositories...", operate)
             env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
         func_kwargs = parsed_kwargs
-        render_mode = resolve_render_mode(operate, args_dict, parsed_kwargs)
-        env["render_mode"] = render_mode
         if render_mode == "interactive_tui":
             _prepare_textual_preflight(env, projects_info, operate, user_args, func_kwargs)
         try:
@@ -1147,6 +1148,8 @@ def main():
             sys.exit(1)
         finally:
             env.pop("execution_session", None)
+            if saved_raw_handlers:
+                restore_console_logging(saved_raw_handlers)
     else:
         log.error("Operation '%s' is not supported.", operate)
         sys.exit(1)
@@ -1198,8 +1201,12 @@ def _run_operation_with_session(
         return func(*func_args, **func_kwargs)
 
     if session.mode == "raw_output":
-        session.add_renderer(RawOutputRenderer())
-        return execute_operation_with_session(session, operate, operation)
+        session_log_handler = attach_execution_session_logging(session)
+        try:
+            session.add_renderer(RawOutputRenderer())
+            return execute_operation_with_session(session, operate, operation)
+        finally:
+            detach_execution_session_logging(session_log_handler)
 
     saved_handlers = mute_console_logging()
     session_log_handler = None

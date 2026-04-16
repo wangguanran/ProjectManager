@@ -20,7 +20,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Mapping, Optional
 
-from src.execution import execution_log, execution_step, make_step_id
+from src.execution import execution_log_info, execution_step, make_step_id
 from src.log_manager import log
 from src.operations.registry import register
 
@@ -572,7 +572,7 @@ def _upgrade_impl(  # noqa: PLR0913
             make_step_id(operation, "release_metadata"),
             "Fetch release metadata",
         ):
-            execution_log(env, f"Fetching release metadata from {api_url}")
+            execution_log_info(env, f"Fetching release metadata from {api_url}")
             payload = _http_get_json(api_url, auth_token)
     except RuntimeError as exc:
         log.error("Failed to fetch %s release metadata: %s", channel, exc)
@@ -632,7 +632,7 @@ def _upgrade_impl(  # noqa: PLR0913
             "Download release asset",
         ):
             os.makedirs(install_dir, exist_ok=True)
-            execution_log(env, f"Downloading asset: {asset_name}")
+            execution_log_info(env, f"Downloading asset: {asset_name}")
             temp_path = _download_file(download_url, auth_token)
 
         checksum_asset = _select_checksum_asset(release_data, asset_name)

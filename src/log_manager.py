@@ -212,7 +212,7 @@ class ExecutionSessionLogHandler(logging.Handler):
     def __init__(self, session: "ExecutionSession") -> None:
         super().__init__(level=logging.INFO)
         self._session = session
-        self.setFormatter(RedactingFormatter("[%(levelname)-8s] %(message)s"))
+        self.setFormatter(RedactingFormatter("%(message)s"))
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -222,7 +222,7 @@ class ExecutionSessionLogHandler(logging.Handler):
             return
 
         stream = "stderr" if record.levelno >= logging.WARNING else "stdout"
-        self._session.log(message, stream=stream)
+        self._session.log(message, stream=stream, kind=record.levelname.lower())
 
 
 def attach_execution_session_logging(

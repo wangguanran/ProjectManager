@@ -384,3 +384,5 @@ class TestExecutionSessionLogHandler:
 
         assert any(item["stream"] == "stdout" and "hello info" in item["text"] for item in logs)
         assert any(item["stream"] == "stderr" and "hello warning" in item["text"] for item in logs)
+        assert any(item.get("kind") == "info" and "hello info" in item["text"] for item in logs)
+        assert any(item.get("kind") == "warning" and "hello warning" in item["text"] for item in logs)
