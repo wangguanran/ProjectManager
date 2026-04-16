@@ -210,9 +210,10 @@ class RawOutputRenderer(ExecutionRenderer):
 class BuildkitOutputRenderer(ExecutionRenderer):
     """Rich-based progress renderer inspired by Docker BuildKit's default TTY output."""
 
-    def __init__(self, stream=None, *, dynamic: Optional[bool] = None) -> None:
+    def __init__(self, stream=None, *, dynamic: Optional[bool] = None, console_width: Optional[int] = None) -> None:
         self.stream = stream or sys.stdout
         self.dynamic = bool(dynamic if dynamic is not None else getattr(self.stream, "isatty", lambda: False)())
+        self.console_width = console_width
         self._session_started_at = time.monotonic()
         self._lock = threading.Lock()
         self._root_step_id: Optional[str] = None
@@ -236,6 +237,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
                 color_system="auto",
                 soft_wrap=True,
                 highlight=False,
+                width=self.console_width,
             )
         except ModuleNotFoundError:
             self._fallback_renderer = RawOutputRenderer(stream=self.stream)
@@ -329,7 +331,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         return Text(self._format_duration(time.monotonic() - started_at), style="dim")
 
     def _step_line_renderable(self, step_id: str, *, total: int):
-        from rich.columns import Columns
+        from rich.table import Table
         from rich.text import Text
 
         step = self._steps[step_id]
@@ -342,7 +344,12 @@ class BuildkitOutputRenderer(ExecutionRenderer):
             left.append("ERROR ", style="bold red")
         left.append(f"[{index}/{max(total, 1)}] ", style="cyan")
         left.append(title, style="bold white" if step.get("state") == "running" else "white")
-        return Columns([left, self._status_text(step)], expand=True, equal=False)
+
+        table = Table.grid(expand=True, padding=(0, 0))
+        table.add_column(ratio=1, no_wrap=True, overflow="ellipsis")
+        table.add_column(width=8, justify="right", no_wrap=True)
+        table.add_row(left, self._status_text(step))
+        return table
 
     def _log_line_renderable(self, text: str, *, kind: str):
         from rich.text import Text
