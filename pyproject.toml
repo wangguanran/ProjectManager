@@ -36,6 +36,7 @@ dependencies = [
     "GitPython>=3.1.40",
     "certifi>=2024.2.2",
     "textual>=0.61.0",
+    "rich>=13.7.0",
     'importlib-metadata; python_version < "3.8"',
 ]
 
@@ -59,6 +60,7 @@ dev = [
 # Optional TUI support (kept for install-hint compatibility)
 tui = [
     "textual>=0.61.0",
+    "rich>=13.7.0",
 ]
 
 [project.urls]

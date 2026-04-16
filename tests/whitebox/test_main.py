@@ -171,15 +171,23 @@ class TestArgParsing:
 
         assert resolve_render_mode("po_apply", {"output": "tui"}, {}) == "interactive_tui"
 
+    def test_resolve_render_mode_defaults_to_buildkit_output_for_tty(self, monkeypatch):
+        """Human-facing commands should default to the Rich/BuildKit renderer in a TTY."""
+        from src.execution import resolve_render_mode
+
+        monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
+
+        assert resolve_render_mode("po_apply", {"output": None}, {}) == "buildkit_output"
+
     def test_resolve_render_mode_uses_execution_ui_for_additional_supported_commands(self, monkeypatch):
         """Human-facing commands added by the design doc should enter the execution UI."""
         from src.execution import resolve_render_mode
 
         monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
 
-        assert resolve_render_mode("po_list", {"output": None}, {}) == "interactive_tui"
-        assert resolve_render_mode("project_new", {"output": None}, {}) == "interactive_tui"
-        assert resolve_render_mode("doctor", {"output": None}, {}) == "interactive_tui"
+        assert resolve_render_mode("po_list", {"output": None}, {}) == "buildkit_output"
+        assert resolve_render_mode("project_new", {"output": None}, {}) == "buildkit_output"
+        assert resolve_render_mode("doctor", {"output": None}, {}) == "buildkit_output"
 
     def test_resolve_render_mode_falls_back_to_raw_output_for_prompting_po_del(self, monkeypatch):
         """Commands that still require stdin prompts should not enter the full-screen UI by default."""
@@ -188,7 +196,7 @@ class TestArgParsing:
         monkeypatch.setattr("src.execution.is_interactive_tty", lambda: True)
 
         assert resolve_render_mode("po_del", {"output": None}, {"force": False}) == "raw_output"
-        assert resolve_render_mode("po_del", {"output": None}, {"force": True}) == "interactive_tui"
+        assert resolve_render_mode("po_del", {"output": None}, {"force": True}) == "buildkit_output"
 
 
 class TestLoadAllProjects:

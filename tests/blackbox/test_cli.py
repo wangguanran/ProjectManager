@@ -128,8 +128,9 @@ def test_cli_019b_output_raw_uses_docker_style_progress_output(workspace_a: Path
     assert "SESSION_END" not in combined
     assert "[__main__.py" not in combined
     assert "#1 [po apply: projA]" in combined
-    assert "#1 Operation 'po_apply' requires repositories, loading repositories..." in combined
-    assert "#2 [PO po_base: apply commits]" in combined
+    assert "#2 [Load repositories]" in combined
+    assert "#2 Operation 'po_apply' requires repositories, loading repositories..." in combined
+    assert re.search(r"#\d+ \[PO po_base: apply commits\]", combined)
     assert re.search(r"^#\d+ DONE \d+\.\d{2}s$", combined, re.MULTILINE)
 
 

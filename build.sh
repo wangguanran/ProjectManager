@@ -145,6 +145,7 @@ PYINSTALLER_ARGS=(
     --hidden-import=src.utils
     --hidden-import=src._build_info
     --collect-all=git
+    --collect-all=rich
     --collect-all=textual
     --add-data "${PYPROJECT_ABS_PATH}${ADD_DATA_SEP}."
     --distpath "$BINARY_DIR"

@@ -21,10 +21,12 @@ import configupdater
 
 import src.plugins.upgrader  # pylint: disable=unused-import
 from src.execution import (
+    BuildkitOutputRenderer,
     ExecutionSession,
     RawOutputRenderer,
     describe_operation,
     execute_operation_with_session,
+    execution_step,
     make_step_id,
     resolve_render_mode,
 )
@@ -652,7 +654,7 @@ def _parse_args_and_plugin_args(builtin_operations):
     parser.add_argument(
         "--output",
         choices=["tui", "raw"],
-        help="Select execution output mode: `tui` for the interactive terminal UI, `raw` for docker-style line output.",
+        help="Select execution output mode: default is Rich/BuildKit-style terminal progress; use `tui` for the full-screen UI or `raw` for stable docker-plain lines.",
     )
     parser.add_argument("--raw-output", dest="output", action="store_const", const="raw", help=argparse.SUPPRESS)
     parser.add_argument(
@@ -1153,7 +1155,7 @@ def main():
         root_step_id = None
         saved_console_handlers = []
         session_log_handler = None
-        if render_mode in {"interactive_tui", "raw_output"}:
+        if render_mode in {"buildkit_output", "interactive_tui", "raw_output"}:
             session = ExecutionSession(title=describe_operation(operate, name), mode=render_mode)
             root_step_id = make_step_id("operation", operate)
             env["execution_session"] = session
@@ -1161,12 +1163,16 @@ def main():
             session_log_handler = attach_execution_session_logging(session)
             if render_mode == "raw_output":
                 session.add_renderer(RawOutputRenderer())
+            elif render_mode == "buildkit_output":
+                session.add_renderer(BuildkitOutputRenderer())
             session.start_step(root_step_id, session.title)
         if get_operation_meta_flag(func, operate, "needs_repositories"):
-            bind_context = (
-                session.bind_step(root_step_id) if session is not None and root_step_id is not None else nullcontext()
-            )
-            with bind_context:
+            if session is not None and root_step_id is not None:
+                repo_step_id = make_step_id(root_step_id, "repositories")
+                with execution_step(env, repo_step_id, "Load repositories", parent_id=root_step_id):
+                    log.info("Operation '%s' requires repositories, loading repositories...", operate)
+                    env["repositories"] = _find_repositories()
+            else:
                 log.info("Operation '%s' requires repositories, loading repositories...", operate)
                 env["repositories"] = _find_repositories()
         func_args = [env, projects_info] + user_args
@@ -1253,7 +1259,7 @@ def _run_operation_with_session(
     def operation():
         return func(*func_args, **func_kwargs)
 
-    if session.mode == "raw_output":
+    if session.mode in {"buildkit_output", "raw_output"}:
         return execute_operation_with_session(session, operate, operation, root_step_id=root_step_id)
 
     try:

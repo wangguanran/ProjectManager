@@ -1,4 +1,4 @@
-"""Shared execution session, render-mode selection, and raw renderers."""
+"""Shared execution session, render-mode selection, and CLI renderers."""
 
 # pylint: disable=missing-function-docstring,too-many-instance-attributes
 
@@ -60,7 +60,7 @@ def is_interactive_tty() -> bool:
 
 
 def resolve_render_mode(operate: str, args_dict: Dict[str, Any], parsed_kwargs: Dict[str, Any]) -> str:
-    """Choose `interactive_tui`, `raw_output`, or `direct_output` for this run."""
+    """Choose `buildkit_output`, `interactive_tui`, `raw_output`, or `direct_output`."""
     output_mode = str(args_dict.get("output") or "").strip().lower()
     if output_mode == "raw":
         return "raw_output"
@@ -82,7 +82,7 @@ def resolve_render_mode(operate: str, args_dict: Dict[str, Any], parsed_kwargs: 
     if operate in RAW_OUTPUT_FALLBACK_OPERATIONS and not _truthy(parsed_kwargs.get("force")):
         return "raw_output"
 
-    return "interactive_tui"
+    return "buildkit_output"
 
 
 def describe_operation(operate: str, name: Optional[str]) -> str:
@@ -133,7 +133,7 @@ class ExecutionRenderer:
 
 
 class RawOutputRenderer(ExecutionRenderer):
-    """Human-readable line renderer similar to `docker build` progress output."""
+    """Stable line renderer similar to `docker build --progress=plain`."""
 
     def __init__(self, stream=None) -> None:
         self.stream = stream or sys.stdout
@@ -205,6 +205,310 @@ class RawOutputRenderer(ExecutionRenderer):
                 if summary:
                     line = f"{line} {summary}"
                 self._write(line)
+
+
+class BuildkitOutputRenderer(ExecutionRenderer):
+    """Rich-based progress renderer inspired by Docker BuildKit's default TTY output."""
+
+    def __init__(self, stream=None, *, dynamic: Optional[bool] = None) -> None:
+        self.stream = stream or sys.stdout
+        self.dynamic = bool(dynamic if dynamic is not None else getattr(self.stream, "isatty", lambda: False)())
+        self._session_started_at = time.monotonic()
+        self._lock = threading.Lock()
+        self._root_step_id: Optional[str] = None
+        self._steps: Dict[str, Dict[str, Any]] = {}
+        self._step_order: List[str] = []
+        self._root_logs: List[Dict[str, str]] = []
+        self._session_title = ""
+        self._session_state = "running"
+        self._session_duration = 0.0
+        self._live = None
+        self._console = None
+        self._fallback_renderer: Optional[RawOutputRenderer] = None
+        self._finalized = False
+
+        try:
+            from rich.console import Console
+
+            self._console = Console(
+                file=self.stream,
+                force_terminal=self.dynamic,
+                color_system="auto",
+                soft_wrap=True,
+                highlight=False,
+            )
+        except ModuleNotFoundError:
+            self._fallback_renderer = RawOutputRenderer(stream=self.stream)
+
+    @staticmethod
+    def _iter_lines(text: Any) -> List[str]:
+        value = "" if text is None else str(text)
+        if not value:
+            return []
+        return [line.strip() for line in value.splitlines() if line.strip()]
+
+    @staticmethod
+    def _looks_cached(step: Dict[str, Any]) -> bool:
+        log_lines = [str(item.get("text") or "").lower() for item in step.get("logs", []) if item.get("text")]
+        if not log_lines:
+            return False
+        cache_markers = ("already applied", "skipping", "already exists", "nothing to do")
+        return all(any(marker in line for marker in cache_markers) for line in log_lines)
+
+    @staticmethod
+    def _format_duration(duration: float) -> str:
+        return f"{max(0.0, duration):.1f}s"
+
+    def _step_index(self, step_id: str) -> int:
+        if step_id not in self._step_order:
+            self._step_order.append(step_id)
+        return self._step_order.index(step_id) + 1
+
+    def _remember_logs(self, target: List[Dict[str, str]], lines: List[str], *, kind: str) -> None:
+        for line in lines:
+            target.append({"text": line, "kind": kind})
+        del target[:-6]
+
+    def _visible_step_logs(self, step: Dict[str, Any]) -> List[Dict[str, str]]:
+        logs = list(step.get("logs", []))
+        if step.get("state") == "failed":
+            visible = logs[-4:]
+            summary = str(step.get("summary") or "").strip()
+            if summary and not any(summary == item.get("text") for item in visible):
+                visible.append({"text": summary, "kind": "error"})
+            return [item for item in visible if item.get("text")]
+
+        if step.get("state") == "running":
+            return [item for item in logs[-2:] if item.get("text")]
+
+        return [
+            item
+            for item in logs[-2:]
+            if item.get("text") and str(item.get("kind") or "") in {"warning", "error", "stderr"}
+        ]
+
+    def _header_renderable(self):
+        from rich.text import Text
+
+        non_root_steps = [step_id for step_id in self._step_order if step_id != self._root_step_id]
+        total = len(non_root_steps)
+        completed = sum(
+            1 for step_id in non_root_steps if self._steps.get(step_id, {}).get("state") in {"success", "failed"}
+        )
+
+        header = Text()
+        header.append("[", style="bold white")
+        header.append("+", style="bold green" if self._session_state != "failed" else "bold red")
+        header.append("] ", style="bold white")
+        header.append(self._session_title or "projman", style="bold white")
+        duration = (
+            self._session_duration
+            if self._session_state in {"success", "failed"}
+            else time.monotonic() - self._session_started_at
+        )
+        header.append(f" {self._format_duration(duration)}", style="dim")
+        if total:
+            header.append(f" ({completed}/{total})", style="cyan")
+        if self._session_state == "success":
+            header.append(" FINISHED", style="bold green")
+        elif self._session_state == "failed":
+            header.append(" FAILED", style="bold red")
+        return header
+
+    def _status_text(self, step: Dict[str, Any]):
+        from rich.text import Text
+
+        state = str(step.get("state") or "running")
+        if state == "failed":
+            return Text("ERROR", style="bold red")
+        if state == "success":
+            if self._looks_cached(step):
+                return Text("CACHED", style="bold yellow")
+            return Text(self._format_duration(float(step.get("duration") or 0.0)), style="green")
+        started_at = float(step.get("started_at_mono") or time.monotonic())
+        return Text(self._format_duration(time.monotonic() - started_at), style="dim")
+
+    def _step_line_renderable(self, step_id: str, *, total: int):
+        from rich.columns import Columns
+        from rich.text import Text
+
+        step = self._steps[step_id]
+        index = self._step_index(step_id)
+        title = str(step.get("title") or "").strip()
+
+        left = Text()
+        left.append(" => ", style="dim")
+        if step.get("state") == "failed":
+            left.append("ERROR ", style="bold red")
+        left.append(f"[{index}/{max(total, 1)}] ", style="cyan")
+        left.append(title, style="bold white" if step.get("state") == "running" else "white")
+        return Columns([left, self._status_text(step)], expand=True, equal=False)
+
+    def _log_line_renderable(self, text: str, *, kind: str):
+        from rich.text import Text
+
+        style = {
+            "warning": "yellow",
+            "error": "red",
+            "stderr": "red",
+        }.get(kind, "dim")
+        line = Text()
+        line.append(" => => ", style="dim")
+        line.append(text, style=style)
+        return line
+
+    def _build_renderable(self):
+        from rich.console import Group
+
+        lines: List[Any] = [self._header_renderable()]
+        non_root_steps = [step_id for step_id in self._step_order if step_id != self._root_step_id]
+        total = len(non_root_steps)
+
+        if non_root_steps:
+            lines.append("")
+            for step_id in non_root_steps:
+                lines.append(self._step_line_renderable(step_id, total=total))
+                for item in self._visible_step_logs(self._steps[step_id]):
+                    lines.append(
+                        self._log_line_renderable(str(item.get("text") or ""), kind=str(item.get("kind") or ""))
+                    )
+        elif self._root_logs:
+            lines.append("")
+            for item in self._root_logs[-2:]:
+                lines.append(self._log_line_renderable(str(item.get("text") or ""), kind=str(item.get("kind") or "")))
+
+        return Group(*lines)
+
+    def _render(self) -> None:
+        if self._finalized:
+            return
+        if self._fallback_renderer is not None:
+            return
+        if self._console is None:
+            return
+
+        renderable = self._build_renderable()
+        if not self.dynamic:
+            return
+
+        with self._lock:
+            if self._live is None:
+                from rich.live import Live
+
+                self._live = Live(renderable, console=self._console, auto_refresh=False, transient=False)
+                self._live.start()
+            else:
+                self._live.update(renderable, refresh=True)
+                return
+
+            self._live.refresh()
+
+    def _finalize(self) -> None:
+        if self._finalized:
+            return
+        if self._fallback_renderer is not None:
+            self._finalized = True
+            return
+        if self._console is None:
+            self._finalized = True
+            return
+
+        renderable = self._build_renderable()
+        with self._lock:
+            if self.dynamic and self._live is not None:
+                self._live.update(renderable, refresh=True)
+                self._live.stop()
+                self._live = None
+            else:
+                self._console.print(renderable)
+            self._finalized = True
+
+    def on_event(self, event: Dict[str, Any]) -> None:
+        if self._fallback_renderer is not None:
+            self._fallback_renderer.on_event(event)
+            if str(event.get("type") or "") == "session_summary":
+                self._finalized = True
+            return
+
+        event_type = str(event.get("type") or "")
+        step_id = str(event.get("step_id") or "")
+
+        if event_type == "step_started":
+            parent_id = event.get("parent_id")
+            title = str(event.get("title") or "").strip()
+            if self._root_step_id is None and not parent_id:
+                self._root_step_id = step_id
+                self._session_title = title
+            step = self._steps.setdefault(
+                step_id,
+                {
+                    "title": title,
+                    "parent_id": parent_id,
+                    "state": "running",
+                    "duration": 0.0,
+                    "summary": "",
+                    "logs": [],
+                    "started_at_mono": time.monotonic(),
+                },
+            )
+            step.update(
+                {"title": title, "parent_id": parent_id, "state": "running", "started_at_mono": time.monotonic()}
+            )
+            if step_id != self._root_step_id and step_id not in self._step_order:
+                self._step_order.append(step_id)
+            self._render()
+            return
+
+        if event_type == "step_log":
+            lines = self._iter_lines(event.get("text"))
+            if not lines:
+                return
+            kind = str(event.get("kind") or event.get("stream") or "stdout")
+            if step_id == self._root_step_id:
+                self._remember_logs(self._root_logs, lines, kind=kind)
+                self._render()
+                return
+
+            step = self._steps.setdefault(
+                step_id,
+                {
+                    "title": step_id,
+                    "parent_id": None,
+                    "state": "running",
+                    "duration": 0.0,
+                    "summary": "",
+                    "logs": [],
+                    "started_at_mono": time.monotonic(),
+                },
+            )
+            self._remember_logs(step["logs"], lines, kind=kind)
+            self._render()
+            return
+
+        if event_type == "step_finished":
+            step = self._steps.setdefault(
+                step_id,
+                {
+                    "title": step_id,
+                    "parent_id": None,
+                    "state": "running",
+                    "duration": 0.0,
+                    "summary": "",
+                    "logs": [],
+                    "started_at_mono": time.monotonic(),
+                },
+            )
+            step["state"] = str(event.get("state") or "success")
+            step["duration"] = float(event.get("duration") or 0.0)
+            step["summary"] = str(event.get("summary") or "")
+            self._render()
+            return
+
+        if event_type == "session_summary":
+            self._session_title = str(event.get("title") or self._session_title)
+            self._session_state = str(event.get("state") or self._session_state)
+            self._session_duration = float(event.get("duration") or 0.0)
+            self._finalize()
 
 
 class _ExecutionLogStream:
