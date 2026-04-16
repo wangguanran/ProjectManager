@@ -210,10 +210,18 @@ class RawOutputRenderer(ExecutionRenderer):
 class BuildkitOutputRenderer(ExecutionRenderer):
     """Rich-based progress renderer inspired by Docker BuildKit's default TTY output."""
 
-    def __init__(self, stream=None, *, dynamic: Optional[bool] = None, console_width: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        stream=None,
+        *,
+        dynamic: Optional[bool] = None,
+        console_width: Optional[int] = None,
+        refresh_per_second: float = 8.0,
+    ) -> None:
         self.stream = stream or sys.stdout
         self.dynamic = bool(dynamic if dynamic is not None else getattr(self.stream, "isatty", lambda: False)())
         self.console_width = console_width
+        self.refresh_per_second = refresh_per_second
         self._session_started_at = time.monotonic()
         self._lock = threading.Lock()
         self._root_step_id: Optional[str] = None
@@ -402,7 +410,13 @@ class BuildkitOutputRenderer(ExecutionRenderer):
             if self._live is None:
                 from rich.live import Live
 
-                self._live = Live(renderable, console=self._console, auto_refresh=False, transient=False)
+                self._live = Live(
+                    renderable,
+                    console=self._console,
+                    auto_refresh=True,
+                    refresh_per_second=self.refresh_per_second,
+                    transient=False,
+                )
                 self._live.start()
             else:
                 self._live.update(renderable, refresh=True)
