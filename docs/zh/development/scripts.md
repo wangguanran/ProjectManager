@@ -64,7 +64,7 @@
 - 默认在 `venv/` 中执行（不存在则自动创建）
 - Python 包输出到 `out/package/`
 - 独立二进制输出到 `out/binary/`
-- 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）
+- 仅 Linux：要求 `staticx` + `patchelf`，若产物仍依赖外部共享库则构建失败
 - 只会构建当前系统/架构的二进制；跨平台产物请用 GitHub Actions Release 工作流
 
 ### `release.sh`

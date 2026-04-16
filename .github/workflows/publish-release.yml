@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +30,9 @@ jobs:
         env:
           PROJMAN_RELEASE_CHANNEL: stable
         run: bash build.sh
+
+      - name: Verify Linux standalone binary
+        run: python scripts/check_linux_standalone_binary.py out/binary/projman
 
       - name: Run tests
         shell: bash
@@ -63,6 +66,10 @@ jobs:
         env:
           PROJMAN_RELEASE_CHANNEL: stable
         run: bash build.sh
+
+      - name: Verify Linux standalone binary
+        if: runner.os == 'Linux'
+        run: python scripts/check_linux_standalone_binary.py out/binary/projman
 
       - name: Compute artifact metadata
         id: meta

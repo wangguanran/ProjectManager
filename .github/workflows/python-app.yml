@@ -34,7 +34,7 @@ permissions:
 jobs:
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
@@ -47,6 +47,8 @@ jobs:
     - name: Build project
       shell: bash
       run: bash build.sh
+    - name: Verify Linux standalone binary
+      run: python scripts/check_linux_standalone_binary.py out/binary/projman
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -58,7 +60,7 @@ jobs:
 
   install_test:
     name: install_test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build
     steps:
     - uses: actions/checkout@v4
@@ -76,7 +78,7 @@ jobs:
 
   pytest:
     name: pytest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build
     steps:
     - uses: actions/checkout@v4

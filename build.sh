@@ -7,6 +7,17 @@ cd "$REPO_ROOT"
 
 VENV_DIR="${VENV_DIR:-venv}"
 
+is_truthy() {
+    case "${1:-}" in
+        1|true|TRUE|yes|YES|on|ON)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 detect_platform() {
     local uname_s
     uname_s="$(uname -s 2>/dev/null || echo unknown)"
@@ -55,6 +66,14 @@ EXE_SUFFIX=""
 if [ "$PLATFORM" = "windows" ]; then
     ADD_DATA_SEP=";"
     EXE_SUFFIX=".exe"
+fi
+
+REQUIRE_LINUX_STANDALONE=0
+if [ "$PLATFORM" = "linux" ]; then
+    REQUIRE_LINUX_STANDALONE=1
+    if is_truthy "${PROJMAN_ALLOW_DYNAMIC_BINARY:-0}"; then
+        REQUIRE_LINUX_STANDALONE=0
+    fi
 fi
 
 ensure_venv
@@ -150,19 +169,30 @@ fi
 echo "$BINARY_PATH" > "$OUT_DIR/projman_binary_path.txt"
 echo "Binary generated at $BINARY_PATH"
 
-# Apply static linking for better compatibility (Linux-only; staticx does not support macOS/Windows).
-# NOTE: staticx is best-effort. If it fails, keep the non-static binary.
+# Apply staticx bundling for Linux standalone compatibility.
 if [ "$PLATFORM" = "linux" ]; then
-    echo -e "\033[32m--- Applying static linking for better compatibility ---\033[0m"
+    echo -e "\033[32m--- Building Linux standalone binary ---\033[0m"
+
+    if ! command -v patchelf >/dev/null 2>&1; then
+        echo "patchelf is required for Linux standalone binaries." >&2
+        if [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
+            exit 1
+        fi
+        echo "Continuing because PROJMAN_ALLOW_DYNAMIC_BINARY is enabled."
+    fi
 
     if ! command -v staticx >/dev/null 2>&1; then
-        echo "staticx not found. Installing for better compatibility..."
+        echo "staticx not found. Installing..."
         if ! python -m pip install staticx; then
-            echo "staticx install failed; continuing without static linking."
+            echo "staticx install failed." >&2
+            if [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
+                exit 1
+            fi
+            echo "Continuing because PROJMAN_ALLOW_DYNAMIC_BINARY is enabled."
         fi
     fi
 
-    if command -v staticx >/dev/null 2>&1; then
+    if command -v patchelf >/dev/null 2>&1 && command -v staticx >/dev/null 2>&1; then
         # staticx depends on pkg_resources, which was removed in newer setuptools.
         if ! python -c "import pkg_resources" >/dev/null 2>&1; then
             echo "pkg_resources not available; installing setuptools<82 for staticx compatibility..."
@@ -170,15 +200,27 @@ if [ "$PLATFORM" = "linux" ]; then
         fi
 
         if ! python -c "import pkg_resources" >/dev/null 2>&1; then
-            echo "pkg_resources still unavailable; skipping staticx."
+            echo "pkg_resources still unavailable after installing setuptools<82." >&2
+            if [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
+                exit 1
+            fi
+            echo "Continuing because PROJMAN_ALLOW_DYNAMIC_BINARY is enabled."
         elif staticx "$BINARY_PATH" "$BINARY_DIR/projman-static"; then
             mv "$BINARY_DIR/projman-static" "$BINARY_PATH"
-            echo "Static linking applied successfully"
+            echo "Standalone wrapping applied successfully"
         else
-            echo "staticx failed; continuing without static linking."
+            echo "staticx failed." >&2
+            if [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
+                exit 1
+            fi
+            echo "Continuing because PROJMAN_ALLOW_DYNAMIC_BINARY is enabled."
         fi
     else
-        echo "staticx unavailable; continuing without static linking."
+        echo "staticx or patchelf unavailable." >&2
+        if [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
+            exit 1
+        fi
+        echo "Continuing because PROJMAN_ALLOW_DYNAMIC_BINARY is enabled."
     fi
 else
     echo "Skipping staticx (unsupported on $PLATFORM)."
@@ -204,6 +246,11 @@ cp -L "$BINARY_PATH" "$RELEASE_BINARY_PATH"
 echo "$RELEASE_BINARY_PATH" > "$OUT_DIR/projman_binary_path.txt"
 if [ "$PLATFORM" != "windows" ]; then
     chmod 755 "$RELEASE_BINARY_PATH" 2>/dev/null || true
+fi
+
+if [ "$PLATFORM" = "linux" ] && [ "$REQUIRE_LINUX_STANDALONE" -eq 1 ]; then
+    echo -e "\033[32m--- Verifying Linux standalone binary ---\033[0m"
+    python scripts/check_linux_standalone_binary.py "$BINARY_PATH"
 fi
 
 echo "Final binary generated at $BINARY_PATH"
