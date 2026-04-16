@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 LOG_PATH = os.path.join(os.getcwd(), ".cache", "logs")
 LATEST_LOG_LINK = os.path.join(os.getcwd(), ".cache", "latest.log")
+LOG_LINE_FORMAT = "[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] [%(funcName)-24s] [%(lineno)-4d] %(message)s"
 
 # ANSI color codes for log levels
 LOG_COLORS = {
@@ -129,11 +130,11 @@ class LogManager:
             "formatters": {
                 "console_formatter": {
                     "()": RedactingColoredFormatter,
-                    "format": "[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] [%(funcName)-24s] [%(lineno)-4d] %(message)s",
+                    "format": LOG_LINE_FORMAT,
                 },
                 "file_formatter": {
                     "()": RedactingFormatter,
-                    "format": "[%(asctime)s] [%(levelname)-8s] [%(filename)-24s] [%(funcName)-24s] [%(lineno)-4d] %(message)s",
+                    "format": LOG_LINE_FORMAT,
                 },
             },
             "handlers": {
@@ -209,10 +210,11 @@ log = LogManager().get_logger()
 class ExecutionSessionLogHandler(logging.Handler):
     """Route logger records into the active execution-session step."""
 
-    def __init__(self, session: "ExecutionSession") -> None:
+    def __init__(self, session: "ExecutionSession", *, include_metadata: bool = False) -> None:
         super().__init__(level=logging.INFO)
         self._session = session
-        self.setFormatter(RedactingFormatter("%(message)s"))
+        formatter = LOG_LINE_FORMAT if include_metadata else "%(message)s"
+        self.setFormatter(RedactingFormatter(formatter))
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -226,11 +228,24 @@ class ExecutionSessionLogHandler(logging.Handler):
 
 
 def attach_execution_session_logging(
-    session: "ExecutionSession", *, logger: Optional[logging.Logger] = None
+    session: "ExecutionSession",
+    *,
+    logger: Optional[logging.Logger] = None,
+    include_metadata: bool = False,
 ) -> ExecutionSessionLogHandler:
     """Attach a temporary logger handler that forwards records into an execution session."""
     target_logger = logger or log
-    handler = ExecutionSessionLogHandler(session)
+    handler = ExecutionSessionLogHandler(session, include_metadata=include_metadata)
+    target_logger.addHandler(handler)
+    return handler
+
+
+def attach_raw_output_logging(*, logger: Optional[logging.Logger] = None, stream=None) -> logging.StreamHandler:
+    """Attach a temporary plain formatter handler for `--raw-output` pre-session logs."""
+    target_logger = logger or log
+    handler = logging.StreamHandler(stream or sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(RedactingFormatter(LOG_LINE_FORMAT))
     target_logger.addHandler(handler)
     return handler
 
@@ -239,6 +254,15 @@ def detach_execution_session_logging(
     handler: Optional[ExecutionSessionLogHandler], *, logger: Optional[logging.Logger] = None
 ) -> None:
     """Remove a previously-attached execution-session log handler."""
+    if handler is None:
+        return
+    target_logger = logger or log
+    target_logger.removeHandler(handler)
+    handler.close()
+
+
+def detach_raw_output_logging(handler: Optional[logging.Handler], *, logger: Optional[logging.Logger] = None) -> None:
+    """Remove a previously-attached raw-output stream handler."""
     if handler is None:
         return
     target_logger = logger or log

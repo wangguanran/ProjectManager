@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Optional
 
+from src.log_manager import log
+
 SUPPORTED_EXECUTION_UI_OPERATIONS = {
     "board_del",
     "board_new",
@@ -156,19 +158,8 @@ class RawOutputRenderer(ExecutionRenderer):
         if event_type == "step_log":
             text = str(event.get("text") or "")
             lines = text.splitlines() or ([text] if text else [])
-            kind = str(event.get("kind") or event.get("stream") or "stdout").strip().upper() or "STDOUT"
-            safe_kind = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in kind)
             for line in lines:
-                self._write(
-                    " ".join(
-                        [
-                            f"LOG_{safe_kind}",
-                            f"id={event['step_id']}",
-                            f"stream={event.get('stream', 'stdout')}",
-                            f"text={self._quote(line)}",
-                        ]
-                    )
-                )
+                self._write(line)
             return
 
         if event_type == "step_command_started":
@@ -556,21 +547,21 @@ def execution_log_info(env: Dict[str, Any], text: Any) -> None:
     """Append an info log line to the active execution step when a session exists."""
     session = get_execution_session(env)
     if session is not None:
-        session.log_info(text)
+        log.info("%s", text, stacklevel=2)
 
 
 def execution_log_warning(env: Dict[str, Any], text: Any) -> None:
     """Append a warning log line to the active execution step when a session exists."""
     session = get_execution_session(env)
     if session is not None:
-        session.log_warning(text)
+        log.warning("%s", text, stacklevel=2)
 
 
 def execution_log_error(env: Dict[str, Any], text: Any) -> None:
     """Append an error log line to the active execution step when a session exists."""
     session = get_execution_session(env)
     if session is not None:
-        session.log_error(text)
+        log.error("%s", text, stacklevel=2)
 
 
 def execute_operation_with_session(session: ExecutionSession, operate: str, operation) -> Any:

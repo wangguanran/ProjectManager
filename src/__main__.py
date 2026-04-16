@@ -28,7 +28,9 @@ from src.execution import (
 )
 from src.log_manager import (
     attach_execution_session_logging,
+    attach_raw_output_logging,
     detach_execution_session_logging,
+    detach_raw_output_logging,
     log,
     mute_console_logging,
     restore_console_logging,
@@ -1125,7 +1127,11 @@ def main():
             sys.exit(1)
         render_mode = resolve_render_mode(operate, args_dict, parsed_kwargs)
         env["render_mode"] = render_mode
-        saved_raw_handlers = mute_console_logging() if render_mode == "raw_output" else []
+        saved_raw_handlers = []
+        raw_output_handler = None
+        if render_mode == "raw_output":
+            saved_raw_handlers = mute_console_logging()
+            raw_output_handler = attach_raw_output_logging()
         if get_operation_meta_flag(func, operate, "needs_repositories"):
             log.info("Operation '%s' requires repositories, loading repositories...", operate)
             env["repositories"] = _find_repositories()
@@ -1137,6 +1143,9 @@ def main():
             if render_mode == "direct_output":
                 result = func(*func_args, **func_kwargs)
             else:
+                if raw_output_handler is not None:
+                    detach_raw_output_logging(raw_output_handler)
+                    raw_output_handler = None
                 session = ExecutionSession(title=describe_operation(operate, name), mode=render_mode)
                 env["execution_session"] = session
                 result = _run_operation_with_session(session, operate, func, func_args, func_kwargs)
@@ -1148,6 +1157,7 @@ def main():
             sys.exit(1)
         finally:
             env.pop("execution_session", None)
+            detach_raw_output_logging(raw_output_handler)
             if saved_raw_handlers:
                 restore_console_logging(saved_raw_handlers)
     else:
@@ -1201,7 +1211,7 @@ def _run_operation_with_session(
         return func(*func_args, **func_kwargs)
 
     if session.mode == "raw_output":
-        session_log_handler = attach_execution_session_logging(session)
+        session_log_handler = attach_execution_session_logging(session, include_metadata=True)
         try:
             session.add_renderer(RawOutputRenderer())
             return execute_operation_with_session(session, operate, operation)

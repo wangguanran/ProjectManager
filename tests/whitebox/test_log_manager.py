@@ -386,3 +386,25 @@ class TestExecutionSessionLogHandler:
         assert any(item["stream"] == "stderr" and "hello warning" in item["text"] for item in logs)
         assert any(item.get("kind") == "info" and "hello info" in item["text"] for item in logs)
         assert any(item.get("kind") == "warning" and "hello warning" in item["text"] for item in logs)
+
+    def test_attach_execution_session_logging_can_include_standard_log_metadata(self):
+        from src.execution import ExecutionSession
+        from src.log_manager import (
+            attach_execution_session_logging,
+            detach_execution_session_logging,
+            log,
+        )
+
+        session = ExecutionSession(title="test", mode="raw_output")
+        step_id = session.start_step("operation.test", "test")
+        handler = attach_execution_session_logging(session, include_metadata=True)
+        try:
+            with session.bind_step(step_id):
+                log.info("hello info")
+        finally:
+            detach_execution_session_logging(handler)
+
+        snapshot = session.snapshot_steps()
+        logs = snapshot[step_id].logs
+
+        assert any("[INFO" in item["text"] and "hello info" in item["text"] for item in logs)
