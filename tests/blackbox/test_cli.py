@@ -123,11 +123,13 @@ def test_cli_019a_po_list_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: 
 def test_cli_019b_raw_output_uses_plain_logger_output_without_step_events(workspace_a: Path) -> None:
     result = run_cli(["po_apply", "projA", "--raw-output"], cwd=workspace_a, check=False)
     combined = result.stdout + result.stderr
+    ansi_prefix = r"(?:\x1b\[[0-9;]*m)*"
 
     assert "STEP_START" not in combined
     assert "SESSION_END" not in combined
-    assert re.search(r"^\[[0-9:, -]+\] \[INFO\s+\] \[__main__\.py", combined, re.MULTILINE)
-    assert re.search(r"^\[[0-9:, -]+\] \[INFO\s+\] \[patch_override\.py", combined, re.MULTILINE)
+    assert "\x1b[32m" in combined
+    assert re.search(rf"^{ansi_prefix}\[[0-9:, -]+\] \[INFO\s+\] \[__main__\.py", combined, re.MULTILINE)
+    assert re.search(rf"^{ansi_prefix}\[[0-9:, -]+\] \[INFO\s+\] \[patch_override\.py", combined, re.MULTILINE)
     assert "LOG_INFO" not in combined
 
 
