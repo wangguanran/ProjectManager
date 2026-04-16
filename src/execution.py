@@ -259,6 +259,10 @@ class ExecutionSession:
             if renderer not in self._renderers:
                 self._renderers.append(renderer)
 
+    def has_renderer(self, renderer_type: type[ExecutionRenderer]) -> bool:
+        with self._lock:
+            return any(isinstance(renderer, renderer_type) for renderer in self._renderers)
+
     def remove_renderer(self, renderer: ExecutionRenderer) -> None:
         with self._lock:
             self._renderers = [item for item in self._renderers if item is not renderer]

@@ -1260,9 +1260,7 @@ def _run_operation_with_session(
         from src.execution_textual import TextualUnavailable, run_textual_session
     except ModuleNotFoundError:
         session.mode = "raw_output"
-        if not any(
-            isinstance(renderer, RawOutputRenderer) for renderer in session._renderers
-        ):  # pylint: disable=protected-access
+        if not session.has_renderer(RawOutputRenderer):
             session.add_renderer(RawOutputRenderer())
         return execute_operation_with_session(session, operate, operation, root_step_id=root_step_id)
 
@@ -1274,9 +1272,7 @@ def _run_operation_with_session(
     except TextualUnavailable as exc:
         log.warning("%s", exc)
         session.mode = "raw_output"
-        if not any(
-            isinstance(renderer, RawOutputRenderer) for renderer in session._renderers
-        ):  # pylint: disable=protected-access
+        if not session.has_renderer(RawOutputRenderer):
             session.add_renderer(RawOutputRenderer())
         return execute_operation_with_session(session, operate, operation, root_step_id=root_step_id)
 
