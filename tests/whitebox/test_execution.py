@@ -245,3 +245,133 @@ def test_buildkit_live_renderable_recomputes_running_durations(monkeypatch) -> N
     assert "1.2s" in first.getvalue()
     assert "[+] po revert: projA 2.4s (0/1)" in second.getvalue()
     assert "2.4s" in second.getvalue()
+
+
+def test_buildkit_output_renderer_wraps_long_failed_logs() -> None:
+    stream = io.StringIO()
+    renderer = BuildkitOutputRenderer(stream=stream, dynamic=False, console_width=72)
+
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply",
+            "title": "po apply: projA",
+            "parent_id": None,
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply.commits",
+            "title": "Apply commits",
+            "parent_id": "operation.po_apply",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_log",
+            "step_id": "operation.po_apply.commits",
+            "text": "Failed to apply commit patch '/very/long/path/0001.patch': fatal: previous rebase directory .git/rebase-apply still exists but mbox given.",
+            "kind": "error",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_finished",
+            "step_id": "operation.po_apply.commits",
+            "state": "failed",
+            "duration": 1.2,
+            "summary": "Operation returned failure status.",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "session_summary",
+            "title": "po apply: projA",
+            "state": "failed",
+            "duration": 1.5,
+        }
+    )
+
+    output = stream.getvalue()
+    assert "rebase directory .git/rebase-apply still exists" in output
+    assert "mbox" in output
+    assert "given." in output
+
+
+def test_buildkit_output_renderer_keeps_raw_failure_stderr_visible() -> None:
+    stream = io.StringIO()
+    renderer = BuildkitOutputRenderer(stream=stream, dynamic=False, console_width=96)
+
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply",
+            "title": "po apply: projA",
+            "parent_id": None,
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply.commits",
+            "title": "Apply commits",
+            "parent_id": "operation.po_apply",
+        }
+    )
+
+    for idx in range(6):
+        renderer.on_event(
+            {
+                "type": "step_log",
+                "step_id": "operation.po_apply.commits",
+                "text": f"Commit patch '000{idx}.patch' already applied; skipping.",
+                "kind": "info",
+            }
+        )
+
+    renderer.on_event(
+        {
+            "type": "step_log",
+            "step_id": "operation.po_apply.commits",
+            "text": "fatal: previous rebase directory .git/rebase-apply still exists but mbox given.",
+            "kind": "stderr",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_log",
+            "step_id": "operation.po_apply.commits",
+            "text": "Failed to apply commit patch '/very/long/path/0007.patch': [len=80 tail=fatal: previous rebase directory .git/rebase-apply still exists but mbox given.]",
+            "kind": "error",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_log",
+            "step_id": "operation.po_apply.commits",
+            "text": "po apply aborted due to error in po: 'po_base'",
+            "kind": "error",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_finished",
+            "step_id": "operation.po_apply.commits",
+            "state": "failed",
+            "duration": 2.0,
+            "summary": "Operation returned failure status.",
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "session_summary",
+            "title": "po apply: projA",
+            "state": "failed",
+            "duration": 2.2,
+        }
+    )
+
+    output = stream.getvalue()
+    assert "fatal: previous rebase directory .git/rebase-apply still exists but mbox" in output
+    assert "po apply aborted due to error in po: 'po_base'" in output

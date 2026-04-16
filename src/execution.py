@@ -285,12 +285,12 @@ class BuildkitOutputRenderer(ExecutionRenderer):
     def _remember_logs(self, target: List[Dict[str, str]], lines: List[str], *, kind: str) -> None:
         for line in lines:
             target.append({"text": line, "kind": kind})
-        del target[:-6]
+        del target[:-20]
 
     def _visible_step_logs(self, step: Dict[str, Any]) -> List[Dict[str, str]]:
         logs = list(step.get("logs", []))
         if step.get("state") == "failed":
-            visible = logs[-4:]
+            visible = logs[-8:]
             summary = str(step.get("summary") or "").strip()
             if summary and not any(summary == item.get("text") for item in visible):
                 visible.append({"text": summary, "kind": "error"})
@@ -368,6 +368,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         return table
 
     def _log_line_renderable(self, text: str, *, kind: str):
+        from rich.table import Table
         from rich.text import Text
 
         style = {
@@ -375,10 +376,13 @@ class BuildkitOutputRenderer(ExecutionRenderer):
             "error": "red",
             "stderr": "red",
         }.get(kind, "dim")
-        line = Text()
-        line.append(" => => ", style="dim")
-        line.append(text, style=style)
-        return line
+        prefix = Text(" => => ", style="dim")
+        body = Text(text, style=style)
+        table = Table.grid(expand=True, padding=(0, 0))
+        table.add_column(width=7, no_wrap=True)
+        table.add_column(ratio=1, no_wrap=False, overflow="fold")
+        table.add_row(prefix, body)
+        return table
 
     def _build_renderable(self):
         from rich.console import Group
