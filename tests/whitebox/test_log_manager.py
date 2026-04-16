@@ -408,3 +408,24 @@ class TestExecutionSessionLogHandler:
         logs = snapshot[step_id].logs
 
         assert any("[INFO" in item["text"] and "hello info" in item["text"] for item in logs)
+
+    def test_attach_raw_output_logging_uses_colored_console_formatter(self):
+        import io
+
+        from src.log_manager import attach_raw_output_logging, detach_raw_output_logging
+
+        stream = io.StringIO()
+        logger = logging.getLogger("test_raw_output_logging")
+        logger.handlers = []
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+
+        handler = attach_raw_output_logging(logger=logger, stream=stream)
+        try:
+            logger.info("hello info")
+        finally:
+            detach_raw_output_logging(handler, logger=logger)
+
+        output = stream.getvalue()
+        assert "\033[32m" in output
+        assert "hello info" in output

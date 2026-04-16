@@ -245,7 +245,7 @@ def attach_raw_output_logging(*, logger: Optional[logging.Logger] = None, stream
     target_logger = logger or log
     handler = logging.StreamHandler(stream or sys.stdout)
     handler.setLevel(logging.INFO)
-    handler.setFormatter(RedactingFormatter(LOG_LINE_FORMAT))
+    handler.setFormatter(RedactingColoredFormatter(LOG_LINE_FORMAT))
     target_logger.addHandler(handler)
     return handler
 
