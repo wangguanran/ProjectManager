@@ -150,6 +150,30 @@ class TestArgParsing:
         assert parsed_kwargs == {"dry_run": True}
         assert args_dict.get("output") == "raw"
 
+    def test_parse_args_treats_output_logger_as_global_even_after_operation(self):
+        """Ensure `--output=logger` after the operation is not forwarded as a plugin kwarg."""
+
+        def dummy_build(env, projects_info, dry_run: bool = False):  # noqa: ARG001
+            _ = dry_run
+            return True
+
+        builtin_ops = {"project_build": {"func": dummy_build, "desc": "Build project"}}
+
+        with patch.object(
+            sys,
+            "argv",
+            ["projman", "project_build", "--output=logger", "projA", "--dry-run"],
+        ):
+            operate, name, parsed_args, parsed_kwargs, args_dict = self.main_mod._parse_args_and_plugin_args(
+                builtin_ops
+            )
+
+        assert operate == "project_build"
+        assert name == "projA"
+        assert parsed_args == []
+        assert parsed_kwargs == {"dry_run": True}
+        assert args_dict.get("output") == "logger"
+
     def test_resolve_render_mode_prefers_direct_output_for_json_and_emit_plan(self):
         """Machine-readable plugin flags must bypass the execution UI."""
         from src.execution import resolve_render_mode
@@ -162,6 +186,12 @@ class TestArgParsing:
         from src.execution import resolve_render_mode
 
         assert resolve_render_mode("po_apply", {"output": "raw"}, {}) == "raw_output"
+
+    def test_resolve_render_mode_prefers_logger_output_for_explicit_output_logger(self):
+        """Explicit `--output=logger` should force standard logger output."""
+        from src.execution import resolve_render_mode
+
+        assert resolve_render_mode("po_apply", {"output": "logger"}, {}) == "logger_output"
 
     def test_resolve_render_mode_prefers_tui_for_explicit_output_tui(self, monkeypatch):
         """Explicit `--output=tui` should prefer the interactive renderer in a real TTY."""

@@ -134,6 +134,16 @@ def test_cli_019b_output_raw_uses_docker_style_progress_output(workspace_a: Path
     assert re.search(r"^#\d+ DONE \d+\.\d{2}s$", combined, re.MULTILINE)
 
 
+def test_cli_019d_output_logger_uses_standard_logger_output(workspace_a: Path) -> None:
+    result = run_cli(["po_apply", "projA", "--output=logger"], cwd=workspace_a, check=False)
+    combined = result.stdout + result.stderr
+
+    assert "#1 [" not in combined
+    assert "[+] po apply:" not in combined
+    assert re.search(r"\[\d{4}-\d{2}-\d{2} .*] \[INFO\s+\] \[.*__main__\.py", combined)
+    assert "Operation 'po_apply' requires repositories, loading repositories..." in combined
+
+
 def test_cli_020_emit_plan_keeps_direct_json_output(workspace_a: Path) -> None:
     result = run_cli(["project_build", "projA", "--emit-plan"], cwd=workspace_a)
     assert result.stdout.lstrip().startswith("{")

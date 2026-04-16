@@ -60,10 +60,12 @@ def is_interactive_tty() -> bool:
 
 
 def resolve_render_mode(operate: str, args_dict: Dict[str, Any], parsed_kwargs: Dict[str, Any]) -> str:
-    """Choose `buildkit_output`, `interactive_tui`, `raw_output`, or `direct_output`."""
+    """Choose `buildkit_output`, `interactive_tui`, `raw_output`, `logger_output`, or `direct_output`."""
     output_mode = str(args_dict.get("output") or "").strip().lower()
     if output_mode == "raw":
         return "raw_output"
+    if output_mode == "logger":
+        return "logger_output"
 
     if any(_truthy(parsed_kwargs.get(flag)) for flag in DIRECT_OUTPUT_FLAGS):
         return "direct_output"

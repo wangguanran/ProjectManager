@@ -653,8 +653,8 @@ def _parse_args_and_plugin_args(builtin_operations):
     )
     parser.add_argument(
         "--output",
-        choices=["tui", "raw"],
-        help="Select execution output mode: default is Rich/BuildKit-style terminal progress; use `tui` for the full-screen UI or `raw` for stable docker-plain lines.",
+        choices=["tui", "raw", "logger"],
+        help="Select execution output mode: default is Rich/BuildKit-style terminal progress; use `tui` for the full-screen UI, `raw` for stable docker-plain lines, or `logger` for standard colored logger output.",
     )
     parser.add_argument("--raw-output", dest="output", action="store_const", const="raw", help=argparse.SUPPRESS)
     parser.add_argument(
@@ -1184,7 +1184,7 @@ def main():
             with bind_context:
                 _prepare_textual_preflight(env, projects_info, operate, user_args, func_kwargs)
         try:
-            if render_mode == "direct_output":
+            if render_mode in {"direct_output", "logger_output"}:
                 result = func(*func_args, **func_kwargs)
             else:
                 assert session is not None
