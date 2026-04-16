@@ -210,6 +210,13 @@ class RawOutputRenderer(ExecutionRenderer):
 class BuildkitOutputRenderer(ExecutionRenderer):
     """Rich-based progress renderer inspired by Docker BuildKit's default TTY output."""
 
+    class _LiveRenderable:
+        def __init__(self, renderer: "BuildkitOutputRenderer") -> None:
+            self._renderer = renderer
+
+        def __rich_console__(self, _console, _options):
+            yield self._renderer.live_renderable()
+
     def __init__(
         self,
         stream=None,
@@ -223,7 +230,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         self.console_width = console_width
         self.refresh_per_second = refresh_per_second
         self._session_started_at = time.monotonic()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._root_step_id: Optional[str] = None
         self._steps: Dict[str, Dict[str, Any]] = {}
         self._step_order: List[str] = []
@@ -235,6 +242,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         self._console = None
         self._fallback_renderer: Optional[RawOutputRenderer] = None
         self._finalized = False
+        self._live_renderable = self._LiveRenderable(self)
 
         try:
             from rich.console import Console
@@ -394,6 +402,10 @@ class BuildkitOutputRenderer(ExecutionRenderer):
 
         return Group(*lines)
 
+    def live_renderable(self):
+        with self._lock:
+            return self._build_renderable()
+
     def _render(self) -> None:
         if self._finalized:
             return
@@ -402,7 +414,6 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         if self._console is None:
             return
 
-        renderable = self._build_renderable()
         if not self.dynamic:
             return
 
@@ -411,7 +422,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
                 from rich.live import Live
 
                 self._live = Live(
-                    renderable,
+                    self._live_renderable,
                     console=self._console,
                     auto_refresh=True,
                     refresh_per_second=self.refresh_per_second,
@@ -419,7 +430,7 @@ class BuildkitOutputRenderer(ExecutionRenderer):
                 )
                 self._live.start()
             else:
-                self._live.update(renderable, refresh=True)
+                self._live.refresh()
                 return
 
             self._live.refresh()
@@ -451,85 +462,86 @@ class BuildkitOutputRenderer(ExecutionRenderer):
                 self._finalized = True
             return
 
-        event_type = str(event.get("type") or "")
-        step_id = str(event.get("step_id") or "")
+        with self._lock:
+            event_type = str(event.get("type") or "")
+            step_id = str(event.get("step_id") or "")
 
-        if event_type == "step_started":
-            parent_id = event.get("parent_id")
-            title = str(event.get("title") or "").strip()
-            if self._root_step_id is None and not parent_id:
-                self._root_step_id = step_id
-                self._session_title = title
-            step = self._steps.setdefault(
-                step_id,
-                {
-                    "title": title,
-                    "parent_id": parent_id,
-                    "state": "running",
-                    "duration": 0.0,
-                    "summary": "",
-                    "logs": [],
-                    "started_at_mono": time.monotonic(),
-                },
-            )
-            step.update(
-                {"title": title, "parent_id": parent_id, "state": "running", "started_at_mono": time.monotonic()}
-            )
-            if step_id != self._root_step_id and step_id not in self._step_order:
-                self._step_order.append(step_id)
-            self._render()
-            return
-
-        if event_type == "step_log":
-            lines = self._iter_lines(event.get("text"))
-            if not lines:
-                return
-            kind = str(event.get("kind") or event.get("stream") or "stdout")
-            if step_id == self._root_step_id:
-                self._remember_logs(self._root_logs, lines, kind=kind)
+            if event_type == "step_started":
+                parent_id = event.get("parent_id")
+                title = str(event.get("title") or "").strip()
+                if self._root_step_id is None and not parent_id:
+                    self._root_step_id = step_id
+                    self._session_title = title
+                step = self._steps.setdefault(
+                    step_id,
+                    {
+                        "title": title,
+                        "parent_id": parent_id,
+                        "state": "running",
+                        "duration": 0.0,
+                        "summary": "",
+                        "logs": [],
+                        "started_at_mono": time.monotonic(),
+                    },
+                )
+                step.update(
+                    {"title": title, "parent_id": parent_id, "state": "running", "started_at_mono": time.monotonic()}
+                )
+                if step_id != self._root_step_id and step_id not in self._step_order:
+                    self._step_order.append(step_id)
                 self._render()
                 return
 
-            step = self._steps.setdefault(
-                step_id,
-                {
-                    "title": step_id,
-                    "parent_id": None,
-                    "state": "running",
-                    "duration": 0.0,
-                    "summary": "",
-                    "logs": [],
-                    "started_at_mono": time.monotonic(),
-                },
-            )
-            self._remember_logs(step["logs"], lines, kind=kind)
-            self._render()
-            return
+            if event_type == "step_log":
+                lines = self._iter_lines(event.get("text"))
+                if not lines:
+                    return
+                kind = str(event.get("kind") or event.get("stream") or "stdout")
+                if step_id == self._root_step_id:
+                    self._remember_logs(self._root_logs, lines, kind=kind)
+                    self._render()
+                    return
 
-        if event_type == "step_finished":
-            step = self._steps.setdefault(
-                step_id,
-                {
-                    "title": step_id,
-                    "parent_id": None,
-                    "state": "running",
-                    "duration": 0.0,
-                    "summary": "",
-                    "logs": [],
-                    "started_at_mono": time.monotonic(),
-                },
-            )
-            step["state"] = str(event.get("state") or "success")
-            step["duration"] = float(event.get("duration") or 0.0)
-            step["summary"] = str(event.get("summary") or "")
-            self._render()
-            return
+                step = self._steps.setdefault(
+                    step_id,
+                    {
+                        "title": step_id,
+                        "parent_id": None,
+                        "state": "running",
+                        "duration": 0.0,
+                        "summary": "",
+                        "logs": [],
+                        "started_at_mono": time.monotonic(),
+                    },
+                )
+                self._remember_logs(step["logs"], lines, kind=kind)
+                self._render()
+                return
 
-        if event_type == "session_summary":
-            self._session_title = str(event.get("title") or self._session_title)
-            self._session_state = str(event.get("state") or self._session_state)
-            self._session_duration = float(event.get("duration") or 0.0)
-            self._finalize()
+            if event_type == "step_finished":
+                step = self._steps.setdefault(
+                    step_id,
+                    {
+                        "title": step_id,
+                        "parent_id": None,
+                        "state": "running",
+                        "duration": 0.0,
+                        "summary": "",
+                        "logs": [],
+                        "started_at_mono": time.monotonic(),
+                    },
+                )
+                step["state"] = str(event.get("state") or "success")
+                step["duration"] = float(event.get("duration") or 0.0)
+                step["summary"] = str(event.get("summary") or "")
+                self._render()
+                return
+
+            if event_type == "session_summary":
+                self._session_title = str(event.get("title") or self._session_title)
+                self._session_state = str(event.get("state") or self._session_state)
+                self._session_duration = float(event.get("duration") or 0.0)
+                self._finalize()
 
 
 class _ExecutionLogStream:

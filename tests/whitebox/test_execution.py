@@ -206,3 +206,42 @@ def test_buildkit_output_renderer_enables_live_auto_refresh(monkeypatch) -> None
     assert created["kwargs"]["refresh_per_second"] == 12.0
     assert created["kwargs"]["transient"] is False
     assert created["started"] is True
+
+
+def test_buildkit_live_renderable_recomputes_running_durations(monkeypatch) -> None:
+    from rich.console import Console
+
+    renderer = BuildkitOutputRenderer(stream=io.StringIO(), dynamic=False, console_width=80)
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_revert",
+            "title": "po revert: projA",
+            "parent_id": None,
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_revert.commits",
+            "title": "Revert commits",
+            "parent_id": "operation.po_revert",
+        }
+    )
+
+    renderer._session_started_at = 0.0
+    renderer._steps["operation.po_revert.commits"]["started_at_mono"] = 0.0
+
+    first = io.StringIO()
+    second = io.StringIO()
+
+    monkeypatch.setattr("src.execution.time.monotonic", lambda: 1.2)
+    Console(file=first, width=80, force_terminal=False, highlight=False).print(renderer._live_renderable)
+
+    monkeypatch.setattr("src.execution.time.monotonic", lambda: 2.4)
+    Console(file=second, width=80, force_terminal=False, highlight=False).print(renderer._live_renderable)
+
+    assert "[+] po revert: projA 1.2s (0/1)" in first.getvalue()
+    assert "1.2s" in first.getvalue()
+    assert "[+] po revert: projA 2.4s (0/1)" in second.getvalue()
+    assert "2.4s" in second.getvalue()
