@@ -61,9 +61,9 @@ def is_interactive_tty() -> bool:
 
 
 def resolve_render_mode(operate: str, args_dict: Dict[str, Any], parsed_kwargs: Dict[str, Any]) -> str:
-    """Choose `interactive_tui`, `raw_output`, or `direct_output` for this run."""
+    """Choose `interactive_tui`, `raw_output`, `plain_output`, or `direct_output` for this run."""
     if _truthy(args_dict.get("raw_output")):
-        return "raw_output"
+        return "plain_output"
 
     if any(_truthy(parsed_kwargs.get(flag)) for flag in DIRECT_OUTPUT_FLAGS):
         return "direct_output"
@@ -544,23 +544,23 @@ def execution_log(env: Dict[str, Any], text: Any, *, stream: str = "stdout") -> 
 
 
 def execution_log_info(env: Dict[str, Any], text: Any) -> None:
-    """Append an info log line to the active execution step when a session exists."""
+    """Emit an info log line for active session steps or explicit plain-output runs."""
     session = get_execution_session(env)
-    if session is not None:
+    if session is not None or env.get("render_mode") == "plain_output":
         log.info("%s", text, stacklevel=2)
 
 
 def execution_log_warning(env: Dict[str, Any], text: Any) -> None:
-    """Append a warning log line to the active execution step when a session exists."""
+    """Emit a warning log line for active session steps or explicit plain-output runs."""
     session = get_execution_session(env)
-    if session is not None:
+    if session is not None or env.get("render_mode") == "plain_output":
         log.warning("%s", text, stacklevel=2)
 
 
 def execution_log_error(env: Dict[str, Any], text: Any) -> None:
-    """Append an error log line to the active execution step when a session exists."""
+    """Emit an error log line for active session steps or explicit plain-output runs."""
     session = get_execution_session(env)
-    if session is not None:
+    if session is not None or env.get("render_mode") == "plain_output":
         log.error("%s", text, stacklevel=2)
 
 

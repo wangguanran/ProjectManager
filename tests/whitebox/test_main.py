@@ -133,6 +133,12 @@ class TestArgParsing:
         assert resolve_render_mode("doctor", {"raw_output": False}, {"json": True}) == "direct_output"
         assert resolve_render_mode("project_build", {"raw_output": False}, {"emit_plan": True}) == "direct_output"
 
+    def test_resolve_render_mode_prefers_plain_output_for_explicit_raw_output_flag(self):
+        """Explicit `--raw-output` should bypass session events and use plain logger output."""
+        from src.execution import resolve_render_mode
+
+        assert resolve_render_mode("po_apply", {"raw_output": True}, {}) == "plain_output"
+
     def test_resolve_render_mode_uses_execution_ui_for_additional_supported_commands(self, monkeypatch):
         """Human-facing commands added by the design doc should enter the execution UI."""
         from src.execution import resolve_render_mode

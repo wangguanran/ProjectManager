@@ -120,14 +120,14 @@ def test_cli_019a_po_list_uses_raw_output_when_stdout_is_not_a_tty(workspace_a: 
     assert "\x1b[?1049h" not in result.stdout
 
 
-def test_cli_019b_raw_output_preserves_standard_logger_format_for_log_messages(workspace_a: Path) -> None:
+def test_cli_019b_raw_output_uses_plain_logger_output_without_step_events(workspace_a: Path) -> None:
     result = run_cli(["po_apply", "projA", "--raw-output"], cwd=workspace_a, check=False)
     combined = result.stdout + result.stderr
 
-    assert "STEP_START id=operation.po_apply" in result.stdout
+    assert "STEP_START" not in combined
+    assert "SESSION_END" not in combined
     assert re.search(r"^\[[0-9:, -]+\] \[INFO\s+\] \[__main__\.py", combined, re.MULTILINE)
     assert re.search(r"^\[[0-9:, -]+\] \[INFO\s+\] \[patch_override\.py", combined, re.MULTILINE)
-    assert "SESSION_END state=success" in result.stdout
     assert "LOG_INFO" not in combined
 
 

@@ -1129,7 +1129,7 @@ def main():
         env["render_mode"] = render_mode
         saved_raw_handlers = []
         raw_output_handler = None
-        if render_mode == "raw_output":
+        if render_mode in {"raw_output", "plain_output"}:
             saved_raw_handlers = mute_console_logging()
             raw_output_handler = attach_raw_output_logging()
         if get_operation_meta_flag(func, operate, "needs_repositories"):
@@ -1140,10 +1140,10 @@ def main():
         if render_mode == "interactive_tui":
             _prepare_textual_preflight(env, projects_info, operate, user_args, func_kwargs)
         try:
-            if render_mode == "direct_output":
+            if render_mode in {"direct_output", "plain_output"}:
                 result = func(*func_args, **func_kwargs)
             else:
-                if raw_output_handler is not None:
+                if render_mode == "raw_output" and raw_output_handler is not None:
                     detach_raw_output_logging(raw_output_handler)
                     raw_output_handler = None
                 session = ExecutionSession(title=describe_operation(operate, name), mode=render_mode)
