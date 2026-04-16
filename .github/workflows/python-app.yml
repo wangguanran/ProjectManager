@@ -43,10 +43,13 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y patchelf binutils
+        sudo apt-get install -y patchelf binutils python3-venv
     - name: Build project
       shell: bash
-      run: bash build.sh
+      run: |
+        export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        python3 --version
+        bash build.sh
     - name: Verify Linux standalone binary
       run: python scripts/check_linux_standalone_binary.py out/binary/projman
     - name: Upload build artifacts

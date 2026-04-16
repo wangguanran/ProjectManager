@@ -22,13 +22,16 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y patchelf binutils git
+          sudo apt-get install -y patchelf binutils git python3-venv
 
       - name: Build project (beta channel)
         shell: bash
         env:
           PROJMAN_RELEASE_CHANNEL: beta
-        run: bash build.sh
+        run: |
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+          python3 --version
+          bash build.sh
 
       - name: Verify Linux standalone binary
         run: python scripts/check_linux_standalone_binary.py out/binary/projman
@@ -59,13 +62,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y patchelf binutils
+          sudo apt-get install -y patchelf binutils python3-venv
 
       - name: Build project (beta channel)
         shell: bash
         env:
           PROJMAN_RELEASE_CHANNEL: beta
-        run: bash build.sh
+        run: |
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+            python3 --version
+          fi
+          bash build.sh
 
       - name: Verify Linux standalone binary
         if: runner.os == 'Linux'
