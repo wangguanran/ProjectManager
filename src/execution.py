@@ -214,7 +214,10 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         def __init__(self, renderer: "BuildkitOutputRenderer") -> None:
             self._renderer = renderer
 
-        def __rich_console__(self, _console, _options):
+        def __rich_console__(self, console, options):
+            width = int(getattr(options, "max_width", 0) or console.size.width or 0)
+            height = int(getattr(options, "max_height", 0) or console.size.height or 0)
+            self._renderer._update_viewport(width=width, height=height)  # pylint: disable=protected-access
             yield self._renderer.live_renderable()
 
     def __init__(
@@ -243,6 +246,8 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         self._fallback_renderer: Optional[RawOutputRenderer] = None
         self._finalized = False
         self._live_renderable = self._LiveRenderable(self)
+        self._viewport_width = console_width
+        self._viewport_height: Optional[int] = None
 
         try:
             from rich.console import Console
@@ -286,6 +291,39 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         for line in lines:
             target.append({"text": line, "kind": kind})
         del target[:-20]
+
+    @staticmethod
+    def _ensure_step_record(step_id: str, step: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if step is not None:
+            return step
+        return {
+            "title": step_id,
+            "parent_id": None,
+            "state": "running",
+            "duration": 0.0,
+            "summary": "",
+            "logs": [],
+            "started_at_mono": time.monotonic(),
+            "active_command": None,
+            "last_command": None,
+        }
+
+    def _update_viewport(self, *, width: Optional[int] = None, height: Optional[int] = None) -> None:
+        if width and width > 0:
+            self._viewport_width = width
+        if height and height > 0:
+            self._viewport_height = height
+
+    def _display_width(self) -> int:
+        return int(self._viewport_width or self.console_width or 120)
+
+    def _estimate_wrapped_lines(self, text: str, *, reserved_width: int) -> int:
+        width = max(20, self._display_width() - reserved_width)
+        physical_lines = list(str(text).splitlines() or [""])
+        total = 0
+        for line in physical_lines:
+            total += max(1, (len(line) + width - 1) // width)
+        return total
 
     def _visible_step_logs(self, step: Dict[str, Any]) -> List[Dict[str, str]]:
         logs = list(step.get("logs", []))
@@ -346,6 +384,13 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         started_at = float(step.get("started_at_mono") or time.monotonic())
         return Text(self._format_duration(time.monotonic() - started_at), style="dim")
 
+    @staticmethod
+    def _command_display(command_info: Dict[str, Any]) -> str:
+        description = str(command_info.get("description") or "").strip()
+        if description:
+            return description
+        return str(command_info.get("command") or "").strip()
+
     def _step_line_renderable(self, step_id: str, *, total: int):
         from rich.table import Table
         from rich.text import Text
@@ -384,21 +429,155 @@ class BuildkitOutputRenderer(ExecutionRenderer):
         table.add_row(prefix, body)
         return table
 
+    def _command_line_renderable(self, command_info: Dict[str, Any]):
+        from rich.table import Table
+        from rich.text import Text
+
+        running = bool(command_info.get("running"))
+        returncode = command_info.get("returncode")
+        label = "RUN" if running else ("ERROR" if int(returncode or 0) != 0 else "DONE")
+        label_style = "cyan" if running else ("bold red" if int(returncode or 0) != 0 else "dim")
+        status_style = "dim" if running else ("bold red" if int(returncode or 0) != 0 else "dim")
+
+        body = Text()
+        body.append(f"{label} ", style=label_style)
+        body.append(self._command_display(command_info), style="white" if running else "dim")
+
+        if running:
+            started_at = float(command_info.get("started_at_mono") or time.monotonic())
+            status_text = self._format_duration(time.monotonic() - started_at)
+        elif command_info.get("duration") is not None:
+            status_text = self._format_duration(float(command_info.get("duration") or 0.0))
+        elif int(returncode or 0) != 0:
+            status_text = f"rc={int(returncode)}"
+        else:
+            status_text = ""
+
+        table = Table.grid(expand=True, padding=(0, 0))
+        table.add_column(width=7, no_wrap=True)
+        table.add_column(ratio=1, no_wrap=False, overflow="fold")
+        table.add_column(width=8, justify="right", no_wrap=True)
+        table.add_row(Text(" => => ", style="dim"), body, Text(status_text, style=status_style))
+        return table
+
+    def _detail_items(self, step: Dict[str, Any]) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        active_command = step.get("active_command")
+        last_command = step.get("last_command")
+        if step.get("state") == "running" and isinstance(active_command, dict):
+            items.append(
+                {
+                    "priority": 0,
+                    "estimate": max(
+                        1,
+                        self._estimate_wrapped_lines(
+                            f"RUN {self._command_display(active_command)}",
+                            reserved_width=15,
+                        ),
+                    ),
+                    "renderable": self._command_line_renderable(active_command),
+                }
+            )
+        elif step.get("state") == "success" and isinstance(last_command, dict):
+            items.append(
+                {
+                    "priority": 4,
+                    "estimate": max(
+                        1,
+                        self._estimate_wrapped_lines(
+                            f"DONE {self._command_display(last_command)}",
+                            reserved_width=15,
+                        ),
+                    ),
+                    "renderable": self._command_line_renderable(last_command),
+                }
+            )
+        elif (
+            step.get("state") == "failed"
+            and isinstance(last_command, dict)
+            and int(last_command.get("returncode", 0)) != 0
+        ):
+            items.append(
+                {
+                    "priority": 1,
+                    "estimate": max(
+                        1,
+                        self._estimate_wrapped_lines(
+                            f"ERROR {self._command_display(last_command)}",
+                            reserved_width=15,
+                        ),
+                    ),
+                    "renderable": self._command_line_renderable(last_command),
+                }
+            )
+
+        log_priority = 1 if step.get("state") == "failed" else (2 if step.get("state") == "running" else 3)
+        for log_item in self._visible_step_logs(step):
+            text = str(log_item.get("text") or "")
+            items.append(
+                {
+                    "priority": log_priority,
+                    "estimate": max(1, self._estimate_wrapped_lines(text, reserved_width=7)),
+                    "renderable": self._log_line_renderable(text, kind=str(log_item.get("kind") or "")),
+                }
+            )
+        return items
+
+    def _trim_step_details(self, blocks: List[Dict[str, Any]]) -> None:
+        if not self.dynamic or not self._viewport_height:
+            return
+
+        max_lines = max(4, int(self._viewport_height) - 1)
+        used_lines = 1  # header
+        if blocks:
+            used_lines += 1  # blank line after header
+        used_lines += len(blocks)  # one line per step
+
+        if used_lines >= max_lines:
+            for block in blocks:
+                block["details"] = []
+            return
+
+        remaining = max_lines - used_lines
+        candidates: List[tuple[int, int, Dict[str, Any]]] = []
+        for block_index, block in enumerate(blocks):
+            for detail in block["details"]:
+                candidates.append((int(detail["priority"]), block_index, detail))
+
+        candidates.sort(key=lambda item: (item[0], item[1]))
+        allowed_ids = set()
+        for _, _, detail in candidates:
+            estimate = int(detail["estimate"])
+            if estimate <= remaining:
+                remaining -= estimate
+                allowed_ids.add(id(detail))
+
+        for block in blocks:
+            block["details"] = [detail for detail in block["details"] if id(detail) in allowed_ids]
+
     def _build_renderable(self):
         from rich.console import Group
 
         lines: List[Any] = [self._header_renderable()]
         non_root_steps = [step_id for step_id in self._step_order if step_id != self._root_step_id]
         total = len(non_root_steps)
+        blocks: List[Dict[str, Any]] = []
+        for step_id in non_root_steps:
+            step = self._steps[step_id]
+            blocks.append(
+                {
+                    "line": self._step_line_renderable(step_id, total=total),
+                    "details": self._detail_items(step),
+                }
+            )
+        self._trim_step_details(blocks)
 
-        if non_root_steps:
+        if blocks:
             lines.append("")
-            for step_id in non_root_steps:
-                lines.append(self._step_line_renderable(step_id, total=total))
-                for item in self._visible_step_logs(self._steps[step_id]):
-                    lines.append(
-                        self._log_line_renderable(str(item.get("text") or ""), kind=str(item.get("kind") or ""))
-                    )
+            for block in blocks:
+                lines.append(block["line"])
+                for detail in block["details"]:
+                    lines.append(detail["renderable"])
         elif self._root_logs:
             lines.append("")
             for item in self._root_logs[-2:]:
@@ -476,20 +655,15 @@ class BuildkitOutputRenderer(ExecutionRenderer):
                 if self._root_step_id is None and not parent_id:
                     self._root_step_id = step_id
                     self._session_title = title
-                step = self._steps.setdefault(
-                    step_id,
+                step = self._steps.setdefault(step_id, self._ensure_step_record(step_id))
+                step.update(
                     {
                         "title": title,
                         "parent_id": parent_id,
                         "state": "running",
-                        "duration": 0.0,
-                        "summary": "",
-                        "logs": [],
                         "started_at_mono": time.monotonic(),
-                    },
-                )
-                step.update(
-                    {"title": title, "parent_id": parent_id, "state": "running", "started_at_mono": time.monotonic()}
+                        "active_command": None,
+                    }
                 )
                 if step_id != self._root_step_id and step_id not in self._step_order:
                     self._step_order.append(step_id)
@@ -506,38 +680,45 @@ class BuildkitOutputRenderer(ExecutionRenderer):
                     self._render()
                     return
 
-                step = self._steps.setdefault(
-                    step_id,
-                    {
-                        "title": step_id,
-                        "parent_id": None,
-                        "state": "running",
-                        "duration": 0.0,
-                        "summary": "",
-                        "logs": [],
-                        "started_at_mono": time.monotonic(),
-                    },
-                )
+                step = self._steps.setdefault(step_id, self._ensure_step_record(step_id))
                 self._remember_logs(step["logs"], lines, kind=kind)
                 self._render()
                 return
 
+            if event_type == "step_command_started":
+                step = self._steps.setdefault(step_id, self._ensure_step_record(step_id))
+                step["active_command"] = {
+                    "description": str(event.get("description") or "").strip(),
+                    "command": str(event.get("command") or "").strip(),
+                    "cwd": str(event.get("cwd") or "").strip(),
+                    "started_at_mono": time.monotonic(),
+                    "running": True,
+                }
+                self._render()
+                return
+
+            if event_type == "step_command_finished":
+                step = self._steps.setdefault(step_id, self._ensure_step_record(step_id))
+                active_command = step.get("active_command") or {}
+                started_at = float(active_command.get("started_at_mono") or time.monotonic())
+                step["last_command"] = {
+                    "description": str(event.get("description") or active_command.get("description") or "").strip(),
+                    "command": str(event.get("command") or active_command.get("command") or "").strip(),
+                    "cwd": str(event.get("cwd") or active_command.get("cwd") or "").strip(),
+                    "duration": max(0.0, time.monotonic() - started_at),
+                    "returncode": int(event.get("returncode") or 0),
+                    "running": False,
+                }
+                step["active_command"] = None
+                self._render()
+                return
+
             if event_type == "step_finished":
-                step = self._steps.setdefault(
-                    step_id,
-                    {
-                        "title": step_id,
-                        "parent_id": None,
-                        "state": "running",
-                        "duration": 0.0,
-                        "summary": "",
-                        "logs": [],
-                        "started_at_mono": time.monotonic(),
-                    },
-                )
+                step = self._steps.setdefault(step_id, self._ensure_step_record(step_id))
                 step["state"] = str(event.get("state") or "success")
                 step["duration"] = float(event.get("duration") or 0.0)
                 step["summary"] = str(event.get("summary") or "")
+                step["active_command"] = None
                 self._render()
                 return
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import re
 
+from rich.console import Console
+
 from src.execution import BuildkitOutputRenderer
 
 
@@ -375,3 +377,100 @@ def test_buildkit_output_renderer_keeps_raw_failure_stderr_visible() -> None:
     output = stream.getvalue()
     assert "fatal: previous rebase directory .git/rebase-apply still exists but mbox" in output
     assert "po apply aborted due to error in po: 'po_base'" in output
+
+
+def test_buildkit_output_renderer_shows_running_command_detail(monkeypatch) -> None:
+    renderer = BuildkitOutputRenderer(stream=io.StringIO(), dynamic=False, console_width=100)
+
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply",
+            "title": "po apply: projA",
+            "parent_id": None,
+        }
+    )
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply.commits",
+            "title": "Apply commits",
+            "parent_id": "operation.po_apply",
+        }
+    )
+    monkeypatch.setattr("src.execution.time.monotonic", lambda: 12.4)
+    renderer.on_event(
+        {
+            "type": "step_command_started",
+            "step_id": "operation.po_apply.commits",
+            "description": "Apply commit patch 0001.patch to repoA",
+            "command": "git am 0001.patch",
+            "cwd": "/tmp/repoA",
+        }
+    )
+    renderer._steps["operation.po_apply.commits"]["active_command"]["started_at_mono"] = 10.0
+
+    output = io.StringIO()
+    Console(file=output, width=100, force_terminal=False, highlight=False).print(renderer._live_renderable)
+
+    rendered = output.getvalue()
+    assert "=> => RUN Apply commit patch 0001.patch to repoA" in rendered
+    assert re.search(r"2\.4s\s*$", rendered.splitlines()[-1]) is not None
+
+
+def test_buildkit_live_renderable_auto_trims_details_to_viewport_height() -> None:
+    renderer = BuildkitOutputRenderer(stream=io.StringIO(), dynamic=True, console_width=80)
+
+    renderer.on_event(
+        {
+            "type": "step_started",
+            "step_id": "operation.po_apply",
+            "title": "po apply: projA",
+            "parent_id": None,
+        }
+    )
+    for index in range(2):
+        step_id = f"operation.po_apply.step{index}"
+        renderer.on_event(
+            {
+                "type": "step_started",
+                "step_id": step_id,
+                "title": f"Step {index}",
+                "parent_id": "operation.po_apply",
+            }
+        )
+        renderer.on_event(
+            {
+                "type": "step_command_started",
+                "step_id": step_id,
+                "description": f"Apply detail {index}",
+                "command": f"cmd-{index}",
+                "cwd": "/tmp",
+            }
+        )
+        renderer.on_event(
+            {
+                "type": "step_command_finished",
+                "step_id": step_id,
+                "description": f"Apply detail {index}",
+                "command": f"cmd-{index}",
+                "cwd": "/tmp",
+                "returncode": 0,
+            }
+        )
+        renderer.on_event(
+            {
+                "type": "step_finished",
+                "step_id": step_id,
+                "state": "success",
+                "duration": 0.2,
+                "summary": "",
+            }
+        )
+
+    output = io.StringIO()
+    Console(file=output, width=80, height=6, force_terminal=False, highlight=False).print(renderer._live_renderable)
+
+    rendered = output.getvalue()
+    assert "=> => DONE Apply detail 0" in rendered
+    assert "=> => DONE Apply detail 1" not in rendered
