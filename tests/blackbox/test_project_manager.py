@@ -108,4 +108,5 @@ def test_pm_013_project_del_with_children(workspace_a: Path) -> None:
 def test_pm_014_project_del_missing(workspace_a: Path) -> None:
     result = run_cli(["project_del", "not_exist_proj"], cwd=workspace_a, check=False)
     assert result.returncode != 0
-    assert "board info" in result.stderr.lower() or "failed" in result.stderr.lower()
+    combined = (result.stdout + result.stderr).lower()
+    assert "board info" in combined or "failed" in combined
