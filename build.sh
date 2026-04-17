@@ -144,9 +144,6 @@ PYINSTALLER_ARGS=(
     --hidden-import=src.profiler
     --hidden-import=src.utils
     --hidden-import=src._build_info
-    --collect-all=git
-    --collect-all=rich
-    --collect-all=textual
     --add-data "${PYPROJECT_ABS_PATH}${ADD_DATA_SEP}."
     --distpath "$BINARY_DIR"
     --workpath "$BINARY_DIR/build"
@@ -159,7 +156,7 @@ if [ "$PLATFORM" = "linux" ] && command -v strip >/dev/null 2>&1; then
 fi
 
 if python -c "import importlib_metadata" >/dev/null 2>&1; then
-    PYINSTALLER_ARGS+=(--hidden-import=importlib_metadata --collect-all=importlib_metadata)
+    PYINSTALLER_ARGS+=(--hidden-import=importlib_metadata)
 fi
 
 PYINSTALLER_ARGS+=(src/__main__.py)
