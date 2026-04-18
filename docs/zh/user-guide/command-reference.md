@@ -27,27 +27,34 @@ python -m src <命令> <参数> [选项]
 
 ## 维护命令
 
-### `update` - 更新 projman（二进制升级，支持 stable/beta 通道）
+### `update` - 从 GitHub Release 资源更新 projman（支持 stable/beta 通道）
 
 **状态**: ✅ 已实现
 
 **语法**:
 ```bash
-python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--token <token>] [--dry-run] [--require-checksum]
+python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--install-kind <auto|package|binary>] [--owner <owner>] [--repo <repo>] [--token <token>] [--dry-run] [--require-checksum]
 ```
 
-**描述**: 自动检测当前平台/架构，从 GitHub Release 拉取最新二进制并安装到目标目录。若 Release 中存在匹配的 `.sha256` 资产，会进行 sha256 校验（可用 `--require-checksum` 强制必须存在 checksum）。
+**描述**: 自动检测当前平台/架构，从 GitHub Release 拉取最新资源并安装到目标目录。若 Release 中存在匹配的 `.sha256` 资产，会进行 sha256 校验（可用 `--require-checksum` 强制必须存在 checksum）。在 macOS/Linux 上，`auto` 默认优先使用 wheel + 受管运行时，以获得更快启动速度；在 Windows 上，`auto` 仍默认使用独立二进制。
 
 **Stable vs Beta**
 - 默认通道推断（best-effort）：当前版本包含 `+beta` 则默认 `beta`，否则默认 `stable`。
 - `--beta`：升级到最新 prerelease（beta 通道）。
 - `--stable`：强制从最新 stable release 升级（覆盖默认推断）。
 
+**安装类型**
+- `--install-kind auto`：默认值；在 macOS/Linux 上使用 `package`，在 Windows 上使用 `binary`。
+- `--install-kind package`：安装 Release wheel 到受管运行时，并在目标安装目录暴露 `projman` 启动器。
+- `--install-kind binary`：安装独立 onefile Release 资产。
+
 **示例**:
 ```bash
 python -m src update --dry-run
 python -m src update --beta --dry-run
 python -m src update --user
+python -m src update --install-kind package --dry-run
+python -m src update --install-kind binary --user
 python -m src update --require-checksum
 ```
 

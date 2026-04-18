@@ -44,6 +44,15 @@ jobs:
         shell: bash
         run: bash -lc "source venv/bin/activate && make lint"
 
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: projman-python-package
+          if-no-files-found: error
+          path: |
+            out/package/*.whl
+            out/package/*.tar.gz
+
   build-binaries:
     name: build-binaries (beta) (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -163,7 +172,7 @@ jobs:
             cp "$file" "release/$name"
             sha256sum "release/$name" > "release/$name.sha256"
             copied=$((copied + 1))
-          done < <(find artifacts/projman-* -type f -name 'projman-*' | sort)
+          done < <(find artifacts -type f \( -name 'projman-*' -o -name 'multi_project_manager-*' \) | sort)
 
           if [ "$copied" -eq 0 ]; then
             echo "No beta release binaries collected from artifacts/" >&2

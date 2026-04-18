@@ -103,6 +103,13 @@ def test_cli_upgrade_alias_dry_run_without_projects_tree(tmp_path: Path) -> None
     assert cp.returncode == 0
 
 
+def test_cli_update_dry_run_supports_package_install_kind(tmp_path: Path) -> None:
+    """CLI-010: `update --install-kind package --dry-run` works without `projects/`."""
+    cp = _run_cli(tmp_path, "update", "--install-kind", "package", "--dry-run")
+    assert cp.returncode == 0
+    assert "install_kind=package" in (cp.stdout + cp.stderr)
+
+
 def test_cli_exact_operation_executes(tmp_path: Path) -> None:
     """CLI-003/CLI-007: exact op match executes; `--short` is parsed as boolean flag."""
     _write_min_projects_tree(tmp_path)

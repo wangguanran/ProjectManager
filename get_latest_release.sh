@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Default values
 REPO_OWNER="wangguanran"
 REPO_NAME="ProjectManager"
@@ -20,6 +22,7 @@ export PATH="$BIN_DIR:$PATH"
 # Install target (projman)
 INSTALL_MODE="auto"  # auto|system|user
 INSTALL_PREFIX=""
+INSTALL_KIND="package" # package|binary
 
 maybe_sudo() {
     if "$@" 2>/dev/null; then
@@ -30,7 +33,7 @@ maybe_sudo() {
     fi
     if command -v sudo >/dev/null 2>&1; then
         sudo "$@"
-        return 0
+        return $?
     fi
     return 1
 }
@@ -46,6 +49,9 @@ usage() {
     echo "      --system         Install to /usr/local/bin (requires root)"
     echo "      --user           Install to ~/.local/bin"
     echo "      --prefix DIR     Install to DIR (overrides --system/--user)"
+    echo "      --package        Install the wheel asset into a managed runtime (default)"
+    echo "      --binary         Install the standalone onefile asset"
+    echo "      --install-kind K Explicit install kind: package or binary"
     echo "  -v, --version-only   Output only the version number"
     echo "  -h, --help           Display this help message"
     echo ""
@@ -87,6 +93,18 @@ while [[ $# -gt 0 ]]; do
             INSTALL_PREFIX="$2"
             shift 2
             ;;
+        --package)
+            INSTALL_KIND="package"
+            shift
+            ;;
+        --binary)
+            INSTALL_KIND="binary"
+            shift
+            ;;
+        --install-kind)
+            INSTALL_KIND="$2"
+            shift 2
+            ;;
         -v|--version-only)
             VERSION_ONLY=true
             shift
@@ -102,6 +120,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+case "$INSTALL_KIND" in
+    package|binary)
+        ;;
+    *)
+        echo "Invalid install kind: $INSTALL_KIND (expected: package or binary)" >&2
+        exit 2
+        ;;
+esac
 
 warn_if_token_from_argv() {
     if [ "$TOKEN_SOURCE" = "argv" ] && [ -n "$GITHUB_TOKEN" ]; then
@@ -391,35 +418,48 @@ download_and_update_bin() {
     local install_dir
     install_dir="$(resolve_install_dir "$INSTALL_MODE" "$INSTALL_PREFIX")"
 
-    local preferred_asset="projman-${platform}-${arch}"
-    local legacy_asset=""
-    if [ "$platform" = "linux" ] && [ "$arch" = "x86_64" ]; then
-        legacy_asset="multi-project-manager-linux-x64"
-    fi
-
     local asset_url=""
-    local asset_name="$preferred_asset"
-    asset_url="$(echo "$release_data" | jq -r --arg name "$preferred_asset" '.assets[]? | select(.name==$name) | .browser_download_url' | head -n1)"
-    if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
-        if [ -n "$legacy_asset" ]; then
-            asset_url="$(echo "$release_data" | jq -r --arg name "$legacy_asset" '.assets[]? | select(.name==$name) | .browser_download_url' | head -n1)"
-            asset_name="$legacy_asset"
+    local asset_name=""
+    if [ "$INSTALL_KIND" = "package" ]; then
+        asset_name="$(
+            echo "$release_data" \
+              | jq -r '.assets[]? | select((.name // "") | test("^multi_project_manager-.*\\.whl$")) | .name' \
+              | head -n1
+        )"
+        asset_url="$(
+            echo "$release_data" \
+              | jq -r '.assets[]? | select((.name // "") | test("^multi_project_manager-.*\\.whl$")) | .browser_download_url' \
+              | head -n1
+        )"
+    else
+        local preferred_asset="projman-${platform}-${arch}"
+        local legacy_asset=""
+        if [ "$platform" = "linux" ] && [ "$arch" = "x86_64" ]; then
+            legacy_asset="multi-project-manager-linux-x64"
+        fi
+
+        asset_name="$preferred_asset"
+        asset_url="$(echo "$release_data" | jq -r --arg name "$preferred_asset" '.assets[]? | select(.name==$name) | .browser_download_url' | head -n1)"
+        if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
+            if [ -n "$legacy_asset" ]; then
+                asset_url="$(echo "$release_data" | jq -r --arg name "$legacy_asset" '.assets[]? | select(.name==$name) | .browser_download_url' | head -n1)"
+                asset_name="$legacy_asset"
+            fi
+        fi
+        if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
+            local available_assets
+            available_assets="$(
+              echo "$release_data" | jq -r '.assets[]? | .name // empty' | sed '/^$/d' | sort | tr '\n' ' '
+            )"
+            echo "Error: no matching release asset found for install_kind=${INSTALL_KIND}, platform=${platform}, arch=${arch}." >&2
+            echo "Expected asset: ${preferred_asset} (or legacy: ${legacy_asset:-<none>})." >&2
+            echo "Available assets: ${available_assets:-<none>}." >&2
+            return 1
         fi
     fi
-    if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
-        # Fail closed: do not install a binary for another OS/arch.
-        local available_assets
-        available_assets="$(
-          echo "$release_data" | jq -r '.assets[]? | .name // empty' | sed '/^$/d' | sort | tr '\n' ' '
-        )"
-        echo "Error: no matching release asset found for platform=${platform}, arch=${arch}." >&2
-        echo "Expected asset: ${preferred_asset} (or legacy: ${legacy_asset:-<none>})." >&2
-        echo "Available assets: ${available_assets:-<none>}." >&2
-        return 1
-    fi
 
-    if [ -z "$asset_url" ] || [ -z "$asset_name" ] || is_checksum_asset_name "$asset_name"; then
-        echo "No assets found in the latest release. Skipping binary update." >&2
+    if [ -z "$asset_url" ] || [ "$asset_url" = "null" ] || [ -z "$asset_name" ] || is_checksum_asset_name "$asset_name"; then
+        echo "No matching assets found in the latest release for install kind '$INSTALL_KIND'." >&2
         return 1
     fi
 
@@ -439,8 +479,13 @@ download_and_update_bin() {
     fi
     
     # 下载 asset 到临时文件
-    local temp_file
-    temp_file="$(mktemp)"
+    local temp_base
+    temp_base="$(mktemp)"
+    local temp_file="$temp_base"
+    if [ "$INSTALL_KIND" = "package" ]; then
+        temp_file="${temp_base}.whl"
+        rm -f "$temp_base" 2>/dev/null || true
+    fi
     local checksum_file
     checksum_file="$(mktemp)"
     if [ "$VERIFY_DOWNLOADS" = true ] && [ -z "$checksum_url" ]; then
@@ -482,15 +527,24 @@ download_and_update_bin() {
     fi
     rm -f "$checksum_file" 2>/dev/null || true
     
-    # 赋予可执行权限
+    if [ "$INSTALL_KIND" = "package" ]; then
+        if ! maybe_sudo python3 "$SCRIPT_DIR/scripts/install_package.py" --wheel "$temp_file" --install-dir "$install_dir" --platform "$platform"; then
+            echo "Failed to install projman wheel into managed runtime under $install_dir" >&2
+            rm -f "$temp_file" 2>/dev/null || true
+            return 1
+        fi
+        rm -f "$temp_file" 2>/dev/null || true
+        echo "Downloaded and installed as $install_dir/projman"
+        return 0
+    fi
+
     chmod +x "$temp_file"
 
     if ! verify_binary_candidate "$temp_file"; then
         rm -f "$temp_file" 2>/dev/null || true
         return 1
     fi
-    
-    # 重命名为 projman 并移动到 .local/bin 目录
+
     if ! mv "$temp_file" "$install_dir/projman" 2>/dev/null; then
         if ! maybe_sudo mv "$temp_file" "$install_dir/projman"; then
             echo "Failed to move projman into $install_dir (try --user or run with sudo)" >&2
@@ -499,7 +553,7 @@ download_and_update_bin() {
         fi
     fi
     maybe_sudo chmod +x "$install_dir/projman" 2>/dev/null || true
-    
+
     echo "Downloaded and installed as $install_dir/projman"
 }
 

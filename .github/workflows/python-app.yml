@@ -64,8 +64,13 @@ jobs:
         name: build-artifacts
         path: |
           out/binary/projman*
+          out/package/*
+          out/projman_*_path.txt
           install.sh
           uninstall.sh
+          scripts/install_package.py
+          src/install_utils.py
+          src/__init__.py
 
   install_test:
     name: install_test
@@ -73,17 +78,28 @@ jobs:
     needs: build
     steps:
     - uses: actions/checkout@v4
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-venv
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: build-artifacts
         path: .
-    - name: Test standalone binary install
+    - name: Test managed package install
       run: |
-        bash install.sh
+        bash install.sh --user
         export PATH="$HOME/.local/bin:$PATH"
         projman --version
-        rm "$HOME/.local/bin/projman"
+        rm -f "$HOME/.local/bin/projman"
+        rm -rf "$HOME/.local/lib/projman"
+    - name: Test standalone binary install
+      run: |
+        bash install.sh --binary --user
+        export PATH="$HOME/.local/bin:$PATH"
+        projman --version
+        rm -f "$HOME/.local/bin/projman"
 
   pytest:
     name: pytest

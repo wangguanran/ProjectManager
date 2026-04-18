@@ -6,15 +6,17 @@
 
 ### `install.sh`
 
-安装由 `build.sh` 生成的独立 `projman` 可执行文件。
+安装由 `build.sh` 生成的 `projman` 产物。默认优先安装 wheel 到受管运行时，以获得更快启动速度；仍保留独立 onefile 二进制安装分支。
 
 **用法**:
 ```bash
-./install.sh [--system|--user] [--prefix DIR]
+./install.sh [--system|--user] [--prefix DIR] [--package|--binary|--install-kind KIND]
 ```
 
 **功能**:
-- 将 `out/binary/projman` 复制到安装目录
+- 默认从 `out/package/*.whl` 安装到受管运行时
+- 在 macOS/Linux 上将启动器安装到目标 `bin` 目录，并把虚拟环境放到相邻的 `lib/projman/venv`
+- 通过 `--binary` 保留安装 `out/binary/projman` 的 onefile 分支
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
 - 当安装目录需要权限时自动使用 `sudo`
 - 对用户态安装输出 PATH 配置提示
@@ -32,7 +34,8 @@
 - 移除已安装的 Python 包
 - 清理配置文件
 - 移除虚拟环境（如果由安装脚本创建）
-- 从 `~/.local/bin` 和 `/usr/local/bin` 移除独立 `projman`
+- 从 `~/.local/bin` 和 `/usr/local/bin` 移除 `projman` 启动器/二进制
+- 移除 `~/.local/lib/projman` 和 `/usr/local/lib/projman` 下的受管运行时
 
 ### `setup_venv.sh`
 
@@ -64,6 +67,7 @@
 - 默认在 `venv/` 中执行（不存在则自动创建）
 - Python 包输出到 `out/package/`
 - 独立二进制输出到 `out/binary/`
+- 生成 `out/projman_wheel_path.txt`、`out/projman_sdist_path.txt`、`out/projman_binary_path.txt` 供安装/发布脚本复用
 - 所有发布二进制都会在 CI 中校验为单文件产物
 - Linux：要求 `staticx` + `patchelf`，若产物仍依赖外部共享库则构建失败
 - macOS：若二进制链接了非系统动态库/Framework，则构建失败
@@ -88,17 +92,17 @@
 
 ### `get_latest_release.sh`
 
-根据当前系统/架构下载最新 Release 的资源并安装 `projman`。
+根据当前系统/架构下载最新 Release 的资源并安装 `projman`。默认优先安装 wheel 到受管运行时，仍可显式安装 onefile 二进制。
 
 **用法**:
 ```bash
-./get_latest_release.sh [--system|--user] [--prefix DIR] [-t TOKEN]
+./get_latest_release.sh [--system|--user] [--prefix DIR] [--package|--binary|--install-kind KIND] [-t TOKEN]
 ```
 
 **功能**:
 - 从 GitHub API 获取最新发布
 - 显示发布信息
-- 自动选择最匹配的资源（例如 `projman-linux-x86_64`）
+- 对 `--package` 自动选择最新 wheel 资源，对 `--binary` 自动选择最匹配的 onefile 资源（例如 `projman-linux-x86_64`）
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
 - 当安装目录需要权限时自动使用 `sudo`
 - Windows 请使用 `install.ps1`
@@ -124,6 +128,7 @@ iwr -useb https://raw.githubusercontent.com/wangguanran/ProjectManager/<tag>/ins
 说明:
 - GitHub Actions artifact 下载需要鉴权，必须提供 `GITHUB_TOKEN`。
 - 如果希望免 token（公开仓库），建议使用 `get_latest_release.sh`（GitHub Releases）。
+- 默认会从 artifact 中的 wheel 安装受管运行时，也可通过 `--binary` 安装 onefile 构建产物。
 
 ## 开发脚本
 

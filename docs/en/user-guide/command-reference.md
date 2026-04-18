@@ -29,21 +29,26 @@ All commands accept the following global options:
 
 ## Maintenance Commands
 
-### `update` — Update projman binary (stable/beta channels)
+### `update` — Update projman from GitHub release assets (stable/beta channels)
 
 **Status**: ✅ Implemented
 
 **Syntax**
 ```bash
-python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--token <token>] [--dry-run] [--require-checksum]
+python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--install-kind <auto|package|binary>] [--owner <owner>] [--repo <repo>] [--token <token>] [--dry-run] [--require-checksum]
 ```
 
-**Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, optionally verify sha256 checksum (if published), and install `projman` to the selected location.
+**Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, optionally verify sha256 checksum (if published), and install `projman` to the selected location. On macOS/Linux, `auto` prefers the wheel-based managed runtime for faster startup; on Windows, `auto` keeps the standalone binary.
 
 **Stable vs Beta**
 - Default channel inference (best-effort): if current version contains `+beta`, default to `beta`; otherwise `stable`.
 - `--beta`: upgrade from the latest GitHub prerelease (beta channel).
 - `--stable`: force upgrading from the latest stable release.
+
+**Install Kind**
+- `--install-kind auto`: default; uses `package` on macOS/Linux and `binary` on Windows.
+- `--install-kind package`: install the release wheel into a managed runtime and expose a `projman` launcher in the target install directory.
+- `--install-kind binary`: install the standalone onefile release asset.
 
 **Examples**
 ```bash
@@ -51,6 +56,8 @@ python -m src update --user
 python -m src update --prefix ~/.local/bin
 python -m src update --dry-run
 python -m src update --beta --dry-run
+python -m src update --install-kind package --dry-run
+python -m src update --install-kind binary --user
 python -m src update --require-checksum
 ```
 

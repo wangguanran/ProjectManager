@@ -24,7 +24,7 @@ class TestUpgrader:
                 {"name": "projman-linux-x86_64", "browser_download_url": "https://example.com/x86_64"},
             ]
         }
-        asset = self.upgrader._select_release_asset(release_data, "linux", "x86_64")
+        asset = self.upgrader._select_release_binary_asset(release_data, "linux", "x86_64")
         assert asset is not None
         assert asset["name"] == "projman-linux-x86_64"
 
@@ -41,7 +41,7 @@ class TestUpgrader:
                 },
             ]
         }
-        asset = self.upgrader._select_release_asset(release_data, "linux", "x86_64")
+        asset = self.upgrader._select_release_binary_asset(release_data, "linux", "x86_64")
         assert asset is not None
         assert asset["name"] == "projman-linux-x86_64"
 
@@ -90,6 +90,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                install_kind="binary",
             )
 
         assert result is True
@@ -131,6 +132,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                install_kind="binary",
             )
 
         assert result is False
@@ -179,6 +181,7 @@ class TestUpgrader:
                 projects_info={},
                 prefix=str(install_dir),
                 beta=True,
+                install_kind="binary",
             )
 
         assert result is True
@@ -210,7 +213,8 @@ class TestUpgrader:
             ],
         }
 
-        def download_side_effect(url: str, _token: str) -> str:
+        def download_side_effect(url: str, _token: str, *, asset_name: str = "") -> str:
+            _ = asset_name
             if url.endswith(".sha256"):
                 return str(checksum_file)
             return str(downloaded)
@@ -228,6 +232,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                install_kind="binary",
             )
 
         assert result is True
@@ -258,7 +263,8 @@ class TestUpgrader:
             ],
         }
 
-        def download_side_effect(url: str, _token: str) -> str:
+        def download_side_effect(url: str, _token: str, *, asset_name: str = "") -> str:
+            _ = asset_name
             if url.endswith(".sha256"):
                 return str(checksum_file)
             return str(downloaded)
@@ -274,6 +280,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                install_kind="binary",
             )
 
         assert result is False
@@ -375,6 +382,7 @@ class TestUpgrader:
                 projects_info={},
                 prefix=str(install_dir),
                 require_checksum=True,
+                install_kind="binary",
             )
 
         assert result is False
@@ -399,5 +407,66 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix="/tmp/unused",
+                install_kind="binary",
             )
         assert result is False
+
+    def test_select_release_package_asset_prefers_wheel(self):
+        release_data = {
+            "assets": [
+                {
+                    "name": "multi_project_manager-0.0.17.tar.gz",
+                    "browser_download_url": "https://example.com/projman.tar.gz",
+                },
+                {
+                    "name": "multi_project_manager-0.0.17-py3-none-any.whl",
+                    "browser_download_url": "https://example.com/projman.whl",
+                },
+            ]
+        }
+        asset = self.upgrader._select_release_package_asset(release_data)
+        assert asset is not None
+        assert asset["name"].endswith(".whl")
+
+    def test_upgrade_package_installs_managed_runtime(self, tmp_path):
+        install_dir = tmp_path / "install-bin"
+        downloaded = tmp_path / "downloaded-projman.whl"
+        downloaded.write_bytes(b"wheel-payload")
+        release_data = {
+            "tag_name": "v0.0.12",
+            "assets": [
+                {
+                    "name": "multi_project_manager-0.0.12-py3-none-any.whl",
+                    "browser_download_url": "https://example.com/projman.whl",
+                }
+            ],
+        }
+
+        with (
+            patch.object(self.upgrader, "_normalize_platform_name", return_value="linux"),
+            patch.object(self.upgrader, "_normalize_arch", return_value="x86_64"),
+            patch.object(self.upgrader, "_is_admin_user", return_value=False),
+            patch.object(self.upgrader, "_http_get_json", return_value=release_data),
+            patch.object(self.upgrader, "_download_file", return_value=str(downloaded)),
+            patch.object(self.upgrader, "_path_contains", return_value=True),
+            patch.object(
+                self.upgrader,
+                "install_wheel_into_managed_runtime",
+                return_value="0.0.12",
+            ) as mocked_install,
+        ):
+            result = self.upgrader.upgrade(
+                env={},
+                projects_info={},
+                prefix=str(install_dir),
+                install_kind="package",
+            )
+
+        assert result is True
+        mocked_install.assert_called_once_with(
+            wheel_path=str(downloaded),
+            install_dir=str(install_dir),
+            platform_name="linux",
+            launcher_name="projman",
+            verifier=self.upgrader._verify_binary,
+        )

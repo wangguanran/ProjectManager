@@ -6,15 +6,17 @@ This document describes the various scripts and automation tools available in th
 
 ### `install.sh`
 
-Installs the standalone `projman` binary produced by `build.sh`.
+Installs `projman` from the artifacts produced by `build.sh`.
 
 **Usage**:
 ```bash
-./install.sh [--system|--user] [--prefix DIR]
+./install.sh [--system|--user] [--prefix DIR] [--package|--binary|--install-kind KIND]
 ```
 
 **Features**:
-- Copies `out/binary/projman` into an install prefix
+- Defaults to `--package`: installs the built wheel into a managed runtime for faster startup
+- Exposes the launcher at the selected install prefix (for example `~/.local/bin/projman`)
+- Supports `--binary` to explicitly install the standalone onefile artifact from `out/binary/`
 - Auto-selects `/usr/local/bin` when run as root, otherwise `~/.local/bin`
 - Uses `sudo` automatically when installing to a protected prefix
 - Prints PATH guidance for user installs
@@ -32,7 +34,8 @@ Removes ProjectManager from the system.
 - Removes installed Python package
 - Cleans up configuration files
 - Removes virtual environment (if created by install script)
-- Removes standalone `projman` from `~/.local/bin` and `/usr/local/bin`
+- Removes the `projman` launcher from `~/.local/bin` and `/usr/local/bin`
+- Removes managed runtimes from `~/.local/lib/projman` and `/usr/local/lib/projman`
 
 ### `setup_venv.sh`
 
@@ -53,7 +56,7 @@ Sets up a Python virtual environment for development.
 
 ### `build.sh`
 
-Builds the Python package and the standalone `projman` binary (PyInstaller).
+Builds the Python packages and the standalone `projman` binary (PyInstaller).
 
 **Usage**:
 ```bash
@@ -63,7 +66,9 @@ Builds the Python package and the standalone `projman` binary (PyInstaller).
 **Features**:
 - Automatically runs inside `venv/` (creates it if missing)
 - Builds Python packages into `out/package/`
+- Records the latest wheel/sdist paths in `out/projman_wheel_path.txt` and `out/projman_sdist_path.txt`
 - Builds the standalone binary into `out/binary/`
+- Records the standalone binary path in `out/projman_binary_path.txt`
 - All release binaries are validated as single-file artifacts in CI
 - Linux builds require `staticx` + `patchelf` and fail if the output still depends on external shared libraries
 - macOS builds fail if the binary links non-system dynamic libraries/frameworks
@@ -92,13 +97,14 @@ Downloads the latest GitHub Release asset for the current OS/arch and installs `
 
 **Usage**:
 ```bash
-./get_latest_release.sh [--system|--user] [--prefix DIR] [-t TOKEN]
+./get_latest_release.sh [--system|--user] [--prefix DIR] [--package|--binary|--install-kind KIND] [-t TOKEN]
 ```
 
 **Features**:
 - Fetches latest release from GitHub API
 - Displays release information
-- Selects the best-matching asset (for example `projman-linux-x86_64`)
+- Defaults to `--package`: selects the latest wheel asset and installs it into a managed runtime
+- Supports `--binary` to explicitly select the best-matching standalone asset (for example `projman-linux-x86_64`)
 - Installs `projman` to `/usr/local/bin` when run as root, otherwise `~/.local/bin`
 - Uses `sudo` automatically when installing to a protected prefix
 - For Windows, use `install.ps1`
@@ -124,6 +130,7 @@ Downloads the latest successful GitHub Actions *artifact* and installs `projman`
 Notes:
 - GitHub Actions artifact download requires authentication. You must provide `GITHUB_TOKEN`.
 - For tokenless installs (public repo), prefer `get_latest_release.sh` (GitHub Releases).
+- Defaults to installing the wheel artifact into a managed runtime for faster startup; pass `--binary` to install the standalone onefile artifact instead.
 
 ## Development Scripts
 

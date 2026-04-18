@@ -11,7 +11,7 @@ maybe_sudo() {
     fi
     if command -v sudo >/dev/null 2>&1; then
         sudo "$@"
-        return 0
+        return $?
     fi
     return 1
 }
@@ -36,16 +36,20 @@ detect_platform() {
 }
 
 usage() {
-    echo "Usage: $0 [--system|--user] [--prefix DIR]"
+    echo "Usage: $0 [--system|--user] [--prefix DIR] [--package|--binary|--install-kind KIND]"
     echo ""
     echo "Options:"
     echo "  --system        Install to system prefix (/usr/local/bin). Requires root."
     echo "  --user          Install to user prefix (~/.local/bin)."
     echo "  --prefix DIR    Install into DIR (overrides --system/--user)."
+    echo "  --package       Install the built wheel into a managed runtime (default on macOS/Linux)."
+    echo "  --binary        Install the standalone onefile binary."
+    echo "  --install-kind  Explicit install kind: package or binary."
 }
 
 INSTALL_MODE="auto"
 PREFIX=""
+INSTALL_KIND="package"
 while [ "${1:-}" != "" ]; do
     case "$1" in
         --system)
@@ -58,6 +62,18 @@ while [ "${1:-}" != "" ]; do
             ;;
         --prefix)
             PREFIX="${2:-}"
+            shift 2
+            ;;
+        --package)
+            INSTALL_KIND="package"
+            shift
+            ;;
+        --binary)
+            INSTALL_KIND="binary"
+            shift
+            ;;
+        --install-kind)
+            INSTALL_KIND="${2:-}"
             shift 2
             ;;
         -h|--help)
@@ -84,8 +100,29 @@ if [ "$PLATFORM" = "windows" ]; then
 fi
 
 SRC_BIN="out/binary/projman${EXE_SUFFIX}"
-if [ ! -f "$SRC_BIN" ]; then
+WHEEL_PATH=""
+if [ -f "out/projman_wheel_path.txt" ]; then
+    WHEEL_PATH="$(cat out/projman_wheel_path.txt)"
+fi
+if [ -z "$WHEEL_PATH" ] || [ ! -f "$WHEEL_PATH" ]; then
+    WHEEL_PATH="$(ls -1t out/package/*.whl 2>/dev/null | head -n1 || true)"
+fi
+
+case "$INSTALL_KIND" in
+    package|binary)
+        ;;
+    *)
+        echo "Invalid install kind: $INSTALL_KIND (expected: package or binary)" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$INSTALL_KIND" = "binary" ] && [ ! -f "$SRC_BIN" ]; then
     echo "$SRC_BIN binary not found. Please run ./build.sh first." >&2
+    exit 1
+fi
+if [ "$INSTALL_KIND" = "package" ] && [ -z "$WHEEL_PATH" ]; then
+    echo "No built wheel found under out/package/. Please run ./build.sh first." >&2
     exit 1
 fi
 
@@ -113,18 +150,28 @@ else
     esac
 fi
 
-echo "--- Installing standalone binary ($PLATFORM) ---"
-if ! maybe_sudo mkdir -p "$TARGET_BIN"; then
-    echo "Failed to create install directory: $TARGET_BIN (try --user or run with sudo)" >&2
-    exit 1
+TARGET_PROJMAN="$TARGET_BIN/projman${EXE_SUFFIX}"
+if [ "$INSTALL_KIND" = "package" ]; then
+    echo "--- Installing managed package runtime ($PLATFORM) ---"
+    if ! maybe_sudo python3 scripts/install_package.py --wheel "$WHEEL_PATH" --install-dir "$TARGET_BIN" --platform "$PLATFORM"; then
+        echo "Failed to install wheel into managed runtime under $TARGET_BIN" >&2
+        exit 1
+    fi
+    echo "Installed launcher to $TARGET_PROJMAN"
+else
+    echo "--- Installing standalone binary ($PLATFORM) ---"
+    if ! maybe_sudo mkdir -p "$TARGET_BIN"; then
+        echo "Failed to create install directory: $TARGET_BIN (try --user or run with sudo)" >&2
+        exit 1
+    fi
+    maybe_sudo rm -f "$TARGET_PROJMAN" 2>/dev/null || true
+    if ! maybe_sudo cp "$SRC_BIN" "$TARGET_PROJMAN"; then
+        echo "Failed to copy binary into $TARGET_BIN (try --user or run with sudo)" >&2
+        exit 1
+    fi
+    maybe_sudo chmod +x "$TARGET_PROJMAN" 2>/dev/null || true
+    echo "Installed to $TARGET_PROJMAN"
 fi
-maybe_sudo rm -f "$TARGET_BIN/projman${EXE_SUFFIX}" 2>/dev/null || true
-if ! maybe_sudo cp "$SRC_BIN" "$TARGET_BIN/projman${EXE_SUFFIX}"; then
-    echo "Failed to copy binary into $TARGET_BIN (try --user or run with sudo)" >&2
-    exit 1
-fi
-maybe_sudo chmod +x "$TARGET_BIN/projman${EXE_SUFFIX}" 2>/dev/null || true
-echo "Installed to $TARGET_BIN/projman${EXE_SUFFIX}"
 
 if [ "$TARGET_BIN" != "/usr/local/bin" ] && ! echo ":$PATH:" | grep -q ":$TARGET_BIN:"; then
     echo "PATH does not include $TARGET_BIN."
@@ -136,7 +183,7 @@ fi
 TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t projman)"
 (
     cd "$TMP_DIR"
-    "$TARGET_BIN/projman${EXE_SUFFIX}" --version
+    "$TARGET_PROJMAN" --version
 )
 rm -rf "$TMP_DIR" 2>/dev/null || true
 echo "projman command executed successfully."

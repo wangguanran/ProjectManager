@@ -16,6 +16,73 @@ BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 export PATH="$BIN_DIR:$PATH"
 
+INSTALL_KIND="package"  # package|binary
+
+detect_platform() {
+  local uname_s
+  uname_s="$(uname -s 2>/dev/null || echo unknown)"
+  case "$uname_s" in
+    Linux)
+      echo "linux"
+      ;;
+    Darwin)
+      echo "macos"
+      ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      echo "windows"
+      ;;
+    *)
+      echo "unknown"
+      ;;
+  esac
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./get_latest_artifact.sh [--package|--binary|--install-kind KIND]
+
+Options:
+  --package        Install the wheel artifact into a managed runtime (default).
+  --binary         Install the standalone onefile artifact.
+  --install-kind   Explicit install kind: package or binary.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --package)
+      INSTALL_KIND="package"
+      shift
+      ;;
+    --binary)
+      INSTALL_KIND="binary"
+      shift
+      ;;
+    --install-kind)
+      INSTALL_KIND="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+case "$INSTALL_KIND" in
+  package|binary)
+    ;;
+  *)
+    echo "Invalid install kind: $INSTALL_KIND (expected: package or binary)" >&2
+    exit 2
+    ;;
+esac
+
 # 安装 jq（用户态，无需 sudo）
 install_jq() {
   local arch
@@ -127,9 +194,27 @@ unzip -o artifact.zip -d ./artifact
 
 echo "最新二进制已下载到 ./artifact 目录" 
 
-# 安装 projman 到 $HOME/.local/bin/
 INSTALL_DIR="$HOME/.local/bin"
 mkdir -p "$INSTALL_DIR"
-cp ./artifact/out/binary/projman "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/projman"
-echo "projman 已安装到 $INSTALL_DIR/"
+PLATFORM="$(detect_platform)"
+
+if [ "$INSTALL_KIND" = "package" ]; then
+  WHEEL_PATH="$(ls -1t ./artifact/out/package/*.whl 2>/dev/null | head -n1 || true)"
+  if [ -z "$WHEEL_PATH" ]; then
+    echo "artifact 中未找到 wheel 包（./artifact/out/package/*.whl）" >&2
+    exit 1
+  fi
+  if [ ! -f ./artifact/scripts/install_package.py ]; then
+    echo "artifact 中未找到 scripts/install_package.py，无法执行包安装。" >&2
+    exit 1
+  fi
+  python3 ./artifact/scripts/install_package.py \
+    --wheel "$WHEEL_PATH" \
+    --install-dir "$INSTALL_DIR" \
+    --platform "$PLATFORM"
+  echo "projman 已以受管运行时方式安装到 $INSTALL_DIR/"
+else
+  cp ./artifact/out/binary/projman "$INSTALL_DIR/"
+  chmod +x "$INSTALL_DIR/projman"
+  echo "projman 独立二进制已安装到 $INSTALL_DIR/"
+fi

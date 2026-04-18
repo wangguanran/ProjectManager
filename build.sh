@@ -114,6 +114,14 @@ trap cleanup_build_info EXIT
 
 echo -e "\033[32m--- Building Python package ---\033[0m"
 python -m build --outdir "$PACKAGE_DIR"
+WHEEL_PATH="$(ls -1t "$PACKAGE_DIR"/*.whl 2>/dev/null | head -n1 || true)"
+SDIST_PATH="$(ls -1t "$PACKAGE_DIR"/*.tar.gz 2>/dev/null | head -n1 || true)"
+if [ -n "$WHEEL_PATH" ]; then
+    echo "$WHEEL_PATH" > "$OUT_DIR/projman_wheel_path.txt"
+fi
+if [ -n "$SDIST_PATH" ]; then
+    echo "$SDIST_PATH" > "$OUT_DIR/projman_sdist_path.txt"
+fi
 echo -e "\033[32m--- Python package build complete. Find the artifacts in the '$PACKAGE_DIR' directory. ---\033[0m"
 
 echo -e "\033[32m--- Building standalone binary with pyinstaller ---\033[0m"

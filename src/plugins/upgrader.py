@@ -1,8 +1,8 @@
-"""
-Upgrade command for projman.
+"""Upgrade command for projman.
 
-Downloads the latest release binary from GitHub and installs it into the
-selected install prefix.
+Downloads the latest GitHub release asset and installs it into the selected
+prefix. Non-Windows installs prefer the managed wheel runtime for faster
+startup; standalone binaries remain available when explicitly requested.
 """
 
 from __future__ import annotations
@@ -21,6 +21,10 @@ import urllib.request
 from typing import Any, Dict, Mapping, Optional
 
 from src.execution import execution_log_info, execution_step, make_step_id
+from src.install_utils import (
+    install_wheel_into_managed_runtime,
+    resolve_managed_install_layout,
+)
 from src.log_manager import log
 from src.operations.registry import register
 
@@ -101,6 +105,17 @@ def _resolve_install_mode(system: Any, user: Any) -> str:
     if bool(user):
         return "user"
     return "auto"
+
+
+def _resolve_install_kind(kind: Any, platform_name: str) -> str:
+    resolved = str(kind or "auto").strip().lower()
+    if resolved == "auto":
+        return "binary" if platform_name == "windows" else "package"
+    if resolved not in {"binary", "package"}:
+        raise ValueError("`--install-kind` must be one of: auto, binary, package.")
+    if resolved == "package" and platform_name == "unknown":
+        raise ValueError("Package installs are unsupported on unknown platforms.")
+    return resolved
 
 
 def _resolve_install_dir(
@@ -224,14 +239,15 @@ def _resolve_channel(*, beta: Any, stable: Any) -> str:
     return _infer_current_channel()
 
 
-def _download_file(url: str, token: str) -> str:
+def _download_file(url: str, token: str, *, asset_name: str = "") -> str:
     headers = {"Accept": "application/octet-stream"}
     if token:
         headers["Authorization"] = f"token {token}"
 
     request = urllib.request.Request(url, headers=headers)
     context = _create_ssl_context()
-    fd, temp_path = tempfile.mkstemp(prefix="projman_upgrade_", suffix=".bin")
+    suffix = os.path.splitext(asset_name or url)[1] or ".bin"
+    fd, temp_path = tempfile.mkstemp(prefix="projman_upgrade_", suffix=suffix)
     os.close(fd)
     try:
         with urllib.request.urlopen(request, timeout=120, context=context) as response, open(
@@ -290,7 +306,9 @@ def _parse_sha256sum_file(path: str) -> str:
     raise RuntimeError("Empty sha256 checksum file.")
 
 
-def _select_release_asset(release_data: Dict[str, Any], platform_name: str, arch: str) -> Optional[Dict[str, Any]]:
+def _select_release_binary_asset(
+    release_data: Dict[str, Any], platform_name: str, arch: str
+) -> Optional[Dict[str, Any]]:
     assets = [asset for asset in (release_data.get("assets") or []) if isinstance(asset, dict)]
     ext = ".exe" if platform_name == "windows" else ""
     exact_candidates = [f"projman-{platform_name}-{arch}{ext}"]
@@ -328,6 +346,31 @@ def _select_release_asset(release_data: Dict[str, Any], platform_name: str, arch
                 continue
             if name.endswith(".exe") and asset.get("browser_download_url"):
                 return asset
+
+    return None
+
+
+def _select_release_package_asset(release_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    assets = [asset for asset in (release_data.get("assets") or []) if isinstance(asset, dict)]
+    wheel_assets = [
+        asset
+        for asset in assets
+        if str(asset.get("name") or "").startswith("multi_project_manager-")
+        and str(asset.get("name") or "").endswith(".whl")
+        and asset.get("browser_download_url")
+    ]
+    if wheel_assets:
+        return sorted(wheel_assets, key=lambda item: str(item.get("name") or ""), reverse=True)[0]
+
+    sdist_assets = [
+        asset
+        for asset in assets
+        if str(asset.get("name") or "").startswith("multi_project_manager-")
+        and str(asset.get("name") or "").endswith(".tar.gz")
+        and asset.get("browser_download_url")
+    ]
+    if sdist_assets:
+        return sorted(sdist_assets, key=lambda item: str(item.get("name") or ""), reverse=True)[0]
 
     return None
 
@@ -407,7 +450,7 @@ def _path_contains(path_value: str) -> bool:
     "upgrade",
     needs_repositories=False,
     needs_projects=False,
-    desc="Upgrade projman by downloading the latest release binary (alias: update)",
+    desc="Upgrade projman from GitHub release assets (alias: update)",
 )
 def upgrade(  # noqa: PLR0913
     env: Dict[str, Any],
@@ -419,12 +462,13 @@ def upgrade(  # noqa: PLR0913
     system: bool = False,
     user: bool = False,
     prefix: str = "",
+    install_kind: str = "auto",
     dry_run: bool = False,
     require_checksum: bool = False,
     beta: bool = False,
     stable: bool = False,
 ) -> bool:
-    """Upgrade projman from GitHub release binary (stable by default).
+    """Upgrade projman from GitHub release assets (stable by default).
 
     Args:
         owner (str): GitHub repository owner.
@@ -433,6 +477,7 @@ def upgrade(  # noqa: PLR0913
         system (bool): Install to system location.
         user (bool): Install to user location.
         prefix (str): Install directory override.
+        install_kind (str): Install mode: auto, package, or binary.
         dry_run (bool): Print planned actions without writing files.
         require_checksum (bool): If True, require a matching sha256 asset and abort if missing.
         beta (bool): If True, upgrade from latest prerelease (beta channel).
@@ -449,6 +494,7 @@ def upgrade(  # noqa: PLR0913
         system=system,
         user=user,
         prefix=prefix,
+        install_kind=install_kind,
         dry_run=dry_run,
         require_checksum=require_checksum,
         beta=beta,
@@ -461,7 +507,7 @@ def upgrade(  # noqa: PLR0913
     "update",
     needs_repositories=False,
     needs_projects=False,
-    desc="Update projman by downloading the latest release binary (stable/beta channels)",
+    desc="Update projman from GitHub release assets (stable/beta channels)",
 )
 def update(  # noqa: PLR0913
     env: Dict[str, Any],
@@ -473,12 +519,13 @@ def update(  # noqa: PLR0913
     system: bool = False,
     user: bool = False,
     prefix: str = "",
+    install_kind: str = "auto",
     dry_run: bool = False,
     require_checksum: bool = False,
     beta: bool = False,
     stable: bool = False,
 ) -> bool:
-    """Update projman from GitHub release binary (stable/beta channels).
+    """Update projman from GitHub release assets (stable/beta channels).
 
     This is the preferred command name. `upgrade` remains for backward compatibility.
     """
@@ -493,6 +540,7 @@ def update(  # noqa: PLR0913
         system=system,
         user=user,
         prefix=prefix,
+        install_kind=install_kind,
         dry_run=dry_run,
         require_checksum=require_checksum,
         beta=beta,
@@ -512,6 +560,7 @@ def _upgrade_impl(  # noqa: PLR0913
     system: bool,
     user: bool,
     prefix: str,
+    install_kind: str,
     dry_run: bool,
     require_checksum: bool,
     beta: Any,
@@ -540,6 +589,12 @@ def _upgrade_impl(  # noqa: PLR0913
 
     platform_name = _normalize_platform_name()
     arch = _normalize_arch()
+    try:
+        resolved_install_kind = _resolve_install_kind(install_kind, platform_name)
+    except ValueError as exc:
+        log.error("%s parameter error: %s", operation, exc)
+        print(f"Error: {exc}")
+        return False
     is_admin = _is_admin_user()
     install_dir = _resolve_install_dir(
         platform_name=platform_name,
@@ -548,8 +603,15 @@ def _upgrade_impl(  # noqa: PLR0913
         is_admin=is_admin,
         env_vars=os.environ,
     )
-    binary_name = "projman.exe" if platform_name == "windows" else "projman"
-    target_path = os.path.join(install_dir, binary_name)
+    if resolved_install_kind == "package":
+        target_path = resolve_managed_install_layout(
+            install_dir,
+            platform_name=platform_name,
+            launcher_name="projman",
+        ).launcher_path
+    else:
+        binary_name = "projman.exe" if platform_name == "windows" else "projman"
+        target_path = os.path.join(install_dir, binary_name)
 
     if platform_name == "unknown":
         log.error("Unsupported platform for upgrade.")
@@ -561,6 +623,7 @@ def _upgrade_impl(  # noqa: PLR0913
 
     if dry_run:
         print(f"DRY-RUN: channel={channel}")
+        print(f"DRY-RUN: install_kind={resolved_install_kind}")
         print(f"DRY-RUN: platform={platform_name}, arch={arch}")
         print(f"DRY-RUN: target install path: {target_path}")
         print(f"DRY-RUN: latest release API: {api_url}")
@@ -597,17 +660,22 @@ def _upgrade_impl(  # noqa: PLR0913
         make_step_id(operation, "select_asset"),
         "Select release asset",
     ):
-        asset = _select_release_asset(release_data, platform_name, arch)
+        if resolved_install_kind == "package":
+            asset = _select_release_package_asset(release_data)
+        else:
+            asset = _select_release_binary_asset(release_data, platform_name, arch)
     if not asset:
         asset_names = [str(item.get("name") or "") for item in (release_data.get("assets") or [])]
         log.error(
-            "No matching release asset found for platform=%s arch=%s in assets=%s",
+            "No matching release asset found for install_kind=%s platform=%s arch=%s in assets=%s",
+            resolved_install_kind,
             platform_name,
             arch,
             asset_names,
         )
         print(
-            f"Error: no matching release asset for platform={platform_name}, arch={arch}. "
+            f"Error: no matching release asset for install_kind={resolved_install_kind}, "
+            f"platform={platform_name}, arch={arch}. "
             f"Available assets: {asset_names}"
         )
         return False
@@ -621,6 +689,7 @@ def _upgrade_impl(  # noqa: PLR0913
     asset_name = str(asset.get("name") or "").strip()
     print(f"Latest release ({channel}): {release_tag}")
     print(f"Selected asset: {asset_name}")
+    print(f"Install kind: {resolved_install_kind}")
     print(f"Install path: {target_path}")
 
     temp_path = ""
@@ -633,7 +702,7 @@ def _upgrade_impl(  # noqa: PLR0913
         ):
             os.makedirs(install_dir, exist_ok=True)
             execution_log_info(env, f"Downloading asset: {asset_name}")
-            temp_path = _download_file(download_url, auth_token)
+            temp_path = _download_file(download_url, auth_token, asset_name=asset_name)
 
         checksum_asset = _select_checksum_asset(release_data, asset_name)
         if checksum_asset:
@@ -644,7 +713,11 @@ def _upgrade_impl(  # noqa: PLR0913
                     make_step_id(operation, "verify_checksum"),
                     "Verify checksum",
                 ):
-                    checksum_path = _download_file(checksum_url, auth_token)
+                    checksum_path = _download_file(
+                        checksum_url,
+                        auth_token,
+                        asset_name=str(checksum_asset.get("name") or ""),
+                    )
                     expected = _parse_sha256sum_file(checksum_path)
                     actual = _sha256_file(temp_path)
                     if actual.lower() != expected.lower():
@@ -661,14 +734,24 @@ def _upgrade_impl(  # noqa: PLR0913
 
         with execution_step(
             env,
-            make_step_id(operation, "install_binary"),
-            "Install downloaded binary",
+            make_step_id(operation, "install_asset"),
+            "Install downloaded asset",
         ):
-            _ensure_executable(temp_path, platform_name)
-            version_output = _verify_binary(temp_path)
-            os.replace(temp_path, target_path)
-            temp_path = ""
-            _ensure_executable(target_path, platform_name)
+            if resolved_install_kind == "package":
+                version_output = install_wheel_into_managed_runtime(
+                    wheel_path=temp_path,
+                    install_dir=install_dir,
+                    platform_name=platform_name,
+                    launcher_name="projman",
+                    verifier=_verify_binary,
+                )
+                temp_path = ""
+            else:
+                _ensure_executable(temp_path, platform_name)
+                version_output = _verify_binary(temp_path)
+                os.replace(temp_path, target_path)
+                temp_path = ""
+                _ensure_executable(target_path, platform_name)
     except PermissionError as exc:
         log.error("Permission denied while installing binary: %s", exc)
         print(
