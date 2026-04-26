@@ -5,8 +5,9 @@ PO plugin: commits (git format-patch + git am -k).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.log_manager import log, summarize_output
 
@@ -17,6 +18,26 @@ from .registry import (
 )
 from .runtime import PoPluginContext, PoPluginRuntime
 from .utils import extract_patch_targets
+
+SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
+
+
+def _extract_original_commit_sha(patch_text: str) -> Optional[str]:
+    match = re.search(r"^From ([0-9a-fA-F]{7,40})\b", patch_text, re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).lower()
+
+
+def _repo_history_contains_commit(repo_path: str, commit_sha: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit_sha, "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
@@ -75,6 +96,25 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             return False
 
         patch_targets = extract_patch_targets(patch_text)
+        original_commit_sha = _extract_original_commit_sha(patch_text)
+
+        if original_commit_sha and _repo_history_contains_commit(patch_target, original_commit_sha):
+            log.info(
+                "Commit patch '%s' already exists in history for repo '%s' via sha '%s'; skipping.",
+                rel_path,
+                repo_name,
+                original_commit_sha,
+            )
+            record = runtime.get_repo_record(ctx, patch_target, repo_name)
+            record["commits"].append(
+                {
+                    "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
+                    "targets": patch_targets,
+                    "status": "already_in_history",
+                    "original_commit_sha": original_commit_sha,
+                }
+            )
+            continue
 
         head_before = None
         if not ctx.dry_run:
@@ -127,6 +167,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                         "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
                         "targets": patch_targets,
                         "status": "already_applied",
+                        "original_commit_sha": original_commit_sha,
                     }
                 )
                 continue
@@ -169,6 +210,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 "head_before": head_before,
                 "head_after": head_after,
                 "commit_shas": commit_shas,
+                "original_commit_sha": original_commit_sha,
             }
         )
 
@@ -189,7 +231,7 @@ def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         log.info("reverting commits for po '%s' in repo '%s'", ctx.po_name, repo_name)
 
         for commit_entry in reversed(commits):
-            if commit_entry.get("status") == "already_applied":
+            if commit_entry.get("status") in SKIPPED_COMMIT_STATUSES:
                 continue
             shas = commit_entry.get("commit_shas") or []
             if not shas and commit_entry.get("head_after"):

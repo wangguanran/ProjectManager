@@ -145,6 +145,41 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     assert not record_path.exists()
 
 
+def test_po_005c_commit_apply_skips_original_commit_in_history(workspace_a: Path) -> None:
+    commits_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "commits"
+    commits_dir.mkdir(parents=True, exist_ok=True)
+
+    commit_file = workspace_a / "commit_file_in_history.txt"
+    commit_file.write_text("from existing commit\n", encoding="utf-8")
+    subprocess.run(["git", "add", "commit_file_in_history.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "existing commit file"], cwd=str(workspace_a), check=True)
+    original_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(workspace_a),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(["git", "format-patch", "-1", "HEAD", "-o", str(commits_dir)], cwd=str(workspace_a), check=True)
+
+    result = run_cli(["po_apply", "projA"], cwd=workspace_a)
+    assert result.returncode == 0
+
+    record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    commit_entries = record.get("commits") or []
+    assert any(
+        item.get("status") == "already_in_history" and item.get("original_commit_sha") == original_sha
+        for item in commit_entries
+    )
+    commands = record.get("commands", [])
+    assert not any(item.get("cmd", "").startswith("git am -k ") for item in commands)
+
+    revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
+    assert revert.returncode == 0
+    assert commit_file.exists()
+
+
 def test_po_006_patch_apply_fail(workspace_a: Path) -> None:
     bad_patch = workspace_a / "projects" / "boardA" / "po" / "po_base" / "patches" / "bad.patch"
     bad_patch.write_text("invalid patch", encoding="utf-8")
