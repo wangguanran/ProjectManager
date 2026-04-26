@@ -1,0 +1,35 @@
+name: Validate Main PR Source
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+permissions:
+  contents: read
+
+jobs:
+  validate-main-source-branch:
+    name: validate-main-source-branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require dev or bug source branch
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          case "$HEAD_BRANCH" in
+            dev|bug/*|fix/*)
+              echo "Allowed source branch: $HEAD_BRANCH"
+              ;;
+            *)
+              echo "::error::PRs targeting main must come from dev, bug/*, or fix/* branches."
+              exit 1
+              ;;
+          esac
