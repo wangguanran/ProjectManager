@@ -137,7 +137,7 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     record = json.loads(record_path.read_text(encoding="utf-8"))
     assert record.get("commits"), "Commit application should be recorded"
     commands = record.get("commands", [])
-    assert any(item.get("cmd", "").startswith("git am -k ") for item in commands)
+    assert any(item.get("cmd", "").startswith("git am -k --keep-cr ") for item in commands)
 
     revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
     assert revert.returncode == 0
@@ -173,7 +173,7 @@ def test_po_005c_commit_apply_skips_original_commit_in_history(workspace_a: Path
         for item in commit_entries
     )
     commands = record.get("commands", [])
-    assert not any(item.get("cmd", "").startswith("git am -k ") for item in commands)
+    assert not any(item.get("cmd", "").startswith("git am -k --keep-cr ") for item in commands)
 
     revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
     assert revert.returncode == 0
