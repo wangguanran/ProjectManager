@@ -16,6 +16,7 @@ permissions:
 jobs:
   validate-main-source-branch:
     name: validate-main-source-branch
+    if: github.event.pull_request.state == 'open'
     runs-on: ubuntu-latest
     steps:
       - name: Require same-repo feature, bug, or ci source branch
