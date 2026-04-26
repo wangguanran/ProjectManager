@@ -22,14 +22,21 @@ jobs:
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::PRs targeting dev must come from branches in $BASE_REPO, got $HEAD_REPO."
+            exit 1
+          fi
+
           case "$HEAD_BRANCH" in
-            feature/*|feat/*|bug/*|fix/*)
+            feature/*|bug/*)
               echo "Allowed source branch: $HEAD_BRANCH"
               ;;
             *)
-              echo "::error::PRs targeting dev must come from feature/*, feat/*, bug/*, or fix/* branches."
+              echo "::error::PRs targeting dev must come from feature/* or bug/* branches."
               exit 1
               ;;
           esac
