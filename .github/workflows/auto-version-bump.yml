@@ -1,0 +1,81 @@
+name: Auto Version Bump
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: auto-version-bump-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-version-bump:
+    name: auto-version-bump
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve bump part from PR branch
+        id: bump
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          case "$HEAD_BRANCH" in
+            bug/*)
+              echo "part=patch" >> "$GITHUB_OUTPUT"
+              ;;
+            feature/*)
+              echo "part=minor" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "No automatic version bump for branch: $HEAD_BRANCH"
+              ;;
+          esac
+
+      - uses: actions/checkout@v4
+        if: steps.bump.outputs.skip != 'true'
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Bump version from latest main
+        if: steps.bump.outputs.skip != 'true'
+        id: version
+        shell: bash
+        env:
+          BUMP_PART: ${{ steps.bump.outputs.part }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin "+refs/heads/main:refs/remotes/origin/main"
+          python3 .github/scripts/bump_version.py --base-ref origin/main --part "$BUMP_PART" --write
+
+      - name: Commit version bump
+        if: steps.bump.outputs.skip != 'true'
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- pyproject.toml; then
+            echo "pyproject.toml already uses version $VERSION"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore: bump version to $VERSION"
+          git push origin "HEAD:$HEAD_BRANCH"

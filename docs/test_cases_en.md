@@ -298,3 +298,11 @@ Notes:
 | MCP-002 | MCP | list_files excludes sensitive paths | None | 1. Call `tools/call` with `name=list_files` and `arguments={\"root\":\".\",\"max_depth\":3}`.<br>2. Inspect returned `structuredContent.files`. | Returned files exclude `.git/`, `.env`, `.agent_artifacts/`, `.cache/` by policy. | P1 | Safety |
 | MCP-003 | MCP | read_file denies `.env` | `.env` exists | 1. Call `tools/call` with `name=read_file` and `arguments={\"path\":\".env\"}`. | Returns `isError=true` and a policy error message; stdout remains JSON-only. | P1 | Negative |
 | MCP-004 | MCP | read_file redacts token-like strings by default | Create `tmp_secrets.txt` containing `ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` | 1. Call `tools/call` with `name=read_file` and `arguments={\"path\":\"tmp_secrets.txt\"}`.<br>2. Inspect returned text. | Output contains redacted form (e.g., `ghp_***`), not the raw token string. | P2 | Safety |
+
+## 16. Release Version Automation (GitHub Actions)
+
+| Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
+|---|---|---|---|---|---|---|---|
+| REL-001 | Release/Version | `bug/*` PR auto-bumps patch version | `main` has `pyproject.toml` version `X.Y.Z`; PR targets `main` from same-repo `bug/*` branch | 1. Open or synchronize the PR.<br>2. Wait for `auto-version-bump.yml`. | Workflow commits `pyproject.toml` version `X.Y.(Z+1)` back to the PR branch; if already correct, it is a no-op. | P1 | Release |
+| REL-002 | Release/Version | `feature/*` PR auto-bumps minor version | `main` has `pyproject.toml` version `X.Y.Z`; PR targets `main` from same-repo `feature/*` branch | 1. Open or synchronize the PR.<br>2. Wait for `auto-version-bump.yml`. | Workflow commits `pyproject.toml` version `X.(Y+1).0` back to the PR branch; if already correct, it is a no-op. | P1 | Release |
+| REL-003 | Release/Version | Major bump workflow creates `ci/*` PR | `main` has `pyproject.toml` version `X.Y.Z` | 1. Run the `Bump Major Version` workflow manually.<br>2. Inspect the created PR. | Workflow creates a `ci/*` PR with `pyproject.toml` version `(X+1).0.0`; the PR can pass main source validation. | P1 | Release |
