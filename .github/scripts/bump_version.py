@@ -8,10 +8,23 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Tuple
+from typing import Iterable, Tuple
 
 VERSION_PATTERN = re.compile(r'(?m)^(version\s*=\s*")(\d+)\.(\d+)\.(\d+)(")')
 Version = Tuple[int, int, int]
+
+RELEASE_CODE_PREFIXES = (
+    "src/",
+    "projects/",
+    "scripts/",
+)
+RELEASE_CODE_FILES = {
+    "build.sh",
+    "install.sh",
+    "get_latest_release.sh",
+    "install.ps1",
+    "Dockerfile",
+}
 
 
 def parse_version(text: str) -> Version:
@@ -25,6 +38,8 @@ def parse_version(text: str) -> Version:
 def bump_version(version: Version, part: str) -> Version:
     """Bump a semantic version part and reset lower-order parts."""
     major, minor, patch = version
+    if part == "none":
+        return version
     if part == "major":
         return major + 1, 0, 0
     if part == "minor":
@@ -57,13 +72,57 @@ def read_file_from_ref(ref: str, filename: str) -> str:
     )
 
 
-def write_github_output(version: str) -> None:
-    """Expose the computed version to GitHub Actions when available."""
+def git_output(*args: str) -> str:
+    """Return stdout from a git command."""
+    return subprocess.check_output(["git", *args], text=True, stderr=subprocess.STDOUT)
+
+
+def strip_project_version(text: str) -> str:
+    """Remove project.version assignments before comparing pyproject changes."""
+    return VERSION_PATTERN.sub(r"\g<1><version>\g<5>", text)
+
+
+def is_release_code_path(path: str) -> bool:
+    """Return whether a path affects release code behavior."""
+    return path in RELEASE_CODE_FILES or path.startswith(RELEASE_CODE_PREFIXES)
+
+
+def has_pyproject_code_changes(base_ref: str, head_ref: str) -> bool:
+    """Return whether pyproject changed beyond the release version line."""
+    try:
+        base_text = read_file_from_ref(base_ref, "pyproject.toml")
+        head_text = read_file_from_ref(head_ref, "pyproject.toml")
+    except subprocess.CalledProcessError:
+        return True
+    return strip_project_version(base_text) != strip_project_version(head_text)
+
+
+def has_release_code_changes(base_ref: str, head_ref: str) -> bool:
+    """Return whether git changes include release-relevant code."""
+    changed_files = git_output("diff", "--name-only", f"{base_ref}...{head_ref}").splitlines()
+    return has_release_code_paths(changed_files, base_ref=base_ref, head_ref=head_ref)
+
+
+def has_release_code_paths(paths: Iterable[str], base_ref: str = "", head_ref: str = "") -> bool:
+    """Return whether changed paths include release-relevant code."""
+    for path in paths:
+        if path == "pyproject.toml":
+            if not base_ref or not head_ref or has_pyproject_code_changes(base_ref, head_ref):
+                return True
+            continue
+        if is_release_code_path(path):
+            return True
+    return False
+
+
+def write_github_output(**values: str) -> None:
+    """Expose computed values to GitHub Actions when available."""
     output_path = os.environ.get("GITHUB_OUTPUT")
     if not output_path:
         return
     with open(output_path, "a", encoding="utf-8") as output:
-        output.write(f"version={version}\n")
+        for key, value in values.items():
+            output.write(f"{key}={value}\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,11 +132,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--base-ref",
         help="Git ref to read the base version from; defaults to the working tree file",
     )
+    parser.add_argument("--head-ref", default="HEAD", help="Git ref to compare against --base-ref")
     parser.add_argument(
         "--part",
-        choices=("major", "minor", "patch"),
-        required=True,
+        choices=("major", "minor", "patch", "none"),
         help="Semantic version part to bump",
+    )
+    parser.add_argument(
+        "--check-release-code-changes",
+        action="store_true",
+        help="Print whether changes include release-relevant code and write has_release_code_changes",
     )
     parser.add_argument(
         "--write",
@@ -89,6 +153,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.check_release_code_changes:
+        if not args.base_ref:
+            raise ValueError("--base-ref is required with --check-release-code-changes")
+        has_code_changes = has_release_code_changes(args.base_ref, args.head_ref)
+        value = "true" if has_code_changes else "false"
+        write_github_output(has_release_code_changes=value)
+        print(value)
+        return 0
+
+    if not args.part:
+        raise ValueError("--part is required unless --check-release-code-changes is used")
+
     version_file = Path(args.file)
     base_text = (
         read_file_from_ref(args.base_ref, args.file) if args.base_ref else version_file.read_text(encoding="utf-8")
@@ -100,7 +176,7 @@ def main() -> int:
         current_text = version_file.read_text(encoding="utf-8")
         version_file.write_text(replace_version(current_text, next_version), encoding="utf-8")
 
-    write_github_output(next_version_text)
+    write_github_output(version=next_version_text)
     print(next_version_text)
     return 0
 

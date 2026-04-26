@@ -98,6 +98,9 @@ jobs:
           esac
 
           base_ref="refs/remotes/origin/${BASE_BRANCH}"
+          has_release_code_changes="$(
+            python3 .github/scripts/bump_version.py --base-ref "$base_ref" --head-ref HEAD --check-release-code-changes
+          )"
           base_version="$(
             git show "${base_ref}:pyproject.toml" | python3 -c 'import re,sys; m=re.search(r"(?m)^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"", sys.stdin.read()); print(".".join(m.groups()) if m else "");'
           )"
@@ -108,6 +111,15 @@ jobs:
           if [ -z "$base_version" ] || [ -z "$head_version" ]; then
             echo "::error::Unable to parse pyproject.toml version."
             exit 1
+          fi
+
+          if [ "$has_release_code_changes" != "true" ]; then
+            if [ "$head_version" != "$base_version" ]; then
+              echo "::error::No release code changes detected for $HEAD_BRANCH, so pyproject.toml must stay at $base_version; got $head_version."
+              exit 1
+            fi
+            echo "No release code changes detected; version remains $head_version."
+            exit 0
           fi
 
           expected_version="$(
