@@ -1,5 +1,5 @@
 """
-PO plugin: commits (git format-patch + git am).
+PO plugin: commits (git format-patch + git am -k).
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             ctx,
             patch_target,
             repo_name,
-            ["git", "am", patch_file],
+            ["git", "am", "-k", patch_file],
             cwd=patch_target,
             description=f"Apply commit patch {os.path.basename(patch_file)} to {repo_name}",
         )
