@@ -131,11 +131,13 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
         text=True,
         check=True,
     ).stdout.strip()
-    assert subject == "add commit file"
+    assert subject == "[PATCH] add commit file"
 
     record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
     record = json.loads(record_path.read_text(encoding="utf-8"))
     assert record.get("commits"), "Commit application should be recorded"
+    commands = record.get("commands", [])
+    assert any(item.get("cmd", "").startswith("git am -k ") for item in commands)
 
     revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
     assert revert.returncode == 0
