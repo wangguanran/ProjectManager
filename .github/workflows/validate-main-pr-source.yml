@@ -18,7 +18,7 @@ jobs:
     name: validate-main-source-branch
     runs-on: ubuntu-latest
     steps:
-      - name: Require feature or bug source branch
+      - name: Require feature, bug, or ci source branch
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -32,11 +32,11 @@ jobs:
           fi
 
           case "$HEAD_BRANCH" in
-            feature/*|bug/*)
+            feature/*|bug/*|ci/*)
               echo "Allowed source branch: $HEAD_BRANCH"
               ;;
             *)
-              echo "::error::PRs targeting main must come from feature/* or bug/* branches."
+              echo "::error::PRs targeting main must come from feature/*, bug/*, or ci/* branches."
               exit 1
               ;;
           esac
