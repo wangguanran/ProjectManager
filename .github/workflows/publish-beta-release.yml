@@ -3,7 +3,7 @@ name: Publish Beta Prerelease
 on:
   push:
     branches:
-      - master
+      - dev
   workflow_dispatch:
 
 permissions:

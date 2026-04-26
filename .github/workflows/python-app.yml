@@ -5,7 +5,7 @@ name: Python application
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main", "dev" ]
     paths:
       - '.github/workflows/python-app.yml'
       - '**.py'
@@ -16,7 +16,7 @@ on:
       - 'install.sh'
       - 'uninstall.sh'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main", "dev" ]
     paths:
       - '.github/workflows/python-app.yml'
       - '**.py'

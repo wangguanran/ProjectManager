@@ -5,7 +5,7 @@ permissions:
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main", "dev"]
     paths:
       - ".github/workflows/mypy.yml"
       - "**.py"
@@ -14,7 +14,7 @@ on:
       - "mypy_baseline.json"
       - "scripts/mypy_ci.py"
   pull_request:
-    branches: ["master"]
+    branches: ["main", "dev"]
     paths:
       - ".github/workflows/mypy.yml"
       - "**.py"
@@ -39,4 +39,3 @@ jobs:
       - name: Run mypy (ratcheted baseline)
         run: |
           make typecheck
-

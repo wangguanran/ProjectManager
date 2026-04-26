@@ -4,14 +4,14 @@ permissions:
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main", "dev" ]
     paths:
       - '**.py'
       - 'requirements.txt'
       - 'pyproject.toml'
       - '.pylintrc'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main", "dev" ]
     paths:
       - '**.py'
       - 'requirements.txt'
