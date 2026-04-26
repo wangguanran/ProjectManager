@@ -40,3 +40,38 @@ jobs:
               exit 1
               ;;
           esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Require rebased PR branch
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags --prune origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+          base_ref="refs/remotes/origin/${BASE_BRANCH}"
+
+          actual_head="$(git rev-parse HEAD)"
+          if [ "$actual_head" != "$HEAD_SHA" ]; then
+            echo "::error::Checked out $actual_head, expected PR head $HEAD_SHA."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$base_ref" HEAD; then
+            echo "::error::PR branch must be rebased on latest ${BASE_BRANCH}."
+            echo "::error::Run: git fetch origin && git rebase origin/${BASE_BRANCH}"
+            exit 1
+          fi
+
+          merge_count="$(git rev-list --merges --count "${base_ref}..HEAD")"
+          if [ "$merge_count" != "0" ]; then
+            echo "::error::PR branch contains merge commits after ${BASE_BRANCH}; rebase instead of merging ${BASE_BRANCH} into the branch."
+            git log --oneline --merges "${base_ref}..HEAD"
+            exit 1
+          fi
