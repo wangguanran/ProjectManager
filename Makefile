@@ -20,16 +20,16 @@ test-cov: ## Run tests with coverage
 
 lint: ## Run linting tools
 	pylint src/ crewai_agents/
-	black --check src/ tests/ crewai_agents/
-	isort --check-only src/ tests/ crewai_agents/
+	black --check src/ tests/ crewai_agents/ .github/scripts/
+	isort --check-only src/ tests/ crewai_agents/ .github/scripts/
 	# mypy src/
 
 typecheck: ## Run mypy (ratcheted baseline)
 	python scripts/mypy_ci.py
 
 format: ## Format code
-	black src/ tests/ crewai_agents/
-	isort src/ tests/ crewai_agents/
+	black src/ tests/ crewai_agents/ .github/scripts/
+	isort src/ tests/ crewai_agents/ .github/scripts/
 
 clean: ## Clean build artifacts
 	rm -rf build/
