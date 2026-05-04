@@ -11,6 +11,13 @@
 ### 安装
 
 ```bash
+# 一键安装/升级（推荐）
+# 未安装 projman 时安装最新稳定版；已安装时执行 projman update 升级。
+curl -fsSL https://raw.githubusercontent.com/wangguanran/ProjectManager/main/install-or-upgrade.sh | bash -s -- --user
+
+# 已 clone 仓库时也可以直接执行
+bash install-or-upgrade.sh --user
+
 # 从 PyPI 安装（推荐）
 pip install multi-project-manager
 

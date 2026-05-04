@@ -12,6 +12,17 @@ ProjectManager is a project management and patch (patch/override, PO) management
 
 ## Installation
 
+### One-shot Install or Upgrade
+
+```bash
+# Installs the latest stable release when projman is missing.
+# Runs `projman update` when projman is already installed.
+curl -fsSL https://raw.githubusercontent.com/wangguanran/ProjectManager/main/install-or-upgrade.sh | bash -s -- --user
+
+# From a cloned repository:
+bash install-or-upgrade.sh --user
+```
+
 ### Python Package
 
 **From PyPI**:
