@@ -248,7 +248,7 @@ class TestLogManager:
                 assert os.path.realpath(os.readlink(latest_link)) == os.path.realpath(file_handlers[0].baseFilename)
 
     def test_latest_log_symlink_failure_writes_to_stderr(self, capsys):
-        """LOG-002: symlink failure should not write to stdout (MCP-safe)."""
+        """LOG-002: symlink failure should not write to stdout."""
         with tempfile.TemporaryDirectory() as temp_dir:
             logs_dir = os.path.join(temp_dir, "logs")
             latest_link = os.path.join(temp_dir, "latest.log")
