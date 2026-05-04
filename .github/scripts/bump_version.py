@@ -24,6 +24,7 @@ RELEASE_CODE_FILES = {
     "get_latest_release.sh",
     "install.ps1",
     "Dockerfile",
+    "requirements.txt",
 }
 
 
