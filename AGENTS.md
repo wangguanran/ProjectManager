@@ -14,7 +14,8 @@ You are working in the `ProjectManager` repository - a Python CLI tool for multi
 8. For major releases, run the `Bump Major Version` workflow; it creates a `ci/*` PR that increments major and resets minor/patch to 0.
 9. After merging a stable release PR to `main`, create and push the matching `vX.Y.Z` tag from the updated `main` commit.
 10. Do not consider release work complete until the publish workflow and published artifacts are verified.
-11. Track work in the repo-root TODO note and delete completed TODO items:
+11. After any PR is merged, switch the local checkout back to `main`, sync it to the merged `origin/main`, and delete the local temporary work branch.
+12. Track work in the repo-root TODO note and delete completed TODO items:
    - `./TODO.md`
 
 ## Code Organization
