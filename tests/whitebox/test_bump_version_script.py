@@ -43,6 +43,7 @@ def test_release_code_path_detection() -> None:
     assert bump_version.has_release_code_paths(["src/utils.py"])
     assert bump_version.has_release_code_paths(["scripts/write_build_info.py"])
     assert bump_version.has_release_code_paths(["build.sh"])
+    assert bump_version.has_release_code_paths(["requirements.txt"])
 
 
 def test_non_code_path_detection() -> None:
