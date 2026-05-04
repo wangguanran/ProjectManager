@@ -72,7 +72,7 @@ def main() -> int:
     parser.add_argument(
         "--targets",
         nargs="*",
-        default=["src", "crewai_agents"],
+        default=["src"],
         help="Directories/packages passed to mypy.",
     )
     args = parser.parse_args()

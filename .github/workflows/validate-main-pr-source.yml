@@ -9,6 +9,21 @@ on:
       - reopened
       - synchronize
       - edited
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to validate.
+        required: true
+      head_branch:
+        description: PR source branch name.
+        required: true
+      base_branch:
+        description: PR target branch name.
+        required: true
+        default: main
+      head_sha:
+        description: Exact PR head SHA to validate.
+        required: true
 
 permissions:
   contents: read
@@ -16,14 +31,14 @@ permissions:
 jobs:
   validate-main-source-branch:
     name: validate-main-source-branch
-    if: github.event.pull_request.state == 'open'
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.state == 'open'
     runs-on: ubuntu-latest
     steps:
       - name: Require same-repo feature, bug, or ci source branch
         shell: bash
         env:
-          HEAD_BRANCH: ${{ github.head_ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.event.inputs.head_branch || github.ref_name }}
+          HEAD_REPO: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           BASE_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -44,14 +59,14 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: Require rebased PR branch
         shell: bash
         env:
-          BASE_BRANCH: ${{ github.base_ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_BRANCH: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.inputs.base_branch || 'main' }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event.inputs.head_sha || github.sha }}
         run: |
           set -euo pipefail
 
@@ -80,8 +95,8 @@ jobs:
       - name: Require expected release version bump
         shell: bash
         env:
-          BASE_BRANCH: ${{ github.base_ref }}
-          HEAD_BRANCH: ${{ github.head_ref }}
+          BASE_BRANCH: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.inputs.base_branch || 'main' }}
+          HEAD_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.event.inputs.head_branch || github.ref_name }}
         run: |
           set -euo pipefail
 

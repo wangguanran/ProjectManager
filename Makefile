@@ -19,17 +19,17 @@ test-cov: ## Run tests with coverage
 	pytest --cov=src --cov-report=html --cov-report=term-missing
 
 lint: ## Run linting tools
-	pylint src/ crewai_agents/
-	black --check src/ tests/ crewai_agents/ .github/scripts/
-	isort --check-only src/ tests/ crewai_agents/ .github/scripts/
+	pylint src/
+	black --check src/ tests/ .github/scripts/
+	isort --check-only src/ tests/ .github/scripts/
 	# mypy src/
 
 typecheck: ## Run mypy (ratcheted baseline)
 	python scripts/mypy_ci.py
 
 format: ## Format code
-	black src/ tests/ crewai_agents/ .github/scripts/
-	isort src/ tests/ crewai_agents/ .github/scripts/
+	black src/ tests/ .github/scripts/
+	isort src/ tests/ .github/scripts/
 
 clean: ## Clean build artifacts
 	rm -rf build/
