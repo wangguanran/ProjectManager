@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from configparser import ConfigParser
@@ -25,6 +26,10 @@ def test_pm_001_board_new_with_template(empty_workspace: Path) -> None:
     po_dir = board_dir / "po"
     assert ini_path.exists()
     assert po_dir.exists()
+    projects_json = board_dir / "projects.json"
+    data = json.loads(projects_json.read_text(encoding="utf-8"))
+    assert Path(data["board_path"]).is_absolute() is False
+    assert data["board_path"] == str(Path("projects") / "boardTest")
 
     run_cli(["project_new", "app1"], cwd=empty_workspace)
     po_list_result = run_cli(["po_list", "app1", "--short"], cwd=empty_workspace)
@@ -51,9 +56,15 @@ def test_pm_002_board_new_without_template(workspace_a: Path) -> None:
         shutil.rmtree(template_dir)
     result = run_cli(["board_new", "boardNoTpl"], cwd=workspace_a)
     assert result.returncode == 0
-    ini_path = workspace_a / "projects" / "boardNoTpl" / "boardNoTpl.ini"
+    board_dir = workspace_a / "projects" / "boardNoTpl"
+    ini_path = board_dir / "boardNoTpl.ini"
     assert ini_path.exists()
-    assert (workspace_a / "projects" / "boardNoTpl" / "po" / "po_template" / "patches").exists()
+    assert (board_dir / "po" / "po_template" / "patches").exists()
+
+    projects_json = board_dir / "projects.json"
+    data = json.loads(projects_json.read_text(encoding="utf-8"))
+    assert Path(data["board_path"]).is_absolute() is False
+    assert data["board_path"] == str(Path("projects") / "boardNoTpl")
 
 
 def test_pm_003_board_new_invalid_names(workspace_a: Path) -> None:
