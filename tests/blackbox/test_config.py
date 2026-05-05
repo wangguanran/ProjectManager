@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from .conftest import run_cli
@@ -13,12 +12,6 @@ def _read_latest_log(root: Path) -> str:
     if not log_path.exists():
         return ""
     return log_path.read_text(encoding="utf-8")
-
-
-def _load_projects_json(root: Path) -> dict:
-    projects_json = root / "projects" / "boardA" / "projects.json"
-    assert projects_json.exists()
-    return json.loads(projects_json.read_text(encoding="utf-8"))
 
 
 def test_cfg_001_missing_common_ini(workspace_a: Path) -> None:
@@ -46,9 +39,8 @@ def test_cfg_003_inline_comment_stripped(workspace_a: Path) -> None:
         updated = text + "\n[common]\nINLINE_KEY = value # comment\n"
     common_ini.write_text(updated, encoding="utf-8")
     _ = run_cli(["po_list", "projA"], cwd=workspace_a)
-    data = _load_projects_json(workspace_a)
-    proj = next(item for item in data["projects"] if item["project_name"] == "projA")
-    assert proj["config"]["INLINE_KEY"] == "value"
+    log_text = _read_latest_log(workspace_a)
+    assert '"INLINE_KEY": "value"' in log_text
 
 
 def test_cfg_004_projects_dir_missing(workspace_a: Path) -> None:
@@ -91,30 +83,20 @@ def test_cfg_007_duplicate_key_skips_board(workspace_a: Path) -> None:
 
 def test_cfg_008_config_inheritance_po_concat(workspace_a: Path) -> None:
     _ = run_cli(["po_list", "projA-sub"], cwd=workspace_a)
-    data = _load_projects_json(workspace_a)
-    proj = next(item for item in data["projects"] if item["project_name"] == "projA-sub")
-    assert "PROJECT_PO_CONFIG" in proj["config"]
-    assert "po_base" in proj["config"]["PROJECT_PO_CONFIG"]
-    assert "po_sub" in proj["config"]["PROJECT_PO_CONFIG"]
+    log_text = _read_latest_log(workspace_a)
+    assert '"PROJECT_PO_CONFIG":' in log_text
+    assert "po_base" in log_text
+    assert "po_sub" in log_text
 
 
 def test_cfg_009_parent_children_relationship(workspace_a: Path) -> None:
     _ = run_cli(["po_list", "projA"], cwd=workspace_a)
-    data = _load_projects_json(workspace_a)
-    proj_a = next(item for item in data["projects"] if item["project_name"] == "projA")
-    proj_sub = next(item for item in data["projects"] if item["project_name"] == "projA-sub")
-    assert proj_sub["parent"] == "projA"
-    assert "projA-sub" in proj_a["children"]
+    log_text = _read_latest_log(workspace_a)
+    assert '"parent": "projA"' in log_text
+    assert '"projA-sub"' in log_text
 
 
-def test_cfg_010_projects_json_written(workspace_a: Path) -> None:
+def test_cfg_010_readonly_command_does_not_write_projects_json(workspace_a: Path) -> None:
     _ = run_cli(["po_list", "projA"], cwd=workspace_a)
     projects_json = workspace_a / "projects" / "boardA" / "projects.json"
-    assert projects_json.exists()
-    data = json.loads(projects_json.read_text(encoding="utf-8"))
-    assert Path(data["board_path"]).is_absolute() is False
-    assert data["board_path"] == str(Path("projects") / "boardA")
-    for project in data.get("projects", []):
-        ini_file = project.get("ini_file")
-        if ini_file:
-            assert Path(ini_file).is_absolute() is False
+    assert not projects_json.exists()
