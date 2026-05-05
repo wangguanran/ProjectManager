@@ -65,6 +65,10 @@ def _env_with_blocked_unix_file_tools(tmp_path: Path):
     return {"PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
 
 
+def _remove_po_base_patch(root: Path) -> None:
+    (root / "projects" / "boardA" / "po" / "po_base" / "patches" / "tmp_file.patch").unlink()
+
+
 def test_po_001_parse_po_config() -> None:
     apply_pos, exclude_pos, exclude_files = parse_po_config("po1 po2 -po3 -po4[file1 file2]")
     assert apply_pos == ["po1", "po2"]
@@ -208,6 +212,7 @@ def test_po_006_patch_apply_fail(workspace_a: Path) -> None:
 
 def test_po_007_override_copy_success(workspace_a: Path, tmp_path: Path) -> None:
     (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_po_base_patch(workspace_a)
     target = workspace_a / "tmp_file.txt"
     if target.exists():
         target.unlink()
@@ -216,10 +221,14 @@ def test_po_007_override_copy_success(workspace_a: Path, tmp_path: Path) -> None
     )
     assert result.returncode == 0
     assert target.exists()
+    assert target.read_text(encoding="utf-8") == (
+        workspace_a / "projects" / "boardA" / "po" / "po_base" / "overrides" / "tmp_file.txt"
+    ).read_text(encoding="utf-8")
 
 
 def test_po_008_remove_file(workspace_a: Path, tmp_path: Path) -> None:
     (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_po_base_patch(workspace_a)
     remove_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "overrides"
     remove_target = workspace_a / "remove_me.txt"
     remove_target.write_text("bye", encoding="utf-8")
@@ -249,6 +258,7 @@ def test_po_009_exclude_files_skip(workspace_a: Path) -> None:
 
 def test_po_010_custom_copy(workspace_a: Path, tmp_path: Path) -> None:
     (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_po_base_patch(workspace_a)
     _remove_common_po_config(workspace_a)
     # Align with PROJECT_PO_DIR=custom by nesting under custom/custom
     nested = workspace_a / "projects" / "boardA" / "po" / "po_base" / "custom" / "custom"
