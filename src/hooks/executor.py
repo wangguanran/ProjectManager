@@ -54,7 +54,7 @@ def execute_hooks(
 
             log.debug("Hook '%s' executed successfully", hook_name)
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             error_msg = f"Error executing hook '{hook_name}': {str(e)}"
             log.error(error_msg)
 
@@ -88,7 +88,7 @@ def execute_single_hook(
             try:
                 hook_result = hook_info["func"](context)
                 return {"success": True, "hook_name": hook_name, "result": hook_result}
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 return {"success": False, "hook_name": hook_name, "error": str(e)}
 
     return {
