@@ -60,6 +60,16 @@ jobs:
         shell: bash
         run: bash build.sh
 
+      - name: Run Windows PO file operation tests on binary
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements.txt
+          python -m pip install --no-deps --no-build-isolation -e .
+          binary_path="$(python -c "from pathlib import Path; print(Path(Path('out/projman_binary_path.txt').read_text().strip()).resolve())")"
+          PROJMAN_TEST_COMMAND="$binary_path" python -m pytest tests/blackbox/test_patch_override.py -k "override_copy_success or remove_file or custom_copy"
+
       - name: Compute artifact metadata
         id: meta
         shell: bash

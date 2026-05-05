@@ -1,5 +1,5 @@
 """
-PO plugin: overrides (cp/rm into repo working tree).
+PO plugin: overrides into repo working trees.
 """
 
 from __future__ import annotations
@@ -61,6 +61,12 @@ def _apply_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         dest_abs = os.path.realpath(os.path.join(repo_root, dest_rel))
         if os.path.commonpath([repo_root_real, dest_abs]) != repo_root_real:
             raise ValueError(f"override target escapes repo_root: {dest_rel}")
+
+    def _remove_path(path: str) -> None:
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
 
     # 1) Group files by repo_root before copying/deleting
     repo_to_files: Dict[str, List[Tuple[str, str, bool]]] = {}  # (src_file, dest_rel, is_remove)
@@ -133,22 +139,20 @@ def _apply_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                         )
                         return False
 
-                    # Check if target file exists
-                    if os.path.exists(os.path.join(repo_root, dest_rel)):
-                        # Use execute_command for delete operation
-                        result = runtime.execute_command(
+                    dest_abs = os.path.join(repo_root, dest_rel)
+                    if os.path.exists(dest_abs) or os.path.islink(dest_abs):
+                        if ctx.dry_run:
+                            log.info("DRY-RUN: remove %s", dest_abs)
+                            continue
+                        _remove_path(dest_abs)
+                        runtime.record_command(
                             ctx,
                             repo_root_abs,
                             record_repo_name,
-                            ["rm", "-rf", dest_rel],
+                            ["python-file-remove", dest_rel],
                             cwd=repo_root,
                             description=f"Remove file {dest_rel}",
                         )
-
-                        if result.returncode != 0:
-                            log.error("Failed to remove file '%s': %s", dest_rel, summarize_output(result.stderr))
-                            return False
-
                         log.info("Removed file '%s' (repo_root=%s)", dest_rel, repo_root)
                     else:
                         log.debug("File '%s' does not exist, skipping removal", dest_rel)
@@ -158,27 +162,23 @@ def _apply_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             else:
                 # Perform copy operation
                 dest_dir = os.path.dirname(dest_rel)
+                dest_abs = os.path.join(repo_root, dest_rel)
                 if not ctx.dry_run and dest_dir:
                     os.makedirs(os.path.join(repo_root, dest_dir), exist_ok=True)
                 try:
-                    # Use execute_command for copy operation
-                    result = runtime.execute_command(
+                    if ctx.dry_run:
+                        log.info("DRY-RUN: copy %s -> %s", src_file, dest_abs)
+                        continue
+
+                    shutil.copy2(src_file, dest_abs)
+                    runtime.record_command(
                         ctx,
                         repo_root_abs,
                         record_repo_name,
-                        ["cp", "-rf", src_file, dest_rel],
+                        ["python-file-copy", src_file, dest_rel],
                         cwd=repo_root,
                         description="Copy override file",
                     )
-
-                    if result.returncode != 0:
-                        log.error(
-                            "Failed to copy override file '%s' to '%s': %s",
-                            src_file,
-                            dest_rel,
-                            summarize_output(result.stderr),
-                        )
-                        return False
 
                     log.info("Copied override file '%s' to '%s' (repo_root=%s)", src_file, dest_rel, repo_root)
                 except OSError as e:
@@ -299,7 +299,7 @@ def _revert_overrides(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 elif os.path.exists(dest_abs):
                     log.debug("File '%s' is not tracked by git, deleting directly", dest_rel)
                     if ctx.dry_run:
-                        log.info("DRY-RUN: cd %s && rm -rf %s", repo_root, dest_rel)
+                        log.info("DRY-RUN: remove %s", dest_abs)
                         continue
                     if os.path.isdir(dest_abs):
                         shutil.rmtree(dest_abs)

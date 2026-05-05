@@ -142,3 +142,19 @@ jobs:
             if tail:
                 print("::error::pytest output tail: " + tail)
         PY
+
+  windows_po_blackbox:
+    name: windows_po_blackbox
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install dependencies
+      run: |
+        python -m pip install -U pip
+        python -m pip install -r requirements.txt
+        python -m pip install --no-deps --no-build-isolation -e .
+    - name: Run Windows PO file operation tests
+      run: python -m pytest tests/blackbox/test_patch_override.py -k "override_copy_success or remove_file or custom_copy"

@@ -2308,11 +2308,12 @@ class TestPatchOverrideUpdate:
 
             commands = record.get("commands", [])
             assert any("git apply" in item.get("cmd", "") for item in commands)
-            assert any(item.get("cmd", "").startswith("cp -rf") for item in commands)
-            assert any(item.get("description") == "Copy override file" for item in commands)
+            copy_cmds = [item for item in commands if item.get("description") == "Copy override file"]
+            assert copy_cmds
+            assert all(not item.get("cmd", "").startswith("cp -rf") for item in copy_cmds)
 
-    def test_po_apply_uses_cp_command_instead_of_shutil(self):
-        """Test that po_apply uses cp command instead of shutil.copy2."""
+    def test_po_apply_uses_python_file_copy_for_overrides(self):
+        """Test that po_apply records Python file copy for overrides."""
         with tempfile.TemporaryDirectory() as tmpdir:
             projects_path = os.path.join(tmpdir, "projects")
             board_name = "test_board"
@@ -2362,10 +2363,10 @@ class TestPatchOverrideUpdate:
             record = json.loads(open(record_path, "r", encoding="utf-8").read())
 
             commands = record.get("commands", [])
-            cp_cmds = [item for item in commands if item.get("cmd", "").startswith("cp -rf")]
-            assert cp_cmds, "Should have at least one cp command"
-            assert any(item.get("description") == "Copy override file" for item in cp_cmds)
-            assert "test_override.txt" in cp_cmds[0]["cmd"]
+            copy_cmds = [item for item in commands if item.get("description") == "Copy override file"]
+            assert copy_cmds, "Should have at least one override copy record"
+            assert all(not item.get("cmd", "").startswith("cp -rf") for item in copy_cmds)
+            assert "test_override.txt" in copy_cmds[0]["cmd"]
 
     def test_po_apply_custom_operations_logged(self):
         """Test that custom operations are logged to applied record."""
