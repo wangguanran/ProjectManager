@@ -150,6 +150,18 @@ def _split_override_repo_prefix(rel_path: str, repo_names: List[str]) -> Tuple[s
     return "root", rel_path
 
 
+def _per_repo_plan_actions(
+    repo_entries: List[Tuple[str, str]],
+    actions_by_repo: Dict[str, List[Dict[str, Any]]],
+) -> List[Dict[str, Any]]:
+    per_repo_actions = [
+        {"repo": repo_name, "actions": actions_by_repo.get(repo_name, [])} for _repo_path, repo_name in repo_entries
+    ]
+    if not any(repo_name == "root" for _repo_path, repo_name in repo_entries) and actions_by_repo.get("root"):
+        per_repo_actions.append({"repo": "root", "actions": actions_by_repo["root"]})
+    return per_repo_actions
+
+
 def build_po_apply_plan(
     env: Dict[str, Any],
     projects_info: Dict[str, Any],
@@ -290,10 +302,7 @@ def build_po_apply_plan(
             for repo_path, repo_name in repo_entries
         ],
         "pos": po_items,
-        "per_repo_actions": [
-            {"repo": repo_name, "actions": actions_by_repo.get(repo_name, [])} for _repo_path, repo_name in repo_entries
-        ]
-        + ([{"repo": "root", "actions": actions_by_repo.get("root", [])}] if not repo_entries else []),
+        "per_repo_actions": _per_repo_plan_actions(repo_entries, actions_by_repo),
     }
 
 
@@ -450,10 +459,7 @@ def build_po_revert_plan(
             for repo_path, repo_name in repo_entries
         ],
         "pos": po_items,
-        "per_repo_actions": [
-            {"repo": repo_name, "actions": actions_by_repo.get(repo_name, [])} for _repo_path, repo_name in repo_entries
-        ]
-        + ([{"repo": "root", "actions": actions_by_repo.get("root", [])}] if not repo_entries else []),
+        "per_repo_actions": _per_repo_plan_actions(repo_entries, actions_by_repo),
     }
 
 
