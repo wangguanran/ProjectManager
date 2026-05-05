@@ -65,6 +65,27 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
                     project_info.get("board_path"),
                     project_info.get("ini_file"),
                 )
+
+        # In a freshly bootstrapped workspace, `board_new` creates only the
+        # board section. Allow that single-board state to host the first
+        # top-level project, while preserving the "unknown project" failure for
+        # workspaces that already contain real projects.
+        board_candidates = {}
+        real_projects = []
+        for existing_project, project_info in projects_info.items():
+            board_name = project_info.get("board_name")
+            if not board_name:
+                continue
+            board_candidates[board_name] = (
+                board_name,
+                project_info.get("board_path"),
+                project_info.get("ini_file"),
+            )
+            if existing_project != board_name:
+                real_projects.append(existing_project)
+        if len(board_candidates) == 1 and not real_projects:
+            return next(iter(board_candidates.values()))
+
         # No fallback strategy - if we can't determine board, return None
         return None, None, None
 
