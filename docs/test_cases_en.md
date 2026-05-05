@@ -135,7 +135,7 @@
 
 | Case ID | Module | Title | Preconditions | Steps | Expected Result | Priority | Type |
 |---|---|---|---|---|---|---|---|
-| PM-001 | Board | board_new succeeds with template | `projects/template/template.ini` and `projects/template/po` exist | 1. Run `python -m src board_new boardTest`.<br>2. Check `projects/boardTest/boardTest.ini` and `projects/boardTest/po`. | Board directory created; ini uses template with first section replaced; po dir copied. | P0 | Functional |
+| PM-001 | Board | board_new succeeds with template | `projects/template/template.ini` and `projects/template/po` exist | 1. Run `python -m src board_new boardTest`.<br>2. Check `projects/boardTest/boardTest.ini` and `projects/boardTest/po`. | Board directory created; ini uses template with first section replaced; `PROJECT_PO_CONFIG` matches copied `po/po_template`; po dir copied. | P0 | Functional |
 | PM-002 | Board | board_new succeeds without template | Temporarily rename `projects/template` | 1. Run `python -m src board_new boardNoTpl`.<br>2. Check ini and po structure.<br>3. Restore template dir. | Default ini content used; po dir contains `po_template/patches` and `overrides`. | P1 | Compatibility |
 | PM-003 | Board | board_new rejects empty/./.. | None | 1. Run `python -m src board_new ""` and `python -m src board_new .` and `python -m src board_new ..`. | Error for each; no directories created. | P1 | Negative |
 | PM-004 | Board | board_new rejects separators/absolute path | None | 1. Run `python -m src board_new a/b`.<br>2. Run `python -m src board_new /abs/path`. | Errors; no directories created. | P1 | Negative |

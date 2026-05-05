@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from configparser import ConfigParser
 from pathlib import Path
 
 from .conftest import REPO_ROOT, run_cli
@@ -15,12 +16,33 @@ def _copy_template(target: Path) -> None:
         shutil.copytree(src, target / "projects" / "template")
 
 
-def test_pm_001_board_new_with_template(workspace_a: Path) -> None:
-    _copy_template(workspace_a)
-    result = run_cli(["board_new", "boardTest"], cwd=workspace_a)
+def test_pm_001_board_new_with_template(empty_workspace: Path) -> None:
+    _copy_template(empty_workspace)
+    result = run_cli(["board_new", "boardTest"], cwd=empty_workspace)
     assert result.returncode == 0
-    assert (workspace_a / "projects" / "boardTest" / "boardTest.ini").exists()
-    assert (workspace_a / "projects" / "boardTest" / "po").exists()
+    board_dir = empty_workspace / "projects" / "boardTest"
+    ini_path = board_dir / "boardTest.ini"
+    po_dir = board_dir / "po"
+    assert ini_path.exists()
+    assert po_dir.exists()
+
+    run_cli(["project_new", "app1"], cwd=empty_workspace)
+    po_list_result = run_cli(["po_list", "app1", "--short"], cwd=empty_workspace)
+
+    config = ConfigParser()
+    config.optionxform = str
+    config.read(ini_path, encoding="utf-8")
+    po_config = config["boardTest"].get("PROJECT_PO_CONFIG", "").strip()
+    copied_po_names = sorted(path.name for path in po_dir.iterdir() if path.is_dir())
+
+    errors = []
+    if po_config != "po_template":
+        errors.append(f"PROJECT_PO_CONFIG should be po_template, got {po_config!r}")
+    if copied_po_names != ["po_template"]:
+        errors.append(f"copied PO dirs should be ['po_template'], got {copied_po_names!r}")
+    if "po_template" not in po_list_result.stdout:
+        errors.append(f"po_list app1 --short should show po_template, got: {po_list_result.stdout!r}")
+    assert not errors, "\n".join(errors)
 
 
 def test_pm_002_board_new_without_template(workspace_a: Path) -> None:

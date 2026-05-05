@@ -203,6 +203,12 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
     # Append the new project section
     new_lines.append(f"[{project_name}]\n")
     new_lines.append(f"PROJECT_NAME = {project_name_value}\n")
+    if not parent_config:
+        board_project_info = projects_info.get(board_name, {})
+        board_config = board_project_info.get("config", {})
+        board_po_config = str(board_config.get("PROJECT_PO_CONFIG", "") or "").strip()
+        if board_po_config:
+            new_lines.append(f"PROJECT_PO_CONFIG = {board_po_config}\n")
 
     # Write back preserving all original comments and formatting elsewhere
     try:
