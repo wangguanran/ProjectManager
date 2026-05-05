@@ -13,7 +13,8 @@ from src.plugins.patch_override import parse_po_config
 
 
 def _repo_head_sha(repo_path: str) -> str:
-    if not os.path.isdir(os.path.join(repo_path, ".git")):
+    git_marker = os.path.join(repo_path, ".git")
+    if not (os.path.isdir(git_marker) or os.path.isfile(git_marker)):
         return ""
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
