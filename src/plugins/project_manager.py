@@ -35,7 +35,11 @@ def project_new(env: Dict, projects_info: Dict, project_name: str) -> bool:
         if parent and parent in projects_info:
             config.update(get_inherited_config(projects_info, parent))
         if name in projects_info:
-            config.update(projects_info[name])
+            for key, value in projects_info[name].items():
+                if isinstance(config.get(key), dict) and isinstance(value, dict):
+                    config[key] = {**config[key], **value}
+                else:
+                    config[key] = value
         return config
 
     def find_board_for_project(project_name, projects_info):
