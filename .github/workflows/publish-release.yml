@@ -29,6 +29,14 @@ jobs:
         shell: bash
         run: bash build.sh
 
+      - name: Install package entry point
+        shell: bash
+        run: |
+          source venv/bin/activate
+          python -m pip install --no-deps --no-build-isolation -e .
+          command -v projman
+          projman --version
+
       - name: Run tests
         shell: bash
         run: bash -lc "source venv/bin/activate && pytest"
