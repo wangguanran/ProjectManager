@@ -1,6 +1,13 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _workflow_event_block(workflow: str, event_name: str) -> str:
+    match = re.search(rf"(?ms)^  {re.escape(event_name)}:\n(?P<body>.*?)(?=^  \w|\Z)", workflow)
+    assert match is not None, f"{event_name} event block missing"
+    return match.group("body")
 
 
 def test_auto_version_bump_dispatches_required_checks_after_bot_push() -> None:
@@ -13,6 +20,7 @@ def test_auto_version_bump_dispatches_required_checks_after_bot_push() -> None:
     assert "steps.commit.outputs.pushed == 'true'" in workflow
     assert 'gh workflow run "$workflow" --ref "$HEAD_BRANCH"' in workflow
     assert "python-app.yml pylint.yml mypy.yml" in workflow
+    assert "gh workflow run auto-merge-pr.yml" in workflow
     assert "gh workflow run validate-main-pr-source.yml" in workflow
     assert '-f "head_sha=$HEAD_SHA"' in workflow
 
@@ -27,3 +35,25 @@ def test_validate_main_source_branch_supports_dispatched_head_validation() -> No
     assert "github.event.inputs.head_branch" in workflow
     assert "github.event.inputs.base_branch" in workflow
     assert "github.event.inputs.head_sha" in workflow
+
+
+def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:
+    workflow = (ROOT / ".github/workflows/auto-merge-pr.yml").read_text(encoding="utf-8")
+
+    assert "pull_request_target:" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "pr_number:" in workflow
+    assert "head_sha:" in workflow
+    assert "pull-requests: write" in workflow
+    assert "contents: write" in workflow
+    assert "github.event.pull_request.draft == false" in workflow
+    assert 'gh pr merge "$PR_NUMBER" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"' in workflow
+
+
+def test_required_pr_ci_workflows_run_for_all_main_pull_requests() -> None:
+    for workflow_name in ("python-app.yml", "pylint.yml", "mypy.yml"):
+        workflow = (ROOT / f".github/workflows/{workflow_name}").read_text(encoding="utf-8")
+        pull_request_block = _workflow_event_block(workflow, "pull_request")
+
+        assert 'branches: [ "main" ]' in pull_request_block or 'branches: ["main"]' in pull_request_block
+        assert "paths:" not in pull_request_block

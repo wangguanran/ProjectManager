@@ -21,19 +21,6 @@ on:
       - 'README_EN.md'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - '.github/workflows/python-app.yml'
-      - '**.py'
-      - 'requirements.txt'
-      - 'pyproject.toml'
-      - 'build.sh'
-      - 'setup_venv.sh'
-      - 'install.sh'
-      - 'install-or-upgrade.sh'
-      - 'get_latest_release.sh'
-      - 'uninstall.sh'
-      - 'README.md'
-      - 'README_EN.md'
   workflow_dispatch:
 
 permissions:

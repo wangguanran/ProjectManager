@@ -125,3 +125,8 @@ jobs:
             -f "head_branch=$HEAD_BRANCH" \
             -f "base_branch=$BASE_BRANCH" \
             -f "head_sha=$HEAD_SHA"
+
+          gh workflow run auto-merge-pr.yml \
+            --ref "$BASE_BRANCH" \
+            -f "pr_number=$PR_NUMBER" \
+            -f "head_sha=$HEAD_SHA"

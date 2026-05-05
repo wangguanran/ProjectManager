@@ -12,11 +12,6 @@ on:
       - '.pylintrc'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - '**.py'
-      - 'requirements.txt'
-      - 'pyproject.toml'
-      - '.pylintrc'
   workflow_dispatch:
 
 jobs:
