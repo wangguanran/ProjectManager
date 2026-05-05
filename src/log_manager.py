@@ -118,8 +118,16 @@ class LogManager:
     @staticmethod
     def _init_logger():
         """Initialize logger."""
-        # Generate log file path
-        log_file_path = get_filename("Log_", ".log", LOG_PATH)
+        log_file_path = None
+        file_logger_handlers = ["console"]
+        try:
+            # Generate log file path.
+            log_file_path = get_filename("Log_", ".log", LOG_PATH)
+            file_logger_handlers.append("file")
+        except OSError as e:
+            # Early-exit commands such as --help and --version must still work
+            # when the current directory is read-only.
+            print(f"Warning: Failed to initialize file logging: {e}", file=sys.stderr)
 
         config = {
             "version": 1.0,
@@ -163,15 +171,19 @@ class LogManager:
                     "level": "DEBUG",
                 },
                 "FileLogger": {
-                    "handlers": ["console", "file"],
+                    "handlers": file_logger_handlers,
                     "level": "DEBUG",
                 },
             },
         }
+        if log_file_path is None:
+            config["handlers"].pop("file")
+            config["handlers"].pop("file_base_time")
         logging.config.dictConfig(config)
 
         # Create symbolic link to latest log file
-        LogManager._create_latest_log_link(log_file_path)
+        if log_file_path is not None:
+            LogManager._create_latest_log_link(log_file_path)
 
         return logging.getLogger("FileLogger")
 

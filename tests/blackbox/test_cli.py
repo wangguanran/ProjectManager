@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import toml
 
 from .conftest import run_cli
@@ -41,6 +42,21 @@ def test_cli_002b_help_no_projects_dir_no_warnings(empty_workspace: Path) -> Non
     result = run_cli(["--help"], cwd=empty_workspace)
     assert "common config not found" not in result.stderr.lower()
     assert "projects directory does not exist" not in result.stderr.lower()
+
+
+@pytest.mark.parametrize("arg", ["--help", "--version"])
+def test_cli_readonly_cwd_early_exit_does_not_crash(tmp_path: Path, arg: str) -> None:
+    readonly = tmp_path / "readonly"
+    readonly.mkdir()
+    readonly.chmod(0o555)
+
+    try:
+        result = run_cli([arg], cwd=readonly, check=False)
+    finally:
+        readonly.chmod(0o755)
+
+    assert result.returncode == 0
+    assert "Traceback" not in result.stderr
 
 
 def test_cli_002c_update_dry_run_no_projects_dir_no_warnings(empty_workspace: Path) -> None:
