@@ -128,18 +128,19 @@ def validate_hooks(hook_type: Union[str, "HookType"], platform: Optional[str] = 
 
             sig = inspect.signature(hook_func)
 
-            # Check if function accepts context parameter
-            if "context" in sig.parameters or len(sig.parameters) > 0:
-                validation_results["valid_hooks"].append(
-                    {"name": hook_name, "description": hook_info.get("description", "")}
-                )
-            else:
-                validation_results["invalid_hooks"].append(
-                    {"name": hook_name, "error": "Function must accept at least one parameter"}
-                )
-                validation_results["valid"] = False
+            # execute_hooks calls hook_func(context), so validate the same call shape.
+            sig.bind(object())
+            validation_results["valid_hooks"].append(
+                {"name": hook_name, "description": hook_info.get("description", "")}
+            )
 
-        except (RuntimeError, ValueError, TypeError, OSError) as e:
+        except TypeError as e:
+            validation_results["invalid_hooks"].append(
+                {"name": hook_name, "error": f"Function must be callable with one context argument: {str(e)}"}
+            )
+            validation_results["valid"] = False
+
+        except (RuntimeError, ValueError, OSError) as e:
             validation_results["invalid_hooks"].append({"name": hook_name, "error": f"Validation error: {str(e)}"})
             validation_results["valid"] = False
 
