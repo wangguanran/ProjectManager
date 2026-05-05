@@ -370,6 +370,19 @@ def build_po_revert_plan(
         # patches revert
         for rel_path in plugin_files.get("patches", {}).get("patch_files", []) or []:
             repo_name = _repo_name_from_po_relpath(rel_path)
+            repo_root = runtime.repo_map.get(repo_name)
+            record = runtime.load_applied_record(repo_root, po_name) if repo_root else None
+            patch_records = (record or {}).get("patches") or []
+            patch_record = next(
+                (
+                    item
+                    for item in patch_records
+                    if item.get("patch_file") == os.path.join("patches", rel_path) or item.get("patch_file") == rel_path
+                ),
+                None,
+            )
+            if patch_record and patch_record.get("status") == "already_applied":
+                continue
             actions_by_repo.setdefault(repo_name, []).append(
                 {
                     "type": "patch_reverse",
