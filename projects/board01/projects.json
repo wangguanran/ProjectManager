@@ -1,6 +1,6 @@
 {
   "board_name": "board01",
-  "board_path": "/home/wangguanran/ProjectManager/projects/board01",
+  "board_path": "projects/board01",
   "last_updated": "2026-02-03T00:21:52.458744",
   "projects": [
     {
@@ -16,7 +16,7 @@
         "board01-project02",
         "board01-error"
       ],
-      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+      "ini_file": "projects/board01/board01.ini"
     },
     {
       "project_name": "board01-project01",
@@ -32,7 +32,7 @@
         "board01-project01-test",
         "board01-project01-test01"
       ],
-      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+      "ini_file": "projects/board01/board01.ini"
     },
     {
       "project_name": "board01-project02",
@@ -44,7 +44,7 @@
       },
       "parent": "board01",
       "children": [],
-      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+      "ini_file": "projects/board01/board01.ini"
     },
     {
       "project_name": "board01-project01-test",
@@ -57,7 +57,7 @@
       },
       "parent": "board01-project01",
       "children": [],
-      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+      "ini_file": "projects/board01/board01.ini"
     },
     {
       "project_name": "board01-error",
@@ -69,7 +69,7 @@
       },
       "parent": "board01",
       "children": [],
-      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+      "ini_file": "projects/board01/board01.ini"
     },
     {
       "project_name": "board01-project01-test01",
@@ -82,7 +82,7 @@
       },
       "parent": "board01-project01",
       "children": [],
-      "ini_file": "/home/wangguanran/ProjectManager/projects/board01/board01.ini"
+      "ini_file": "projects/board01/board01.ini"
     }
   ]
 }
