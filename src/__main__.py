@@ -1099,7 +1099,7 @@ def main():
             if result is False:
                 log.error("Operation '%s' failed", operate)
                 sys.exit(1)
-            if operate in {"project_new", "project_del"}:
+            if operate in {"project_new", "project_del", "po_del"}:
                 try:
                     _load_all_projects(
                         env["projects_path"],

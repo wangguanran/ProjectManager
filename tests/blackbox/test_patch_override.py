@@ -426,6 +426,24 @@ def test_po_021_po_del_remove_config(workspace_a: Path) -> None:
     assert not (workspace_a / "projects" / "boardA" / "po" / "po_base").exists()
 
 
+def test_po_021b_po_del_refreshes_existing_projects_json(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    projects_path = workspace_a / "projects"
+    common_configs, _ = _load_common_config(str(projects_path))
+    _load_all_projects(str(projects_path), common_configs, write_projects_index=True)
+
+    projects_json = projects_path / "boardA" / "projects.json"
+    before = json.loads(projects_json.read_text(encoding="utf-8"))
+    assert any("po_base" in project["config"].get("PROJECT_PO_CONFIG", "").split() for project in before["projects"])
+
+    result = run_cli(["po_del", "projA", "po_base", "--force"], cwd=workspace_a)
+
+    assert result.returncode == 0
+    after = json.loads(projects_json.read_text(encoding="utf-8"))
+    for project in after["projects"]:
+        assert "po_base" not in project["config"].get("PROJECT_PO_CONFIG", "").split()
+
+
 def test_po_022_po_del_cancel(workspace_a: Path) -> None:
     run_cli(["po_new", "projA", "po_cancel", "--force"], cwd=workspace_a)
     result = run_cli(["po_del", "projA", "po_cancel"], cwd=workspace_a, check=False)
