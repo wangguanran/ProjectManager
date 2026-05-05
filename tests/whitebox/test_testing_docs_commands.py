@@ -12,7 +12,7 @@ PATH_REFERENCE_PATTERN = re.compile(
     r"(?<![\w/.-])(?:\./)?(?:git-hooks|hooks|tests)/[A-Za-z0-9_./:-]+|requirements-[A-Za-z0-9_.-]+\.txt"
 )
 BASH_BLOCK_PATTERN = re.compile(r"```bash\n(?P<body>.*?)\n```", re.DOTALL)
-HOOK_TOOL_PATTERN = re.compile(r"`(?P<path>(?:\./)?hooks/[A-Za-z0-9_./:-]+)`")
+HOOK_TOOL_PATTERN = re.compile(r"`(?P<path>(?:\./)?(?:git-hooks|hooks)/[A-Za-z0-9_./:-]+)`")
 
 
 def _command_reference_text(markdown: str) -> str:
@@ -25,6 +25,12 @@ def _referenced_repo_paths(markdown: str):
     for match in PATH_REFERENCE_PATTERN.finditer(_command_reference_text(markdown)):
         reference = match.group(0).split("::", 1)[0].rstrip("`.,;)")
         yield reference[2:] if reference.startswith("./") else reference
+
+
+def test_extracts_inline_git_hooks_references():
+    markdown = "**Tools**: Git hooks (`git-hooks/pre-commit`)"
+
+    assert list(_referenced_repo_paths(markdown)) == ["git-hooks/pre-commit"]
 
 
 def test_testing_docs_only_reference_existing_repo_paths():
