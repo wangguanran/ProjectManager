@@ -171,7 +171,8 @@ def doctor(env: Dict[str, Any], projects_info: Dict[str, Any], json: bool = Fals
                                 continue
                             if "=" in line and current_section:
                                 key = line.split("=", 1)[0].strip()
-                                if key in keys_in_section:
+                                normalized_key = key.upper()
+                                if normalized_key in keys_in_section:
                                     dup_keys.append(
                                         {
                                             "board": entry,
@@ -181,7 +182,7 @@ def doctor(env: Dict[str, Any], projects_info: Dict[str, Any], json: bool = Fals
                                         }
                                     )
                                 else:
-                                    keys_in_section.add(key)
+                                    keys_in_section.add(normalized_key)
                 except (OSError, UnicodeError) as err:
                     boards_multi_ini.setdefault(entry, []).append(f"{ini_files[0]} (unreadable: {err})")
         except OSError as err:
