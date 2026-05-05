@@ -33,11 +33,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.inputs.head_sha || github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          current_head="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
+          current_head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
           if [ "$current_head" != "$HEAD_SHA" ]; then
             echo "PR #$PR_NUMBER head moved from $HEAD_SHA to $current_head; skipping stale auto-merge request."
             exit 0
           fi
-          gh pr merge "$PR_NUMBER" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"

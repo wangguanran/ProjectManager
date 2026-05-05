@@ -47,7 +47,12 @@ def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:
     assert "pull-requests: write" in workflow
     assert "contents: write" in workflow
     assert "github.event.pull_request.draft == false" in workflow
-    assert 'gh pr merge "$PR_NUMBER" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"' in workflow
+    assert "REPO: ${{ github.repository }}" in workflow
+    assert 'gh pr view "$PR_NUMBER" --repo "$REPO"' in workflow
+    assert (
+        'gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"'
+        in workflow
+    )
 
 
 def test_required_pr_ci_workflows_run_for_all_main_pull_requests() -> None:
