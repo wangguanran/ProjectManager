@@ -18,6 +18,13 @@ You are working in the `ProjectManager` repository - a Python CLI tool for multi
 12. After any PR is merged, switch the local checkout back to `main`, sync it to the merged `origin/main`, and delete the local temporary work branch.
 13. Track work in the repo-root TODO note and delete completed TODO items:
    - `./TODO.md`
+14. For complex tasks, the main agent must not run commands or edit files directly; it only analyzes, decomposes, assigns/publishes tasks, guides subagents, and collects results.
+15. For a single issue-fix workflow, assign ownership as follows:
+   - Step 1 (problem analysis) and step 2 (plan/task decomposition): the main agent.
+   - Steps 3-5 (code/doc edit, formatting, testing/verification): one execution subagent.
+   - Step 6 (review): a second subagent that reports only actionable findings or `OK`.
+   - Step 7 (review feedback correction): handled through interaction between the first two subagents.
+   - Steps 8-10 (commit/push, CI check, result summary): one completion subagent.
 
 ## Code Organization
 
