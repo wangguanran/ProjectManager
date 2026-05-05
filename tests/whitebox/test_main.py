@@ -364,6 +364,53 @@ PROJECT_NAME=duplicate_key
         # Should skip projects with duplicate keys
         assert not result
 
+    def test_load_all_projects_duplicate_keys_case_insensitive(self):
+        """CFG-007: mixed-case duplicate keys in one section cause skip."""
+        projects_path = self._create_temp_projects_structure()
+
+        ini_content = """[test-project]
+PROJECT_NAME=test_project
+project_name=duplicate_key
+"""
+        self._create_board_structure(projects_path, "board01", ini_content)
+
+        result = self._load_projects_with_config(projects_path)
+
+        assert not result
+
+    def test_doctor_reports_duplicate_keys_case_insensitive(self, capsys):
+        """CFG-007: doctor reports mixed-case duplicate keys as duplicates."""
+        projects_path = self._create_temp_projects_structure()
+
+        ini_content = """[test-project]
+PROJECT_NAME=test_project
+project_name=duplicate_key
+"""
+        self._create_board_structure(projects_path, "board01", ini_content)
+
+        from src.plugins.doctor import doctor
+
+        ok = doctor(
+            {"root_path": self.temp_dir, "projects_path": projects_path},
+            {},
+            json=True,
+        )
+
+        output = capsys.readouterr().out
+        report = json.loads(output)
+        duplicate_check = next(check for check in report["checks"] if check["id"] == "ini_duplicate_keys")
+
+        assert ok is False
+        assert duplicate_check["severity"] == "error"
+        assert duplicate_check["data"]["duplicates"] == [
+            {
+                "board": "board01",
+                "ini": "board01.ini",
+                "section": "test-project",
+                "key": "project_name",
+            }
+        ]
+
     def test_load_all_projects_comments_stripping(self):
         """CFG-003: inline comment stripping (# / ;) for config values."""
         projects_path = self._create_temp_projects_structure()

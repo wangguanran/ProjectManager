@@ -146,7 +146,8 @@ def _load_all_projects(projects_path, common_configs):
                     continue
                 if "=" in line and current_project:
                     key = line.split("=", 1)[0].strip()
-                    if key in keys_in_project:
+                    normalized_key = key.upper()
+                    if normalized_key in keys_in_project:
                         log.error(
                             "Duplicate key '%s' found in project '%s' of file '%s'",
                             key,
@@ -155,7 +156,7 @@ def _load_all_projects(projects_path, common_configs):
                         )
                         has_duplicate = True
                     else:
-                        keys_in_project.add(key)
+                        keys_in_project.add(normalized_key)
         if has_duplicate:
             continue
         config = configupdater.ConfigUpdater()
