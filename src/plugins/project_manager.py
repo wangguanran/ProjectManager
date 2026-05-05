@@ -484,12 +484,19 @@ def board_new(env: Dict, projects_info: Dict, board_name: str) -> bool:
         with open(ini_path, "w", encoding="utf-8") as ini_file:
             ini_file.writelines(ini_lines)
 
+        root_path = env.get("root_path")
+        if not isinstance(root_path, str) or not root_path.strip():
+            if os.path.basename(projects_path) == "projects":
+                root_path = os.path.dirname(projects_path)
+            else:
+                root_path = projects_path
+        root_path = os.path.abspath(root_path)
         try:
-            board_path_rel = os.path.relpath(board_path, projects_path)
+            board_path_rel = os.path.relpath(board_path, root_path)
         except ValueError:
-            board_path_rel = board_name
+            board_path_rel = os.path.join(os.path.basename(projects_path), board_name)
         if os.path.isabs(board_path_rel):
-            board_path_rel = board_name
+            board_path_rel = os.path.join(os.path.basename(projects_path), board_name)
 
         board_metadata = {
             "board_name": board_name,
