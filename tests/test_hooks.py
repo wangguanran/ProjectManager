@@ -222,13 +222,16 @@ def test_validate_hooks_rejects_signatures_that_cannot_accept_context() -> None:
 
 def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> None:
     """HOOK-008: Platform failure falls back to global."""
+    calls: List[str] = []
 
     def plat(ctx: Dict[str, Any]) -> bool:
         _ = ctx
+        calls.append("plat")
         return False
 
     def glob(ctx: Dict[str, Any]) -> bool:
         _ = ctx
+        calls.append("glob")
         return True
 
     register_hook(HookType.BUILD, "plat", plat, platform="platA")
@@ -236,3 +239,32 @@ def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> 
 
     ok = execute_hooks_with_fallback(HookType.BUILD, context={}, platform="platA")
     assert ok is True
+    assert calls == ["glob", "plat"]
+
+
+def test_execute_hooks_with_fallback_runs_unexecuted_global_hooks_after_platform_failure() -> None:
+    """HOOK-008: Platform failure falls back to unexecuted global hooks."""
+    calls: List[str] = []
+
+    def global_before(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        calls.append("global_before")
+        return True
+
+    def platform_fail(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        calls.append("platform")
+        return False
+
+    def global_after(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        calls.append("global_after")
+        return True
+
+    register_hook(HookType.BUILD, "global_before", global_before, priority=HookPriority.HIGH)
+    register_hook(HookType.BUILD, "platform_fail", platform_fail, priority=HookPriority.NORMAL, platform="platA")
+    register_hook(HookType.BUILD, "global_after", global_after, priority=HookPriority.LOW)
+
+    ok = execute_hooks_with_fallback(HookType.BUILD, context={}, platform="platA")
+    assert ok is True
+    assert calls == ["global_before", "platform", "global_after"]
