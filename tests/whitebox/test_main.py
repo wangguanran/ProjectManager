@@ -430,6 +430,24 @@ PROJECT_NAME=project2
         assert result["project1"]["board_name"] == "board01"
         assert result["project2"]["board_name"] == "board02"
 
+    def test_load_all_projects_duplicate_project_across_boards_errors(self):
+        """Duplicate project sections across boards fail deterministically."""
+        projects_path = self._create_temp_projects_structure()
+
+        self._create_board_structure(projects_path, "board01", "[shared]\nPROJECT_NAME=board01_shared\n")
+        self._create_board_structure(projects_path, "board02", "[shared]\nPROJECT_NAME=board02_shared\n")
+
+        try:
+            self._load_projects_with_config(projects_path)
+        except ValueError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("Expected duplicate project definitions to raise ValueError")
+
+        assert "Duplicate project 'shared'" in message
+        assert os.path.join("board01", "board01.ini") in message
+        assert os.path.join("board02", "board02.ini") in message
+
     def test_load_all_projects_invalid_projects_handling(self):
         """Test handling of invalid projects."""
         projects_path = self._create_temp_projects_structure()
