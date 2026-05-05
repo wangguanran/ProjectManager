@@ -1,0 +1,111 @@
+name: Release After Main Merge
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-after-main-merge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag-and-dispatch-release:
+    name: tag-and-dispatch-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag from pyproject.toml
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_and_tag="$(
+            python3 - <<'PY'
+          import re
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          version = data["project"]["version"]
+          if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+              print("::error::Expected pyproject.toml project.version to be X.Y.Z", file=sys.stderr)
+              raise SystemExit(1)
+          tag = f"v{version}"
+          print(version)
+          print(tag)
+          PY
+          )"
+          version="$(printf '%s\n' "$version_and_tag" | sed -n '1p')"
+          tag="$(printf '%s\n' "$version_and_tag" | sed -n '2p')"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Check existing release tag or GitHub Release
+        id: existing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=release-exists" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Release ${TAG} already exists; stable release dispatch is a no-op."
+            exit 0
+          fi
+
+          if remote_tag_ref="$(git ls-remote --exit-code --tags origin "refs/tags/${TAG}" 2>/dev/null)"; then
+            remote_tag_sha="$(printf '%s\n' "$remote_tag_ref" | sed -n '1s/[[:space:]].*//p')"
+            if [ "$remote_tag_sha" != "$GITHUB_SHA" ]; then
+              echo "::error::Release tag ${TAG} points to ${remote_tag_sha}, expected ${GITHUB_SHA}; refusing to dispatch publish-release.yml."
+              exit 1
+            fi
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=tag-exists-release-missing" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release tag ${TAG} points to ${GITHUB_SHA}, but GitHub Release is missing; dispatching publish-release.yml."
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+
+      - name: Create matching stable release tag
+        if: steps.existing.outputs.skip != 'true' && steps.existing.outputs.tag_exists != 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/${TAG}"
+
+      - name: Dispatch tag-based release workflow
+        if: steps.existing.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if gh workflow run publish-release.yml --ref "$TAG"; then
+              echo "Dispatched publish-release.yml for ${TAG}."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Failed to dispatch publish-release.yml for ${TAG}."
+          exit 1
