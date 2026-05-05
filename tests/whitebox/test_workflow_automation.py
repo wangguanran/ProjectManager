@@ -98,14 +98,24 @@ def test_release_after_main_merge_runs_on_main_push_and_tags_pyproject_version()
     assert 'echo "tag=${tag}" >> "$GITHUB_OUTPUT"' in workflow
 
 
-def test_release_after_main_merge_skips_existing_tag_or_release_without_failure() -> None:
+def test_release_after_main_merge_skips_existing_release_without_failure() -> None:
     workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
 
     assert 'git ls-remote --exit-code --tags origin "refs/tags/${TAG}"' in workflow
     assert 'gh release view "$TAG"' in workflow
-    assert "skip_reason=tag-exists" in workflow
     assert "skip_reason=release-exists" in workflow
     assert "steps.existing.outputs.skip != 'true'" in workflow
+
+
+def test_release_after_main_merge_recovers_existing_tag_without_release() -> None:
+    workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
+
+    assert "tag_exists=true" in workflow
+    assert "skip_reason=tag-exists-release-missing" in workflow
+    assert 'if [ "$remote_tag_sha" != "$GITHUB_SHA" ]; then' in workflow
+    assert "refusing to dispatch publish-release.yml" in workflow
+    assert "steps.existing.outputs.tag_exists != 'true'" in workflow
+    assert "dispatching publish-release.yml." in workflow
 
 
 def test_release_after_main_merge_reuses_publish_release_validation() -> None:

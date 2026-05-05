@@ -55,25 +55,33 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=tag-exists" >> "$GITHUB_OUTPUT"
-            echo "Release tag ${TAG} already exists; stable release dispatch is a no-op."
-            exit 0
-          fi
-
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "skip_reason=release-exists" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
             echo "GitHub Release ${TAG} already exists; stable release dispatch is a no-op."
+            exit 0
+          fi
+
+          if remote_tag_ref="$(git ls-remote --exit-code --tags origin "refs/tags/${TAG}" 2>/dev/null)"; then
+            remote_tag_sha="$(printf '%s\n' "$remote_tag_ref" | sed -n '1s/[[:space:]].*//p')"
+            if [ "$remote_tag_sha" != "$GITHUB_SHA" ]; then
+              echo "::error::Release tag ${TAG} points to ${remote_tag_sha}, expected ${GITHUB_SHA}; refusing to dispatch publish-release.yml."
+              exit 1
+            fi
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=tag-exists-release-missing" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release tag ${TAG} points to ${GITHUB_SHA}, but GitHub Release is missing; dispatching publish-release.yml."
             exit 0
           fi
 
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "skip_reason=" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=false" >> "$GITHUB_OUTPUT"
 
       - name: Create matching stable release tag
-        if: steps.existing.outputs.skip != 'true'
+        if: steps.existing.outputs.skip != 'true' && steps.existing.outputs.tag_exists != 'true'
         shell: bash
         env:
           TAG: ${{ steps.version.outputs.tag }}
