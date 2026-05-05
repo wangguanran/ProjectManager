@@ -92,6 +92,17 @@ def test_hook_007_validate_hook_signature() -> None:
 
 
 def test_hook_008_fallback_to_global() -> None:
-    register_hook(HookType.BUILD, "platform_fail", lambda ctx: False, platform="platA")
-    register_hook(HookType.BUILD, "global_ok", lambda ctx: True)
+    calls = []
+
+    def global_ok(ctx):
+        calls.append("global")
+        return True
+
+    def platform_fail(ctx):
+        calls.append("platform")
+        return False
+
+    register_hook(HookType.BUILD, "platform_fail", platform_fail, platform="platA")
+    register_hook(HookType.BUILD, "global_ok", global_ok)
     assert execute_hooks_with_fallback(HookType.BUILD, {}, platform="platA") is True
+    assert calls == ["global", "platform"]

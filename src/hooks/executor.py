@@ -3,11 +3,63 @@ Hook execution engine for extensible project building operations.
 """
 
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from src.hooks.registry import HookType, get_hooks
 
 log = logging.getLogger(__name__)
+
+
+def _hook_key(hook_info: Dict[str, Any]) -> Tuple[Optional[str], str]:
+    """Return a stable key for a registered hook within one execution pass."""
+    return (hook_info.get("platform"), str(hook_info["name"]))
+
+
+def _execute_hook_list(
+    hook_type: Union[str, "HookType"],
+    hooks: List[Dict[str, Any]],
+    context: Dict[str, Any],
+    stop_on_error: bool = False,
+    executed_hooks: Optional[Set[Tuple[Optional[str], str]]] = None,
+) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Execute hook info dictionaries and return the first failing hook."""
+    if not hooks:
+        log.debug("No hooks found for type '%s'", hook_type)
+        return True, None
+
+    log.debug("Executing %d hooks for type '%s'", len(hooks), hook_type)
+
+    for hook_info in hooks:
+        hook_name = hook_info["name"]
+        hook_func = hook_info["func"]
+        hook_priority = hook_info["priority"]
+
+        if executed_hooks is not None:
+            executed_hooks.add(_hook_key(hook_info))
+
+        try:
+            log.debug("Executing hook '%s' with priority %d", hook_name, hook_priority.value)
+
+            # Execute the hook function
+            hook_result = hook_func(context)
+
+            # Check if hook returned False (failure)
+            if hook_result is False:
+                log.error("Hook '%s' returned False, indicating failure", hook_name)
+                return False, hook_info
+
+            log.debug("Hook '%s' executed successfully", hook_name)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            error_msg = f"Error executing hook '{hook_name}': {str(e)}"
+            log.error(error_msg)
+
+            if stop_on_error:
+                log.error("Stopping hook execution due to error in '%s'", hook_name)
+                return False, hook_info
+
+    log.debug("All hooks for type '%s' executed successfully", hook_type)
+    return True, None
 
 
 def execute_hooks(
@@ -29,41 +81,8 @@ def execute_hooks(
         True if all hooks executed successfully, False otherwise
     """
     hooks = get_hooks(hook_type, platform)
-
-    if not hooks:
-        log.debug("No hooks found for type '%s'", hook_type)
-        return True
-
-    log.debug("Executing %d hooks for type '%s'", len(hooks), hook_type)
-
-    for hook_info in hooks:
-        hook_name = hook_info["name"]
-        hook_func = hook_info["func"]
-        hook_priority = hook_info["priority"]
-
-        try:
-            log.debug("Executing hook '%s' with priority %d", hook_name, hook_priority.value)
-
-            # Execute the hook function
-            hook_result = hook_func(context)
-
-            # Check if hook returned False (failure)
-            if hook_result is False:
-                log.error("Hook '%s' returned False, indicating failure", hook_name)
-                return False
-
-            log.debug("Hook '%s' executed successfully", hook_name)
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            error_msg = f"Error executing hook '{hook_name}': {str(e)}"
-            log.error(error_msg)
-
-            if stop_on_error:
-                log.error("Stopping hook execution due to error in '%s'", hook_name)
-                return False
-
-    log.debug("All hooks for type '%s' executed successfully", hook_type)
-    return True
+    result, _failed_hook = _execute_hook_list(hook_type, hooks, context, stop_on_error)
+    return result
 
 
 def execute_single_hook(
@@ -183,12 +202,21 @@ def execute_hooks_with_fallback(
     if not platform:
         return execute_hooks(hook_type, context, None)
 
-    # Try platform-specific hooks first
-    platform_result = execute_hooks(hook_type, context, platform)
+    # Try merged global/platform hooks first
+    executed_hooks: Set[Tuple[Optional[str], str]] = set()
+    platform_hooks = get_hooks(hook_type, platform)
+    platform_result, failed_hook = _execute_hook_list(hook_type, platform_hooks, context, executed_hooks=executed_hooks)
 
     if platform_result or not fallback_to_global:
         return platform_result
 
+    if failed_hook is not None and failed_hook.get("platform") is None:
+        return False
+
     # Fall back to global hooks
     log.info("Platform hooks failed for %s, falling back to global hooks", platform)
-    return execute_hooks(hook_type, context, None)
+    fallback_hooks = [hook for hook in get_hooks(hook_type, None) if _hook_key(hook) not in executed_hooks]
+    fallback_result, _failed_hook = _execute_hook_list(
+        hook_type, fallback_hooks, context, executed_hooks=executed_hooks
+    )
+    return fallback_result

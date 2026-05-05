@@ -222,13 +222,16 @@ def test_validate_hooks_rejects_signatures_that_cannot_accept_context() -> None:
 
 def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> None:
     """HOOK-008: Platform failure falls back to global."""
+    calls: List[str] = []
 
     def plat(ctx: Dict[str, Any]) -> bool:
         _ = ctx
+        calls.append("plat")
         return False
 
     def glob(ctx: Dict[str, Any]) -> bool:
         _ = ctx
+        calls.append("glob")
         return True
 
     register_hook(HookType.BUILD, "plat", plat, platform="platA")
@@ -236,3 +239,4 @@ def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> 
 
     ok = execute_hooks_with_fallback(HookType.BUILD, context={}, platform="platA")
     assert ok is True
+    assert calls == ["glob", "plat"]
