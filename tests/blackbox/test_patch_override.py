@@ -46,6 +46,29 @@ def _remove_common_po_config(root: Path) -> None:
     common_ini.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _env_with_blocked_unix_file_tools(tmp_path: Path):
+    fake_bin = tmp_path / "fake-coreutils"
+    fake_bin.mkdir()
+
+    if os.name == "nt":
+        for name in ("cp", "rm"):
+            (fake_bin / f"{name}.bat").write_text(
+                "@echo off\r\necho blocked unix file tool 1>&2\r\nexit /b 127\r\n",
+                encoding="utf-8",
+            )
+    else:
+        for name in ("cp", "rm"):
+            tool = fake_bin / name
+            tool.write_text("#!/bin/sh\necho blocked unix file tool >&2\nexit 127\n", encoding="utf-8")
+            tool.chmod(0o755)
+
+    return {"PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+
+def _remove_po_base_patch(root: Path) -> None:
+    (root / "projects" / "boardA" / "po" / "po_base" / "patches" / "tmp_file.patch").unlink()
+
+
 def test_po_001_parse_po_config() -> None:
     apply_pos, exclude_pos, exclude_files = parse_po_config("po1 po2 -po3 -po4[file1 file2]")
     assert apply_pos == ["po1", "po2"]
@@ -187,23 +210,35 @@ def test_po_006_patch_apply_fail(workspace_a: Path) -> None:
     assert result.returncode != 0
 
 
-def test_po_007_override_copy_success(workspace_a: Path) -> None:
+def test_po_007_override_copy_success(workspace_a: Path, tmp_path: Path) -> None:
     (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_po_base_patch(workspace_a)
     target = workspace_a / "tmp_file.txt"
     if target.exists():
         target.unlink()
-    result = run_cli(["po_apply", "projA"], cwd=workspace_a, check=False)
+    result = run_cli(
+        ["po_apply", "projA"], cwd=workspace_a, env=_env_with_blocked_unix_file_tools(tmp_path), check=False
+    )
     assert result.returncode == 0
     assert target.exists()
+    assert target.read_text(encoding="utf-8") == (
+        workspace_a / "projects" / "boardA" / "po" / "po_base" / "overrides" / "tmp_file.txt"
+    ).read_text(encoding="utf-8")
 
 
-def test_po_008_remove_file(workspace_a: Path) -> None:
+def test_po_008_remove_file(workspace_a: Path, tmp_path: Path) -> None:
     (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_po_base_patch(workspace_a)
     remove_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "overrides"
     remove_target = workspace_a / "remove_me.txt"
     remove_target.write_text("bye", encoding="utf-8")
     (remove_dir / "remove_me.txt.remove").write_text("", encoding="utf-8")
-    result = run_cli(["po_apply", "projA", "--force"], cwd=workspace_a, check=False)
+    result = run_cli(
+        ["po_apply", "projA", "--force"],
+        cwd=workspace_a,
+        env=_env_with_blocked_unix_file_tools(tmp_path),
+        check=False,
+    )
     assert result.returncode == 0
     assert not remove_target.exists()
 
@@ -221,8 +256,9 @@ def test_po_009_exclude_files_skip(workspace_a: Path) -> None:
     assert remove_target.exists()
 
 
-def test_po_010_custom_copy(workspace_a: Path) -> None:
+def test_po_010_custom_copy(workspace_a: Path, tmp_path: Path) -> None:
     (workspace_a / "src" / "tmp_file.txt").write_text("line1", encoding="utf-8")
+    _remove_po_base_patch(workspace_a)
     _remove_common_po_config(workspace_a)
     # Align with PROJECT_PO_DIR=custom by nesting under custom/custom
     nested = workspace_a / "projects" / "boardA" / "po" / "po_base" / "custom" / "custom"
@@ -230,7 +266,7 @@ def test_po_010_custom_copy(workspace_a: Path) -> None:
     (nested / "data").mkdir(parents=True, exist_ok=True)
     (nested / "cfg" / "sample.ini").write_text("k=v", encoding="utf-8")
     (nested / "data" / "sample.dat").write_text("data", encoding="utf-8")
-    result = run_cli(["po_apply", "projA"], cwd=workspace_a)
+    result = run_cli(["po_apply", "projA"], cwd=workspace_a, env=_env_with_blocked_unix_file_tools(tmp_path))
     assert result.returncode == 0
     assert (workspace_a / "out" / "cfg" / "sample.ini").exists()
     assert (workspace_a / "out" / "data" / "sample.dat").exists()

@@ -154,6 +154,35 @@ class PoPluginRuntime:
         record["commands"].append(formatted)
         return result
 
+    def record_command(
+        self,
+        ctx: PoPluginContext,
+        repo_root: str,
+        repo_name: str,
+        command,
+        *,
+        cwd: str | None = None,
+        description: str = "",
+        shell: bool = False,
+        returncode: int = 0,
+        stdout: str = "",
+        stderr: str = "",
+    ) -> None:
+        """Record a non-subprocess operation in the applied record."""
+        formatted = self._format_command(command, cwd=cwd, description=description, shell=shell)
+        formatted["returncode"] = int(returncode)
+        record = self.get_repo_record(ctx, repo_root, repo_name)
+        record["commands"].append(formatted)
+        log_cmd_event(
+            log,
+            command=command,
+            cwd=cwd,
+            description=description,
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
     def finalize_records(self, ctx: PoPluginContext) -> None:
         for repo_root, record in ctx.applied_records.items():
             record_path = self.applied_record_path(repo_root, ctx.po_name)

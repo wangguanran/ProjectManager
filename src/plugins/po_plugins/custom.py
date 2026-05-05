@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import glob
 import os
+import shutil
 from typing import Any, Dict, List
 
-from src.log_manager import log, summarize_output
+from src.log_manager import log
 
 from .registry import APPLY_PHASE_PER_PO, REVERT_PHASE_PER_PO, register_simple_plugin
 from .runtime import PoPluginContext, PoPluginRuntime
@@ -29,7 +30,7 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         """Execute a single file copy operation with wildcard and directory support.
 
         - Expands *, ?, [], and ** patterns via glob (no shell).
-        - Uses `cp -rf` with shell=False to handle file/dir copies safely.
+        - Uses Python file operations so PO copy rules work without Unix cp.
         """
         log.debug("Executing file copy: source='%s', target='%s'", source_pattern, target_path)
 
@@ -51,6 +52,17 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 except ValueError:
                     continue
             return False
+
+        def _copy_path(src_path: str, dest_path: str) -> None:
+            if os.path.isdir(src_path) and not os.path.islink(src_path):
+                if os.path.exists(dest_path) or os.path.islink(dest_path):
+                    if os.path.isdir(dest_path) and not os.path.islink(dest_path):
+                        shutil.rmtree(dest_path)
+                    else:
+                        os.remove(dest_path)
+                shutil.copytree(src_path, dest_path, symlinks=True)
+            else:
+                shutil.copy2(src_path, dest_path)
 
         abs_pattern = os.path.join(section_custom_dir, source_pattern)
         record_repo = runtime.resolve_repo_for_target_path(target_path)
@@ -101,9 +113,9 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 base_dir = section_custom_dir
 
             # Determine if target should be treated as a directory.
-            target_is_dir = target_path.endswith(os.sep) or os.path.isdir(target_path) or len(matches) > 1
+            target_is_dir = target_path.endswith(("/", "\\")) or os.path.isdir(target_path) or len(matches) > 1
             if target_is_dir:
-                abs_target_dir = _resolve_target_abs(target_path.rstrip(os.sep))
+                abs_target_dir = _resolve_target_abs(target_path.rstrip("/\\"))
                 if not _is_under_allowed_roots(abs_target_dir):
                     if not ctx.force:
                         log.error(
@@ -117,7 +129,7 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     )
 
             if not ctx.dry_run and target_is_dir and not os.path.exists(target_path):
-                os.makedirs(target_path.rstrip(os.sep), exist_ok=True)
+                os.makedirs(target_path.rstrip("/\\"), exist_ok=True)
 
             for src in matches:
                 if target_is_dir:
@@ -143,17 +155,19 @@ def _apply_custom(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 if not ctx.dry_run and dest_dir:
                     os.makedirs(dest_dir, exist_ok=True)
 
-                result = runtime.execute_command(
+                if ctx.dry_run:
+                    log.info("DRY-RUN: copy %s -> %s", src, dest)
+                    continue
+
+                _copy_path(src, dest)
+                runtime.record_command(
                     ctx,
                     record_repo_root,
                     record_repo_name,
-                    ["cp", "-rf", src, dest],
+                    ["python-file-copy", src, dest],
                     description="Copy custom file",
                     shell=False,
                 )
-                if result.returncode != 0:
-                    log.error("Failed to copy '%s' to '%s': %s", src, dest, summarize_output(result.stderr))
-                    return False
 
             return True
         except OSError as e:

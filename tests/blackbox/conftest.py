@@ -28,6 +28,9 @@ def _run(
 def run_cli(
     args: List[str], cwd: Path, env: Dict[str, str] | None = None, check: bool = True
 ) -> subprocess.CompletedProcess:
+    command_override = (env or {}).get("PROJMAN_TEST_COMMAND") or os.environ.get("PROJMAN_TEST_COMMAND")
+    if command_override:
+        return _run([command_override, *args], cwd=cwd, env=env, check=check)
     return _run([os.environ.get("PYTHON", os.sys.executable), "-m", "src", *args], cwd=cwd, env=env, check=check)
 
 
