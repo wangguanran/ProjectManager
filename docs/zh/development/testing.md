@@ -63,7 +63,7 @@ tests/
 ├── test_main.py              # 主应用程序测试
 ├── test_log_manager.py       # 日志功能测试
 ├── test_profiler.py          # 性能分析功能测试
-├── test_utils.py             # 工具函数测试
+├── whitebox/test_utils.py    # 工具函数测试
 ├── projects/                 # 测试项目配置
 │   ├── board01/
 │   │   ├── board01.ini
@@ -105,7 +105,7 @@ tests/
 pytest
 
 # 运行特定测试文件
-pytest tests/test_utils.py
+pytest tests/whitebox/test_utils.py
 
 # 运行详细输出
 pytest -v
@@ -224,7 +224,7 @@ def sample_project_config():
 
 **提交前的自动化测试**
 
-**工具**: Git 钩子 (`hooks/pre-commit`)
+**工具**: Git 钩子 (`git-hooks/pre-commit`)
 
 **程序**:
 - 运行单元测试
@@ -235,14 +235,14 @@ def sample_project_config():
 **配置**:
 ```bash
 # 安装钩子
-./hooks/install_hooks.sh
+./git-hooks/install_hooks.sh
 ```
 
 ### 2. 预推送测试
 
 **推送前的综合测试**
 
-**工具**: Git 钩子 (`hooks/pre-push`)
+**工具**: 本地 pytest 命令和 GitHub Actions
 
 **程序**:
 - 完整测试套件执行
@@ -428,7 +428,7 @@ pytest tests/ -m "performance"
 pytest -v -s
 
 # 运行单个测试
-pytest tests/test_utils.py::test_specific_function
+pytest tests/whitebox/test_utils.py::TestPathFromRoot::test_path_from_root_single_arg
 
 # 运行 pdb
 pytest --pdb
@@ -442,7 +442,7 @@ pytest --pdb
 ./setup_venv.sh
 
 # 安装测试依赖
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 
 # 验证测试环境
 pytest --collect-only
