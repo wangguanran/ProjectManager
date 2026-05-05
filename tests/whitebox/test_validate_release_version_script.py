@@ -20,6 +20,7 @@ def test_initial_bug_pr_release_code_commit_can_wait_for_auto_bump() -> None:
         head_branch="bug/fix-release-code",
         has_release_code_changes=True,
         event_name="pull_request",
+        event_action="opened",
     )
 
     assert result.valid
@@ -33,10 +34,55 @@ def test_initial_feature_pr_release_code_commit_can_wait_for_auto_bump() -> None
         head_branch="feature/new-release-code",
         has_release_code_changes=True,
         event_name="pull_request",
+        event_action="synchronize",
     )
 
     assert result.valid
     assert result.pending_auto_bump
+
+
+def test_no_release_code_pr_without_version_change_passes() -> None:
+    result = validate_release_version.validate_release_version(
+        base_version="0.2.17",
+        head_version="0.2.17",
+        head_branch="bug/docs-only",
+        has_release_code_changes=False,
+        event_name="pull_request",
+        event_action="opened",
+    )
+
+    assert result.valid
+    assert not result.pending_auto_bump
+    assert "No release code changes detected" in result.message
+
+
+def test_no_release_code_pr_with_version_change_fails() -> None:
+    result = validate_release_version.validate_release_version(
+        base_version="0.2.17",
+        head_version="0.2.18",
+        head_branch="bug/docs-only",
+        has_release_code_changes=False,
+        event_name="pull_request",
+        event_action="opened",
+    )
+
+    assert not result.valid
+    assert "must stay at 0.2.17" in result.message
+
+
+def test_edited_bug_pr_release_code_commit_cannot_wait_for_auto_bump() -> None:
+    result = validate_release_version.validate_release_version(
+        base_version="0.2.17",
+        head_version="0.2.17",
+        head_branch="bug/fix-release-code",
+        has_release_code_changes=True,
+        event_name="pull_request",
+        event_action="edited",
+    )
+
+    assert not result.valid
+    assert not result.pending_auto_bump
+    assert "Expected pyproject.toml version 0.2.18" in result.message
 
 
 def test_dispatched_bug_pr_head_requires_auto_bumped_patch_version() -> None:
@@ -46,6 +92,7 @@ def test_dispatched_bug_pr_head_requires_auto_bumped_patch_version() -> None:
         head_branch="bug/fix-release-code",
         has_release_code_changes=True,
         event_name="workflow_dispatch",
+        event_action="",
     )
 
     assert result.valid
@@ -59,6 +106,7 @@ def test_dispatched_feature_pr_head_requires_auto_bumped_minor_version() -> None
         head_branch="feature/new-release-code",
         has_release_code_changes=True,
         event_name="workflow_dispatch",
+        event_action="",
     )
 
     assert result.valid
@@ -72,6 +120,7 @@ def test_dispatched_release_code_head_without_bump_fails() -> None:
         head_branch="bug/fix-release-code",
         has_release_code_changes=True,
         event_name="workflow_dispatch",
+        event_action="",
     )
 
     assert not result.valid
@@ -85,6 +134,7 @@ def test_release_code_head_with_wrong_bump_fails() -> None:
         head_branch="bug/fix-release-code",
         has_release_code_changes=True,
         event_name="workflow_dispatch",
+        event_action="",
     )
 
     assert not result.valid

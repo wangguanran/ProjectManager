@@ -16,6 +16,8 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import bump_version as version_helper  # isort: skip
 
+AUTO_BUMP_PR_ACTIONS = frozenset({"opened", "reopened", "synchronize", "ready_for_review"})
+
 
 @dataclass(frozen=True)
 class ValidationResult:
@@ -53,6 +55,7 @@ def validate_release_version(
     head_branch: str,
     has_release_code_changes: bool,
     event_name: str,
+    event_action: str,
 ) -> ValidationResult:
     """Validate the version relationship between the base and PR head."""
     bump_part = bump_part_for_branch(head_branch)
@@ -78,7 +81,7 @@ def validate_release_version(
             expected_version=expected_version,
         )
 
-    if event_name == "pull_request" and head_version == base_version:
+    if event_name == "pull_request" and event_action in AUTO_BUMP_PR_ACTIONS and head_version == base_version:
         return ValidationResult(
             True,
             (
@@ -123,6 +126,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("GITHUB_EVENT_NAME", ""),
         help="GitHub event name, for example pull_request or workflow_dispatch",
     )
+    parser.add_argument(
+        "--event-action",
+        default=os.environ.get("GITHUB_EVENT_ACTION", ""),
+        help="GitHub pull_request action, for example opened, synchronize, reopened, or edited",
+    )
     parser.add_argument("--file", default="pyproject.toml", help="Path to the working tree pyproject.toml")
     return parser
 
@@ -140,6 +148,7 @@ def main() -> int:
         head_branch=args.head_branch,
         has_release_code_changes=has_release_changes,
         event_name=args.event_name,
+        event_action=args.event_action,
     )
     if result.valid:
         print(result.message)

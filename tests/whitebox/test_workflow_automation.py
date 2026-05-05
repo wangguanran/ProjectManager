@@ -14,12 +14,18 @@ def test_auto_version_bump_dispatches_required_checks_after_bot_push() -> None:
     workflow = (ROOT / ".github/workflows/auto-version-bump.yml").read_text(encoding="utf-8")
 
     assert "actions: write" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "head_branch:" in workflow
+    assert "base_branch:" in workflow
+    assert "head_sha:" in workflow
     assert "id: commit" in workflow
     assert "pushed=true" in workflow
+    assert "Validate dispatched final auto-version context" in workflow
     assert "Dispatch PR checks for bumped commit" in workflow
     assert "steps.commit.outputs.pushed == 'true'" in workflow
     assert 'gh workflow run "$workflow" --ref "$HEAD_BRANCH"' in workflow
     assert "python-app.yml pylint.yml mypy.yml" in workflow
+    assert "gh workflow run auto-version-bump.yml" in workflow
     assert "gh workflow run auto-merge-pr.yml" in workflow
     assert "gh workflow run validate-main-pr-source.yml" in workflow
     assert '-f "head_sha=$HEAD_SHA"' in workflow
@@ -41,9 +47,11 @@ def test_validate_main_source_branch_uses_tested_release_version_gate() -> None:
     workflow = (ROOT / ".github/workflows/validate-main-pr-source.yml").read_text(encoding="utf-8")
 
     assert "EVENT_NAME: ${{ github.event_name }}" in workflow
+    assert "EVENT_ACTION: ${{ github.event.action || '' }}" in workflow
     assert "python3 .github/scripts/validate_release_version.py" in workflow
     assert '--head-branch "$HEAD_BRANCH"' in workflow
     assert '--event-name "$EVENT_NAME"' in workflow
+    assert '--event-action "$EVENT_ACTION"' in workflow
 
 
 def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:

@@ -9,6 +9,21 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number for the final auto-version-bump check.
+        required: true
+      head_branch:
+        description: PR source branch name.
+        required: true
+      base_branch:
+        description: PR target branch name.
+        required: true
+        default: main
+      head_sha:
+        description: Exact PR head SHA to validate without re-bumping.
+        required: true
 
 permissions:
   actions: write
@@ -16,16 +31,37 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: auto-version-bump-${{ github.event.pull_request.number }}
+  group: auto-version-bump-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   auto-version-bump:
     name: auto-version-bump
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          ref: ${{ github.event.inputs.head_sha }}
+          fetch-depth: 1
+
+      - name: Validate dispatched final auto-version context
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.inputs.head_sha }}
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [ "$actual_head" != "$HEAD_SHA" ]; then
+            echo "::error::Checked out $actual_head, expected final PR head $HEAD_SHA."
+            exit 1
+          fi
+          echo "Auto-version-bump final context validated for $HEAD_SHA."
+
       - name: Resolve bump part from PR branch
+        if: github.event_name == 'pull_request'
         id: bump
         shell: bash
         env:
@@ -46,13 +82,13 @@ jobs:
           esac
 
       - uses: actions/checkout@v4
-        if: steps.bump.outputs.skip != 'true'
+        if: github.event_name == 'pull_request' && steps.bump.outputs.skip != 'true'
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Detect release code changes
-        if: steps.bump.outputs.skip != 'true'
+        if: github.event_name == 'pull_request' && steps.bump.outputs.skip != 'true'
         id: changes
         shell: bash
         run: |
@@ -61,7 +97,7 @@ jobs:
           python3 .github/scripts/bump_version.py --base-ref origin/main --head-ref HEAD --check-release-code-changes
 
       - name: Sync version from latest main
-        if: steps.bump.outputs.skip != 'true'
+        if: github.event_name == 'pull_request' && steps.bump.outputs.skip != 'true'
         id: version
         shell: bash
         env:
@@ -79,7 +115,7 @@ jobs:
 
       - name: Commit version sync
         id: commit
-        if: steps.bump.outputs.skip != 'true'
+        if: github.event_name == 'pull_request' && steps.bump.outputs.skip != 'true'
         shell: bash
         env:
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -102,7 +138,7 @@ jobs:
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch PR checks for bumped commit
-        if: steps.commit.outputs.pushed == 'true'
+        if: github.event_name == 'pull_request' && steps.commit.outputs.pushed == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -120,6 +156,13 @@ jobs:
           done
 
           gh workflow run validate-main-pr-source.yml \
+            --ref "$HEAD_BRANCH" \
+            -f "pr_number=$PR_NUMBER" \
+            -f "head_branch=$HEAD_BRANCH" \
+            -f "base_branch=$BASE_BRANCH" \
+            -f "head_sha=$HEAD_SHA"
+
+          gh workflow run auto-version-bump.yml \
             --ref "$HEAD_BRANCH" \
             -f "pr_number=$PR_NUMBER" \
             -f "head_branch=$HEAD_BRANCH" \
