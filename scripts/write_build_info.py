@@ -4,6 +4,7 @@ Generate src/_build_info.py with the current git commit hash.
 
 This is intended for build pipelines (PyInstaller / wheel) so `--version` can
 still show a commit hash even when `.git` is not shipped with the artifact.
+The generated module stays limited to build metadata constants.
 """
 
 from __future__ import annotations
