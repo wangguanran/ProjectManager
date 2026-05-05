@@ -117,7 +117,7 @@ def _load_all_projects(projects_path, common_configs):
 
     # Use the passed common_configs parameter
 
-    for item in os.listdir(projects_path):
+    for item in sorted(os.listdir(projects_path)):
         board_name = item
         board_path = os.path.join(projects_path, board_name)
         if not os.path.isdir(board_path) or board_name in exclude_dirs:
@@ -161,6 +161,13 @@ def _load_all_projects(projects_path, common_configs):
         config = configupdater.ConfigUpdater()
         config.read(ini_file, encoding="utf-8")
         for project_name in config.sections():
+            if project_name in projects_info:
+                previous = projects_info[project_name]
+                msg = (
+                    f"Duplicate project '{project_name}' found across boards: " f"{previous['ini_file']} and {ini_file}"
+                )
+                log.error(msg)
+                raise ValueError(msg)
             config_dict = {k.upper(): _strip_comment(v.value) for k, v in config[project_name].items()}
             raw_configs[project_name] = config_dict
             projects_info[project_name] = {
