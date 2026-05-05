@@ -63,7 +63,7 @@ tests/
 ├── test_main.py              # Main application tests
 ├── test_log_manager.py       # Logging functionality tests
 ├── test_profiler.py          # Profiling functionality tests
-├── test_utils.py             # Utility function tests
+├── whitebox/test_utils.py    # Utility function tests
 ├── projects/                 # Test project configurations
 │   ├── board01/
 │   │   ├── board01.ini
@@ -105,7 +105,7 @@ tests/
 pytest
 
 # Run specific test file
-pytest tests/test_utils.py
+pytest tests/whitebox/test_utils.py
 
 # Run with verbose output
 pytest -v
@@ -224,7 +224,7 @@ def sample_project_config():
 
 **Automated Testing Before Commits**
 
-**Tools**: Git hooks (`hooks/pre-commit`)
+**Tools**: Git hooks (`git-hooks/pre-commit`)
 
 **Procedures**:
 - Run unit tests
@@ -235,14 +235,14 @@ def sample_project_config():
 **Configuration**:
 ```bash
 # Install hooks
-./hooks/install_hooks.sh
+./git-hooks/install_hooks.sh
 ```
 
 ### 2. Pre-push Testing
 
 **Comprehensive Testing Before Push**
 
-**Tools**: Git hooks (`hooks/pre-push`)
+**Tools**: Local pytest commands and GitHub Actions
 
 **Procedures**:
 - Full test suite execution
@@ -428,7 +428,7 @@ pytest tests/ -m "performance"
 pytest -v -s
 
 # Run single test
-pytest tests/test_utils.py::test_specific_function
+pytest tests/whitebox/test_utils.py::TestPathFromRoot::test_path_from_root_single_arg
 
 # Run with pdb
 pytest --pdb
@@ -442,7 +442,7 @@ pytest --pdb
 ./setup_venv.sh
 
 # Install test dependencies
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 
 # Verify test environment
 pytest --collect-only
@@ -498,4 +498,4 @@ pytest --collect-only
 - Mutation testing
 - Property-based testing
 - Contract testing
-- Chaos engineering 
+- Chaos engineering
