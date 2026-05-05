@@ -97,68 +97,13 @@ jobs:
         env:
           BASE_BRANCH: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.inputs.base_branch || 'main' }}
           HEAD_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.event.inputs.head_branch || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
-          case "$HEAD_BRANCH" in
-            bug/*)
-              bump_part="patch"
-              ;;
-            feature/*)
-              bump_part="minor"
-              ;;
-            *)
-              echo "No release version bump required for branch: $HEAD_BRANCH"
-              exit 0
-              ;;
-          esac
-
           base_ref="refs/remotes/origin/${BASE_BRANCH}"
-          has_release_code_changes="$(
-            python3 .github/scripts/bump_version.py --base-ref "$base_ref" --head-ref HEAD --check-release-code-changes
-          )"
-          base_version="$(
-            git show "${base_ref}:pyproject.toml" | python3 -c 'import re,sys; m=re.search(r"(?m)^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"", sys.stdin.read()); print(".".join(m.groups()) if m else "");'
-          )"
-          head_version="$(
-            python3 -c 'import re,pathlib; m=re.search(r"(?m)^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"", pathlib.Path("pyproject.toml").read_text(encoding="utf-8")); print(".".join(m.groups()) if m else "");'
-          )"
-
-          if [ -z "$base_version" ] || [ -z "$head_version" ]; then
-            echo "::error::Unable to parse pyproject.toml version."
-            exit 1
-          fi
-
-          if [ "$has_release_code_changes" != "true" ]; then
-            if [ "$head_version" != "$base_version" ]; then
-              echo "::error::No release code changes detected for $HEAD_BRANCH, so pyproject.toml must stay at $base_version; got $head_version."
-              exit 1
-            fi
-            echo "No release code changes detected; version remains $head_version."
-            exit 0
-          fi
-
-          expected_version="$(
-            BASE_VERSION="$base_version" BUMP_PART="$bump_part" python3 - <<'PY'
-          import os
-
-          major, minor, patch = (int(part) for part in os.environ["BASE_VERSION"].split("."))
-          part = os.environ["BUMP_PART"]
-          if part == "minor":
-              minor += 1
-              patch = 0
-          elif part == "patch":
-              patch += 1
-          else:
-              raise SystemExit(f"unsupported bump part: {part}")
-          print(f"{major}.{minor}.{patch}")
-          PY
-          )"
-
-          if [ "$head_version" != "$expected_version" ]; then
-            echo "::error::Expected pyproject.toml version $expected_version for $HEAD_BRANCH, got $head_version."
-            echo "::error::Wait for auto-version-bump.yml or re-run it after rebasing on ${BASE_BRANCH}."
-            exit 1
-          fi
-
-          echo "Version bump is valid: $base_version -> $head_version ($bump_part)"
+          python3 .github/scripts/validate_release_version.py \
+            --base-ref "$base_ref" \
+            --head-ref HEAD \
+            --head-branch "$HEAD_BRANCH" \
+            --event-name "$EVENT_NAME"

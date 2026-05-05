@@ -37,6 +37,15 @@ def test_validate_main_source_branch_supports_dispatched_head_validation() -> No
     assert "github.event.inputs.head_sha" in workflow
 
 
+def test_validate_main_source_branch_uses_tested_release_version_gate() -> None:
+    workflow = (ROOT / ".github/workflows/validate-main-pr-source.yml").read_text(encoding="utf-8")
+
+    assert "EVENT_NAME: ${{ github.event_name }}" in workflow
+    assert "python3 .github/scripts/validate_release_version.py" in workflow
+    assert '--head-branch "$HEAD_BRANCH"' in workflow
+    assert '--event-name "$EVENT_NAME"' in workflow
+
+
 def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:
     workflow = (ROOT / ".github/workflows/auto-merge-pr.yml").read_text(encoding="utf-8")
 
