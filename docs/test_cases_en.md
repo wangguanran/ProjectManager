@@ -215,6 +215,7 @@
 | UTIL-004 | Utils | list_file_path depth & filters | Create test tree | 1. Create `tmp/a/b/file.txt`.<br>2. Run `python -c "from src.utils import list_file_path; print(list(list_file_path('tmp', max_depth=1)))"`. | Output excludes paths deeper than depth 1. | P3 | Functional |
 | LOG-001 | Logging | latest.log symlink created | Dataset A completed | 1. Run any command (e.g., `python -m src --help`).<br>2. Check `.cache/latest.log`. | Symlink exists and points to the latest log file. | P2 | Functional |
 | LOG-002 | Logging | Symlink failure does not write to stdout | Force symlink creation to fail (e.g., restricted FS) | 1. Run any command (e.g., `python -m src --help`).<br>2. If symlink creation fails, observe console output streams. | Warning is written to **stderr**; stdout stays clean. | P2 | Safety |
+| LOG-003 | Logging | Read-only cwd falls back without crashing | Current directory is not writable | 1. Run `python -m src --help` from the read-only directory.<br>2. Run `python -m src --version` from the same directory. | Both commands exit 0 without a traceback; file logging may fall back to console-only logging. | P1 | Safety |
 | PROF-001 | Profiler | ENABLE_CPROFILE toggles profiling | Use a script setting `builtins.ENABLE_CPROFILE=True` | 1. Call a function decorated with `@func_cprofile`. | cProfile stats appear in logs; process finishes normally. | P3 | Functional |
 
 ## 10. Artifact Saving Rules (src/plugins/project_builder.py)
