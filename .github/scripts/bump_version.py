@@ -21,6 +21,7 @@ RELEASE_CODE_PREFIXES = (
 RELEASE_CODE_FILES = {
     "build.sh",
     "install.sh",
+    "install-or-upgrade.sh",
     "get_latest_release.sh",
     "install.ps1",
     "Dockerfile",
