@@ -187,6 +187,39 @@ def test_validate_hooks_no_arg_invalid() -> None:
     assert any(item["name"] == "noargs" for item in res["invalid_hooks"])
 
 
+def test_validate_hooks_rejects_signatures_that_cannot_accept_context() -> None:
+    """HOOK-007: validate_hooks matches the execute_hooks one-context call."""
+
+    def single_context(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        return True
+
+    def context_with_default(ctx: Dict[str, Any], optional: bool = True) -> bool:
+        _ = ctx, optional
+        return True
+
+    def context_with_varargs(ctx: Dict[str, Any], *extra: Any) -> bool:
+        _ = ctx, extra
+        return True
+
+    def two_required_args(first: Dict[str, Any], second: Dict[str, Any]) -> bool:
+        _ = first, second
+        return True
+
+    register_hook(HookType.CUSTOM, "single_context", single_context)
+    register_hook(HookType.CUSTOM, "context_with_default", context_with_default)
+    register_hook(HookType.CUSTOM, "context_with_varargs", context_with_varargs)
+    register_hook(HookType.CUSTOM, "two_required_args", two_required_args)
+
+    res = validate_hooks(HookType.CUSTOM)
+
+    valid_names = {item["name"] for item in res["valid_hooks"]}
+    invalid_names = {item["name"] for item in res["invalid_hooks"]}
+    assert {"single_context", "context_with_default", "context_with_varargs"} <= valid_names
+    assert "two_required_args" in invalid_names
+    assert res["valid"] is False
+
+
 def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> None:
     """HOOK-008: Platform failure falls back to global."""
 
