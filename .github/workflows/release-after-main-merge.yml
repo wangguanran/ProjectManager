@@ -4,23 +4,132 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact main commit SHA to tag and release.
+        required: false
+      target_ref:
+        description: Main branch ref containing the target commit.
+        required: false
+        default: main
+      pr_number:
+        description: Pull request number to watch until GitHub auto-merge creates the merge commit.
+        required: false
+      pr_head_sha:
+        description: Exact PR head SHA expected before waiting for its merge commit.
+        required: false
 
 permissions:
   contents: write
   actions: write
+  pull-requests: read
 
 concurrency:
-  group: release-after-main-merge-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-after-main-merge-${{ github.event.inputs.target_sha || github.event.inputs.pr_number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number != '' && github.event.inputs.target_sha == '' }}
 
 jobs:
   tag-and-dispatch-release:
     name: tag-and-dispatch-release
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve target main commit
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TARGET_SHA: ${{ github.event.inputs.target_sha || '' }}
+          INPUT_TARGET_REF: ${{ github.event.inputs.target_ref || 'main' }}
+          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number || '' }}
+          INPUT_PR_HEAD_SHA: ${{ github.event.inputs.pr_head_sha || '' }}
+        run: |
+          set -euo pipefail
+
+          target_ref="${INPUT_TARGET_REF:-main}"
+          target_sha=""
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            target_ref="${GITHUB_REF_NAME:-main}"
+            target_sha="$GITHUB_SHA"
+          elif [ -n "$INPUT_TARGET_SHA" ]; then
+            target_sha="$INPUT_TARGET_SHA"
+          elif [ -n "$INPUT_PR_NUMBER" ]; then
+            if [ -z "$INPUT_PR_HEAD_SHA" ]; then
+              echo "::error::pr_head_sha is required when pr_number is provided."
+              exit 1
+            fi
+
+            for attempt in $(seq 1 60); do
+              pr_meta="$(
+                gh pr view "$INPUT_PR_NUMBER" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --json headRefOid,mergedAt,mergeCommit \
+                  --jq '[.headRefOid, (.mergedAt // ""), (.mergeCommit.oid // "")] | @tsv'
+              )"
+              IFS=$'\t' read -r current_head merged_at merge_sha <<< "$pr_meta"
+              if [ "$current_head" != "$INPUT_PR_HEAD_SHA" ]; then
+                echo "::notice::PR #${INPUT_PR_NUMBER} head moved from ${INPUT_PR_HEAD_SHA} to ${current_head}; stale release watcher exits."
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "skip_reason=stale-pr-head" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [ -n "$merged_at" ] && [ -n "$merge_sha" ]; then
+                target_sha=$merge_sha
+                break
+              fi
+              sleep 30
+            done
+
+            if [ -z "$target_sha" ]; then
+              echo "::notice::PR #${INPUT_PR_NUMBER} was not merged before the release watcher timeout; no release was dispatched."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "skip_reason=pr-not-merged" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "::error::workflow_dispatch requires target_sha or pr_number."
+            exit 1
+          fi
+
+          if ! [[ "$target_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Target SHA must be a full 40-character lowercase hex commit, got '${target_sha}'."
+            exit 1
+          fi
+
+          echo "sha=${target_sha}" >> "$GITHUB_OUTPUT"
+          echo "ref=${target_ref}" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        if: steps.target.outputs.skip != 'true'
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Validate target commit is on main
+        if: steps.target.outputs.skip != 'true'
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+          TARGET_REF: ${{ steps.target.outputs.ref }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "$actual_sha" != "$TARGET_SHA" ]; then
+            echo "::error::Checked out ${actual_sha}, expected target main SHA ${TARGET_SHA}."
+            exit 1
+          fi
+
+          git fetch --no-tags --prune origin "+refs/heads/${TARGET_REF}:refs/remotes/origin/${TARGET_REF}"
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "refs/remotes/origin/${TARGET_REF}"; then
+            echo "::error::Target SHA ${TARGET_SHA} is not reachable from origin/${TARGET_REF}; refusing to release."
+            exit 1
+          fi
 
       - name: Resolve release tag from pyproject.toml
+        if: steps.target.outputs.skip != 'true'
         id: version
         shell: bash
         run: |
@@ -48,11 +157,13 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Check existing release tag or GitHub Release
+        if: steps.target.outputs.skip != 'true'
         id: existing
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -65,14 +176,14 @@ jobs:
 
           if remote_tag_ref="$(git ls-remote --exit-code --tags origin "refs/tags/${TAG}" 2>/dev/null)"; then
             remote_tag_sha="$(printf '%s\n' "$remote_tag_ref" | sed -n '1s/[[:space:]].*//p')"
-            if [ "$remote_tag_sha" != "$GITHUB_SHA" ]; then
-              echo "::error::Release tag ${TAG} points to ${remote_tag_sha}, expected ${GITHUB_SHA}; refusing to dispatch publish-release.yml."
+            if [ "$remote_tag_sha" != "$TARGET_SHA" ]; then
+              echo "::error::Release tag ${TAG} points to ${remote_tag_sha}, expected ${TARGET_SHA}; refusing to dispatch publish-release.yml."
               exit 1
             fi
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "skip_reason=tag-exists-release-missing" >> "$GITHUB_OUTPUT"
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
-            echo "Release tag ${TAG} points to ${GITHUB_SHA}, but GitHub Release is missing; dispatching publish-release.yml."
+            echo "Release tag ${TAG} points to ${TARGET_SHA}, but GitHub Release is missing; dispatching publish-release.yml."
             exit 0
           fi
 
@@ -81,19 +192,20 @@ jobs:
           echo "tag_exists=false" >> "$GITHUB_OUTPUT"
 
       - name: Create matching stable release tag
-        if: steps.existing.outputs.skip != 'true' && steps.existing.outputs.tag_exists != 'true'
+        if: steps.target.outputs.skip != 'true' && steps.existing.outputs.skip != 'true' && steps.existing.outputs.tag_exists != 'true'
         shell: bash
         env:
           TAG: ${{ steps.version.outputs.tag }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG" "$GITHUB_SHA"
+          git tag "$TAG" "$TARGET_SHA"
           git push origin "refs/tags/${TAG}"
 
       - name: Dispatch tag-based release workflow
-        if: steps.existing.outputs.skip != 'true'
+        if: steps.target.outputs.skip != 'true' && steps.existing.outputs.skip != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

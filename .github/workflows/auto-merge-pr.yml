@@ -21,6 +21,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   enable-auto-merge:
@@ -42,3 +43,26 @@ jobs:
             exit 0
           fi
           gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"
+
+      - name: Dispatch release watcher for GitHub-token auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.inputs.head_sha || github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          base_branch="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json baseRefName --jq .baseRefName)"
+          if [ "$base_branch" != "main" ]; then
+            echo "PR #$PR_NUMBER targets $base_branch, not main; no stable release watcher needed."
+            exit 0
+          fi
+
+          # GITHUB_TOKEN-created auto-merge pushes do not trigger push workflows.
+          # workflow_dispatch is exempt, so this watcher waits for the merge SHA.
+          gh workflow run release-after-main-merge.yml \
+            --repo "$REPO" \
+            --ref "$base_branch" \
+            -f "target_ref=$base_branch" \
+            -f "pr_number=$PR_NUMBER" \
+            -f "pr_head_sha=$HEAD_SHA"

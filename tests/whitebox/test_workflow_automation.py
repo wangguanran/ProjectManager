@@ -63,6 +63,7 @@ def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:
     assert "head_sha:" in workflow
     assert "pull-requests: write" in workflow
     assert "contents: write" in workflow
+    assert "actions: write" in workflow
     assert "github.event.pull_request.draft == false" in workflow
     assert "REPO: ${{ github.repository }}" in workflow
     assert 'gh pr view "$PR_NUMBER" --repo "$REPO"' in workflow
@@ -70,6 +71,20 @@ def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:
         'gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"'
         in workflow
     )
+
+
+def test_auto_merge_pr_workflow_dispatches_release_watcher_for_github_token_merges() -> None:
+    workflow = (ROOT / ".github/workflows/auto-merge-pr.yml").read_text(encoding="utf-8")
+
+    assert "Dispatch release watcher for GitHub-token auto-merge" in workflow
+    assert "GITHUB_TOKEN-created auto-merge pushes do not trigger push workflows" in workflow
+    assert "workflow_dispatch is exempt" in workflow
+    assert 'base_branch="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json baseRefName --jq .baseRefName)"' in workflow
+    assert "gh workflow run release-after-main-merge.yml" in workflow
+    assert '--repo "$REPO"' in workflow
+    assert '-f "target_ref=$base_branch"' in workflow
+    assert '-f "pr_number=$PR_NUMBER"' in workflow
+    assert '-f "pr_head_sha=$HEAD_SHA"' in workflow
 
 
 def test_required_pr_ci_workflows_run_for_all_main_pull_requests() -> None:
@@ -98,6 +113,26 @@ def test_release_after_main_merge_runs_on_main_push_and_tags_pyproject_version()
     assert 'echo "tag=${tag}" >> "$GITHUB_OUTPUT"' in workflow
 
 
+def test_release_after_main_merge_supports_dispatch_target_sha_and_pr_merge_wait() -> None:
+    workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
+
+    assert "workflow_dispatch:" in workflow
+    assert "target_sha:" in workflow
+    assert "target_ref:" in workflow
+    assert "pr_number:" in workflow
+    assert "pr_head_sha:" in workflow
+    assert "Resolve target main commit" in workflow
+    assert "INPUT_TARGET_SHA" in workflow
+    assert "INPUT_PR_NUMBER" in workflow
+    assert "mergedAt" in workflow
+    assert "mergeCommit" in workflow
+    assert "target_sha=$merge_sha" in workflow
+    assert 'echo "sha=${target_sha}" >> "$GITHUB_OUTPUT"' in workflow
+    assert "Validate target commit is on main" in workflow
+    assert "ref: ${{ steps.target.outputs.sha }}" in workflow
+    assert "steps.target.outputs.skip != 'true' && steps.existing.outputs.skip != 'true'" in workflow
+
+
 def test_release_after_main_merge_skips_existing_release_without_failure() -> None:
     workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
 
@@ -112,7 +147,7 @@ def test_release_after_main_merge_recovers_existing_tag_without_release() -> Non
 
     assert "tag_exists=true" in workflow
     assert "skip_reason=tag-exists-release-missing" in workflow
-    assert 'if [ "$remote_tag_sha" != "$GITHUB_SHA" ]; then' in workflow
+    assert 'if [ "$remote_tag_sha" != "$TARGET_SHA" ]; then' in workflow
     assert "refusing to dispatch publish-release.yml" in workflow
     assert "steps.existing.outputs.tag_exists != 'true'" in workflow
     assert "dispatching publish-release.yml." in workflow
@@ -122,7 +157,7 @@ def test_release_after_main_merge_reuses_publish_release_validation() -> None:
     workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
     publish_release = (ROOT / ".github/workflows/publish-release.yml").read_text(encoding="utf-8")
 
-    assert 'git tag "$TAG" "$GITHUB_SHA"' in workflow
+    assert 'git tag "$TAG" "$TARGET_SHA"' in workflow
     assert 'git push origin "refs/tags/${TAG}"' in workflow
     assert 'gh workflow run publish-release.yml --ref "$TAG"' in workflow
     assert "twine upload" not in workflow
