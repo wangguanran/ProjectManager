@@ -116,7 +116,7 @@ def test_hook_exception_continues_when_stop_on_error_false() -> None:
     def boom(ctx: Dict[str, Any]) -> bool:
         _ = ctx
         calls.append("boom")
-        raise ValueError("x")
+        raise KeyError("x")
 
     def good(ctx: Dict[str, Any]) -> bool:
         _ = ctx
@@ -129,6 +129,43 @@ def test_hook_exception_continues_when_stop_on_error_false() -> None:
     ok = execute_hooks(HookType.PRE_BUILD, context={}, stop_on_error=False)
     assert ok is True
     assert calls == ["boom", "good"]
+
+
+def test_hook_exception_returns_false_when_stop_on_error_true() -> None:
+    """HOOK-005: Exception with stop_on_error=True returns False."""
+    calls: List[str] = []
+
+    def boom(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        calls.append("boom")
+        raise IndexError("x")
+
+    def later(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        calls.append("later")
+        return True
+
+    register_hook(HookType.PRE_BUILD, "boom", boom, priority=HookPriority.HIGH)
+    register_hook(HookType.PRE_BUILD, "later", later, priority=HookPriority.LOW)
+
+    ok = execute_hooks(HookType.PRE_BUILD, context={}, stop_on_error=True)
+    assert ok is False
+    assert calls == ["boom"]
+
+
+def test_execute_single_hook_returns_failure_for_exception() -> None:
+    """HOOK-006: execute_single_hook returns structured failure for exceptions."""
+
+    def boom(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        raise AssertionError("x")
+
+    register_hook(HookType.CUSTOM, "boom", boom)
+
+    res = execute_single_hook(HookType.CUSTOM, "boom", context={})
+    assert res["success"] is False
+    assert res["hook_name"] == "boom"
+    assert "x" in str(res.get("error", ""))
 
 
 def test_execute_single_hook_not_found() -> None:
