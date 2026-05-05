@@ -79,3 +79,44 @@ def test_required_pr_ci_workflows_run_for_all_main_pull_requests() -> None:
 
         assert 'branches: [ "main" ]' in pull_request_block or 'branches: ["main"]' in pull_request_block
         assert "paths:" not in pull_request_block
+
+
+def test_release_after_main_merge_runs_on_main_push_and_tags_pyproject_version() -> None:
+    workflow_path = ROOT / ".github/workflows/release-after-main-merge.yml"
+    assert workflow_path.exists()
+
+    workflow = workflow_path.read_text(encoding="utf-8")
+
+    assert "push:" in workflow
+    assert "- main" in workflow
+    assert "contents: write" in workflow
+    assert "actions: write" in workflow
+    assert "tomllib" in workflow
+    assert "pyproject.toml" in workflow
+    assert 'tag = f"v{version}"' in workflow
+    assert "Expected pyproject.toml project.version to be X.Y.Z" in workflow
+    assert 'echo "tag=${tag}" >> "$GITHUB_OUTPUT"' in workflow
+
+
+def test_release_after_main_merge_skips_existing_tag_or_release_without_failure() -> None:
+    workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
+
+    assert 'git ls-remote --exit-code --tags origin "refs/tags/${TAG}"' in workflow
+    assert 'gh release view "$TAG"' in workflow
+    assert "skip_reason=tag-exists" in workflow
+    assert "skip_reason=release-exists" in workflow
+    assert "steps.existing.outputs.skip != 'true'" in workflow
+
+
+def test_release_after_main_merge_reuses_publish_release_validation() -> None:
+    workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
+    publish_release = (ROOT / ".github/workflows/publish-release.yml").read_text(encoding="utf-8")
+
+    assert 'git tag "$TAG" "$GITHUB_SHA"' in workflow
+    assert 'git push origin "refs/tags/${TAG}"' in workflow
+    assert 'gh workflow run publish-release.yml --ref "$TAG"' in workflow
+    assert "twine upload" not in workflow
+    assert "docker/build-push-action" not in workflow
+    assert "  push:\n    tags:" in publish_release
+    assert "  workflow_dispatch:" in publish_release
+    assert "Validate pyproject version matches release tag" in publish_release
