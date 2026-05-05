@@ -82,6 +82,21 @@ def test_pm_009_project_new_append_section(workspace_a: Path) -> None:
     assert "[projA-new]" in text
 
 
+def test_pm_009_project_new_creates_first_top_level_project(empty_workspace: Path) -> None:
+    projects_dir = empty_workspace / "projects"
+    board_dir = projects_dir / "board1"
+    board_dir.mkdir(parents=True)
+    ini_path = board_dir / "board1.ini"
+    ini_path.write_text("[board1]\nPROJECT_NAME =\n", encoding="utf-8")
+
+    result = run_cli(["project_new", "myproject"], cwd=empty_workspace)
+
+    assert result.returncode == 0
+    text = ini_path.read_text(encoding="utf-8")
+    assert "[myproject]" in text
+    assert "PROJECT_NAME = myproject" in text
+
+
 def test_pm_010_project_new_unknown_board(workspace_a: Path) -> None:
     result = run_cli(["project_new", "unknownProj"], cwd=workspace_a, check=False)
     assert result.returncode != 0
