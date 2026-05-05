@@ -14,6 +14,8 @@ from .registry import APPLY_PHASE_PER_PO, REVERT_PHASE_PER_PO, register_simple_p
 from .runtime import PoPluginContext, PoPluginRuntime
 from .utils import extract_patch_targets
 
+SKIPPED_PATCH_STATUSES = {"already_applied"}
+
 
 def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     log.debug("po_name: '%s', po_patch_dir: '%s'", ctx.po_name, ctx.po_patch_dir)
@@ -68,12 +70,12 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 return False
 
             record = runtime.get_repo_record(ctx, patch_target, repo_name)
-            record["patches"].append(
-                {
-                    "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
-                    "targets": patch_targets,
-                }
-            )
+            patch_entry = {
+                "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
+                "targets": patch_targets,
+                "status": "applied",
+            }
+            record["patches"].append(patch_entry)
 
             result = runtime.execute_command(
                 ctx,
@@ -105,6 +107,7 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                         rel_path,
                         repo_name,
                     )
+                    patch_entry["status"] = "already_applied"
                     continue
 
                 log.error("Failed to apply patch '%s': %s", patch_file, summarize_output(result.stderr))
@@ -151,6 +154,23 @@ def _revert_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 log.error("Cannot find repo path for '%s'", repo_name)
                 return False
             patch_file = os.path.join(current_dir, fname)
+            record = runtime.load_applied_record(patch_target, ctx.po_name)
+            patches = (record or {}).get("patches") or []
+            patch_record = next(
+                (
+                    item
+                    for item in patches
+                    if item.get("patch_file") == os.path.join("patches", rel_path) or item.get("patch_file") == rel_path
+                ),
+                None,
+            )
+            if patch_record and patch_record.get("status") in SKIPPED_PATCH_STATUSES:
+                log.info(
+                    "patch '%s' was already applied before po_apply for repo '%s'; skipping revert.",
+                    rel_path,
+                    repo_name,
+                )
+                continue
             log.info("reverting patch: '%s' from dir: '%s'", patch_file, patch_target)
             try:
                 if ctx.dry_run:

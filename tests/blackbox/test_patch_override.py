@@ -129,6 +129,29 @@ def test_po_005_patch_apply_success(workspace_a: Path) -> None:
     assert "line2" in target.read_text(encoding="utf-8")
 
 
+def test_po_005d_preexisting_patch_is_not_reverted(workspace_a: Path) -> None:
+    target = workspace_a / "src" / "tmp_file.txt"
+    assert target.read_text(encoding="utf-8") == "line1\nline2"
+
+    result = run_cli(["po_apply", "projA"], cwd=workspace_a)
+    assert result.returncode == 0
+    record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    assert any(item.get("status") == "already_applied" for item in record.get("patches", []))
+
+    plan = run_cli(["po_revert", "projA", "--emit-plan"], cwd=workspace_a)
+    assert plan.returncode == 0
+    payload = json.loads(plan.stdout)
+    actions = [action for repo in payload["per_repo_actions"] for action in repo["actions"]]
+    assert not any(
+        action.get("type") == "patch_reverse" and action.get("source") == "patches/tmp_file.patch" for action in actions
+    )
+
+    revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
+    assert revert.returncode == 0
+    assert target.read_text(encoding="utf-8") == "line1\nline2"
+
+
 def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     commits_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "commits"
     commits_dir.mkdir(parents=True, exist_ok=True)
