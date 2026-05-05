@@ -324,9 +324,7 @@ class TestProjectNew:
         # Verify the actual INI file content to ensure multi-level inheritance worked
         content = ini_file.read_text()
         assert "[grandparent-parent-child]" in content
-        # Check that the project name includes inherited customer name (from direct parent)
-        # Note: platform from grandparent is not inherited in current implementation
-        assert "PROJECT_NAME = grandparent-parent-child_customer456" in content
+        assert "PROJECT_NAME = platform_grandparent-parent-child_customer456" in content
 
     def test_project_new_config_merge(self, tmp_path):
         """Test project_new with config merging."""
@@ -1306,9 +1304,7 @@ PROJECT_PLATFORM=platform
         # Verify project section was added
         assert "[base-feature-child]" in content
 
-        # Verify inherited project name includes customer (from direct parent)
-        # Note: platform from grandparent is not inherited in current implementation
-        assert "PROJECT_NAME = base-feature-child_customer456" in content
+        assert "PROJECT_NAME = platform_base-feature-child_customer456" in content
 
         # Verify the inheritance chain worked correctly
         # The project should inherit from base-feature, which inherits from base
