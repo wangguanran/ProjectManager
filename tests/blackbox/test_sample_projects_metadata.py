@@ -8,9 +8,18 @@ from pathlib import Path
 
 SENSITIVE_PATH_PATTERNS = [
     re.compile(r"/Users/[^/\s\"]+"),
-    re.compile(r"/home/[^/\s\"]+"),
+    re.compile(r"/home/[A-Za-z0-9._-]+/"),
     re.compile(r"\.codex"),
 ]
+
+
+def test_sensitive_path_patterns_ignore_documented_home_placeholders() -> None:
+    placeholder_path = "/home/<user>/ProjectManager"
+    real_user_path = "/home/alice/ProjectManager"
+    linux_home_pattern = SENSITIVE_PATH_PATTERNS[1]
+
+    assert linux_home_pattern.search(placeholder_path) is None
+    assert linux_home_pattern.search(real_user_path) is not None
 
 
 def test_sample_projects_metadata_uses_portable_relative_paths() -> None:
