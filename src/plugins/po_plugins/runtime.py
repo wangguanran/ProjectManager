@@ -47,7 +47,7 @@ class PoPluginRuntime:
         project_name: str,
         repositories: List[Tuple[str, str]],
         workspace_root: str,
-        po_configs: Dict[str, Dict[str, Any]] | None = None,
+        po_configs: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         self.board_name = board_name
         self.project_name = project_name
@@ -78,7 +78,12 @@ class PoPluginRuntime:
             return None
 
     @staticmethod
-    def _format_command(command, cwd: str | None = None, description: str = "", shell: bool = False) -> Dict[str, Any]:
+    def _format_command(
+        command,
+        cwd: Optional[str] = None,
+        description: str = "",
+        shell: bool = False,
+    ) -> Dict[str, Any]:
         if isinstance(command, list):
             cmd_str = " ".join(f'"{arg}"' if " " in arg else arg for arg in command)
         else:
@@ -119,7 +124,7 @@ class PoPluginRuntime:
         repo_name: str,
         command,
         *,
-        cwd: str | None = None,
+        cwd: Optional[str] = None,
         description: str = "",
         shell: bool = False,
     ) -> subprocess.CompletedProcess:
@@ -161,7 +166,7 @@ class PoPluginRuntime:
         repo_name: str,
         command,
         *,
-        cwd: str | None = None,
+        cwd: Optional[str] = None,
         description: str = "",
         shell: bool = False,
         returncode: int = 0,
