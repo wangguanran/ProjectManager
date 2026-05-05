@@ -13,7 +13,8 @@ from src.plugins.patch_override import parse_po_config
 
 
 def _repo_head_sha(repo_path: str) -> str:
-    if not os.path.isdir(os.path.join(repo_path, ".git")):
+    git_marker = os.path.join(repo_path, ".git")
+    if not (os.path.isdir(git_marker) or os.path.isfile(git_marker)):
         return ""
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -171,7 +172,17 @@ def snapshot_validate(
             drift["repos"].append({"name": name, "status": "missing"})
             continue
         current_head = _repo_head_sha(current_path)
-        if expected_head and current_head and expected_head != current_head:
+        if expected_head and not current_head:
+            drift["repos"].append(
+                {
+                    "name": name,
+                    "path": _safe_relpath(current_path, start=root_path),
+                    "expected_head": expected_head,
+                    "current_head": current_head,
+                    "status": "head_unavailable",
+                }
+            )
+        elif expected_head and current_head and expected_head != current_head:
             drift["repos"].append(
                 {
                     "name": name,
@@ -203,6 +214,8 @@ def snapshot_validate(
                 status = item.get("status")
                 if status == "missing":
                     print(f"- repo missing: {item.get('name')}")
+                elif status == "head_unavailable":
+                    print(f"- repo head unavailable: {item.get('name')} expected={item.get('expected_head')}")
                 elif status == "head_mismatch":
                     print(
                         f"- repo head mismatch: {item.get('name')} "
