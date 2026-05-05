@@ -6,6 +6,7 @@ import configparser
 import json
 import os
 import sys
+from pathlib import Path
 
 
 class TestProjectNew:
@@ -1644,14 +1645,16 @@ class TestBoardNew:
     def test_board_new_creates_expected_structure(self, tmp_path):
         """PM-002: board_new succeeds without template (default structure)."""
 
-        env = {"projects_path": str(tmp_path)}
+        root = tmp_path
+        projects_path = root / "projects"
+        env = {"root_path": str(root), "projects_path": str(projects_path)}
         projects_info = {}
         board_name = "board_alpha"
 
         result = self.ProjectManager.board_new(env, projects_info, board_name)
 
         assert result is True
-        board_path = tmp_path / board_name
+        board_path = projects_path / board_name
         assert board_path.is_dir()
         assert (board_path / "po").is_dir()
         assert (board_path / "po" / "po_template").is_dir()
@@ -1667,7 +1670,8 @@ class TestBoardNew:
         assert projects_json_path.is_file()
         metadata = json.loads(projects_json_path.read_text(encoding="utf-8"))
         assert metadata["board_name"] == board_name
-        assert metadata["board_path"] == board_name
+        assert Path(metadata["board_path"]).is_absolute() is False
+        assert metadata["board_path"] == str(Path("projects") / board_name)
         assert metadata["projects"] == []
 
     def test_board_new_uses_template_when_available(self, tmp_path):
