@@ -87,6 +87,19 @@ def test_auto_merge_pr_workflow_dispatches_release_watcher_for_github_token_merg
     assert '-f "pr_head_sha=$HEAD_SHA"' in workflow
 
 
+def test_auto_merge_pr_workflow_rechecks_head_before_release_watcher_dispatch() -> None:
+    workflow = (ROOT / ".github/workflows/auto-merge-pr.yml").read_text(encoding="utf-8")
+
+    assert (
+        workflow.count('current_head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"')
+        == 2
+    )
+    assert (
+        'echo "PR #$PR_NUMBER head moved from $HEAD_SHA to $current_head; skipping stale release watcher dispatch."'
+        in workflow
+    )
+
+
 def test_required_pr_ci_workflows_run_for_all_main_pull_requests() -> None:
     for workflow_name in ("python-app.yml", "pylint.yml", "mypy.yml"):
         workflow = (ROOT / f".github/workflows/{workflow_name}").read_text(encoding="utf-8")
@@ -131,6 +144,28 @@ def test_release_after_main_merge_supports_dispatch_target_sha_and_pr_merge_wait
     assert "Validate target commit is on main" in workflow
     assert "ref: ${{ steps.target.outputs.sha }}" in workflow
     assert "steps.target.outputs.skip != 'true' && steps.existing.outputs.skip != 'true'" in workflow
+
+
+def test_release_after_main_merge_pr_watcher_concurrency_includes_expected_head() -> None:
+    workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
+
+    assert (
+        "group: release-after-main-merge-${{ github.event_name == 'workflow_dispatch' && "
+        "github.event.inputs.target_sha != '' && github.event.inputs.target_sha || "
+        "github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number != '' && "
+        "format('pr-{0}-{1}', github.event.inputs.pr_number, github.event.inputs.pr_head_sha) || github.sha }}"
+        in workflow
+    )
+
+
+def test_release_after_main_merge_pr_watcher_timeout_fails_visibly() -> None:
+    workflow = (ROOT / ".github/workflows/release-after-main-merge.yml").read_text(encoding="utf-8")
+
+    assert (
+        'echo "::error::PR #${INPUT_PR_NUMBER} was not merged before the release watcher timeout; '
+        'release dispatch cannot be verified."' in workflow
+    )
+    assert "skip_reason=pr-not-merged" not in workflow
 
 
 def test_release_after_main_merge_skips_existing_release_without_failure() -> None:

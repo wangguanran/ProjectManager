@@ -26,7 +26,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: release-after-main-merge-${{ github.event.inputs.target_sha || github.event.inputs.pr_number || github.sha }}
+  group: release-after-main-merge-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_sha != '' && github.event.inputs.target_sha || github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number != '' && format('pr-{0}-{1}', github.event.inputs.pr_number, github.event.inputs.pr_head_sha) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number != '' && github.event.inputs.target_sha == '' }}
 
 jobs:
@@ -83,10 +83,8 @@ jobs:
             done
 
             if [ -z "$target_sha" ]; then
-              echo "::notice::PR #${INPUT_PR_NUMBER} was not merged before the release watcher timeout; no release was dispatched."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "skip_reason=pr-not-merged" >> "$GITHUB_OUTPUT"
-              exit 0
+              echo "::error::PR #${INPUT_PR_NUMBER} was not merged before the release watcher timeout; release dispatch cannot be verified."
+              exit 1
             fi
           else
             echo "::error::workflow_dispatch requires target_sha or pr_number."

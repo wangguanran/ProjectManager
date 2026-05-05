@@ -57,6 +57,11 @@ jobs:
             echo "PR #$PR_NUMBER targets $base_branch, not main; no stable release watcher needed."
             exit 0
           fi
+          current_head="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)"
+          if [ "$current_head" != "$HEAD_SHA" ]; then
+            echo "PR #$PR_NUMBER head moved from $HEAD_SHA to $current_head; skipping stale release watcher dispatch."
+            exit 0
+          fi
 
           # GITHUB_TOKEN-created auto-merge pushes do not trigger push workflows.
           # workflow_dispatch is exempt, so this watcher waits for the merge SHA.
