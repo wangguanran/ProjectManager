@@ -201,3 +201,16 @@ def test_release_after_main_merge_reuses_publish_release_validation() -> None:
     assert "  push:\n    tags:" in publish_release
     assert "  workflow_dispatch:" in publish_release
     assert "Validate pyproject version matches release tag" in publish_release
+
+
+def test_publish_release_test_job_installs_console_script_before_pytest() -> None:
+    workflow = (ROOT / ".github/workflows/publish-release.yml").read_text(encoding="utf-8")
+
+    build_index = workflow.index("- name: Build project")
+    install_index = workflow.index("- name: Install package entry point")
+    test_index = workflow.index("- name: Run tests")
+
+    assert build_index < install_index < test_index
+    assert "source venv/bin/activate" in workflow
+    assert "python -m pip install --no-deps --no-build-isolation -e ." in workflow
+    assert "command -v projman" in workflow
