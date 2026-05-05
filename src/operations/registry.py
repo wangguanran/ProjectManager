@@ -4,17 +4,17 @@ Simple registry for function-based operations.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 REGISTRY: Dict[str, Callable[..., Any]] = {}
 
 
 def register(
-    name: str | None = None,
+    name: Optional[str] = None,
     *,
     needs_repositories: bool = False,
     needs_projects: bool = True,
-    desc: str | None = None,
+    desc: Optional[str] = None,
 ):
     """
     Decorator to register a function as a CLI operation.
