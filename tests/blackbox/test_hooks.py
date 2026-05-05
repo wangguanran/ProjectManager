@@ -53,16 +53,35 @@ def test_hook_004_execute_stop_on_false() -> None:
 
 def test_hook_005_execute_error_continue() -> None:
     def broken(ctx):
-        raise ValueError("boom")
+        raise KeyError("boom")
 
     register_hook(HookType.BUILD, "broken", broken)
     register_hook(HookType.BUILD, "ok", lambda ctx: True)
     assert execute_hooks(HookType.BUILD, {}, stop_on_error=False) is True
 
 
+def test_hook_005_execute_error_stop_returns_false() -> None:
+    def broken(ctx):
+        raise IndexError("boom")
+
+    register_hook(HookType.BUILD, "broken", broken)
+    register_hook(HookType.BUILD, "ok", lambda ctx: True)
+    assert execute_hooks(HookType.BUILD, {}, stop_on_error=True) is False
+
+
 def test_hook_006_execute_single_missing() -> None:
     result = execute_single_hook(HookType.BUILD, "missing", {}, platform=None)
     assert result["success"] is False
+
+
+def test_hook_006_execute_single_error_returns_failure() -> None:
+    def broken(ctx):
+        raise AssertionError("boom")
+
+    register_hook(HookType.BUILD, "broken", broken)
+    result = execute_single_hook(HookType.BUILD, "broken", {}, platform=None)
+    assert result["success"] is False
+    assert "boom" in result["error"]
 
 
 def test_hook_007_validate_hook_signature() -> None:
