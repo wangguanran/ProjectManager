@@ -7,7 +7,7 @@ Plugins are registered by importing modules under `src/plugins/po_plugins/`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from .runtime import PoPluginContext, PoPluginRuntime
 
@@ -57,8 +57,8 @@ def register_simple_plugin(
     revert_order: int,
     apply: Callable[[PoPluginContext, PoPluginRuntime], bool],
     revert: Callable[[PoPluginContext, PoPluginRuntime], bool],
-    list_files: Callable[[str, PoPluginRuntime], Dict[str, Any]] | None = None,
-    ensure_structure: Callable[[str, bool], None] | None = None,
+    list_files: Optional[Callable[[str, PoPluginRuntime], Dict[str, Any]]] = None,
+    ensure_structure: Optional[Callable[[str, bool], None]] = None,
 ) -> None:
     register_plugin(
         PoPlugin(
