@@ -107,7 +107,7 @@
 | CFG-007 | Project Scan | Duplicate keys in section cause skip | Put duplicate `PROJECT_NAME` in one section, including mixed-case aliases such as `PROJECT_NAME` and `project_name` | 1. Run `python -m src po_list projA`.<br>2. Check logs.<br>3. Run `python -m src doctor --json`. | Error logs duplicate key; that board is skipped. Doctor JSON reports the duplicate key in `ini_duplicate_keys`. | P1 | Negative |
 | CFG-008 | Config Merge | common + parent + child merge with PO concat | Dataset A completed | 1. Ensure `projA` and `projA-sub` exist.<br>2. Run `python -m src po_list projA-sub`.<br>3. Inspect effective config in logs. | Child inherits common and parent; `PROJECT_PO_CONFIG` is concatenated with space. | P1 | Functional |
 | CFG-009 | Relationships | parent/children built correctly | Dataset A completed | 1. Inspect `projects_info` in logs. | `projA-sub` parent is `projA`; `projA` children includes `projA-sub`. | P2 | Functional |
-| CFG-010 | Index Write | projects.json written per board | Dataset A completed | 1. Run a command (e.g., `python -m src po_list projA`).<br>2. Check `projects/boardA/projects.json`. | File contains board_name, last_updated, and projects list with configs. | P1 | Functional |
+| CFG-010 | Index Write | Read-only project load does not rewrite board projects.json | Dataset A completed | 1. Ensure `projects/boardA/projects.json` is absent or capture its exact contents.<br>2. Run a read-only command (e.g., `python -m src po_list projA`).<br>3. Check `projects/boardA/projects.json`. | Read-only commands do not create or rewrite the board metadata file; explicit project write paths may refresh it with relative paths only. | P1 | Functional |
 
 ## 3. Repository Discovery (_find_repositories)
 

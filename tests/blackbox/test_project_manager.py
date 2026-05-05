@@ -113,6 +113,9 @@ def test_pm_009_project_new_append_section(workspace_a: Path) -> None:
     ini_path = workspace_a / "projects" / "boardA" / "boardA.ini"
     text = ini_path.read_text(encoding="utf-8")
     assert "[projA-new]" in text
+    projects_json = workspace_a / "projects" / "boardA" / "projects.json"
+    data = json.loads(projects_json.read_text(encoding="utf-8"))
+    assert any(project.get("project_name") == "projA-new" for project in data["projects"])
 
 
 def test_pm_009_project_new_creates_first_top_level_project(empty_workspace: Path) -> None:

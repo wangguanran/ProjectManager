@@ -104,9 +104,81 @@ def _load_common_config(projects_path):
     return common_configs, po_configs
 
 
+def _write_projects_info_to_boards(projects_info, projects_path):
+    """
+    Write project information to board directories.
+
+    Args:
+        projects_info (dict): Dictionary containing project information
+        projects_path (str): Path to projects directory
+    """
+    try:
+        root_path = os.path.abspath(os.path.join(projects_path, os.pardir))
+
+        def _to_relpath(path_value: Optional[str]) -> Optional[str]:
+            if not path_value:
+                return path_value
+            try:
+                rel = os.path.relpath(path_value, root_path)
+            except ValueError:
+                rel = os.path.basename(path_value)
+            # Fail closed: never persist absolute paths in caches.
+            if os.path.isabs(rel):
+                rel = os.path.basename(rel)
+            return rel
+
+        # Group projects by board_name
+        board_projects = {}
+        for project_name, project_info in projects_info.items():
+            board_name = project_info.get("board_name")
+            if not board_name:
+                continue
+            if board_name not in board_projects:
+                board_projects[board_name] = []
+            board_projects[board_name].append(
+                {
+                    "project_name": project_name,
+                    "config": project_info.get("config", {}),
+                    "parent": project_info.get("parent"),
+                    "children": project_info.get("children", []),
+                    "ini_file": project_info.get("ini_file"),
+                }
+            )
+
+        # Write project information to each board directory
+        for board_name, projects in board_projects.items():
+            board_path = os.path.join(projects_path, board_name)
+            if not os.path.exists(board_path):
+                log.warning("Board directory does not exist: %s", board_path)
+                continue
+
+            # Prepare project data for JSON output (store relative paths only).
+            board_projects_out = []
+            for project in projects:
+                item = dict(project)
+                item["ini_file"] = _to_relpath(item.get("ini_file"))
+                board_projects_out.append(item)
+
+            project_data = {
+                "board_name": board_name,
+                "board_path": _to_relpath(board_path),
+                "last_updated": datetime.now().isoformat(),
+                "projects": board_projects_out,
+            }
+
+            projects_json_path = os.path.join(board_path, "projects.json")
+            with open(projects_json_path, "w", encoding="utf-8") as f:
+                json.dump(project_data, f, indent=2, ensure_ascii=False)
+
+            log.debug("Project information written to: %s", projects_json_path)
+
+    except (OSError, IOError, ValueError) as e:
+        log.error("Failed to write project information to board directories: %s", e)
+
+
 @func_time
 @func_cprofile
-def _load_all_projects(projects_path, common_configs):
+def _load_all_projects(projects_path, common_configs, write_projects_index=False):
     exclude_dirs = {"scripts", "common", "template", ".cache", ".git"}
     if not os.path.exists(projects_path):
         log.warning("projects directory does not exist: '%s'", projects_path)
@@ -230,80 +302,8 @@ def _load_all_projects(projects_path, common_configs):
             continue
         project_info["config"] = merge_config(project)
 
-    # Write project information to board directories
-    def __write_projects_info_to_boards(projects_info, projects_path):
-        """
-        Write project information to board directories.
-
-        Args:
-            projects_info (dict): Dictionary containing project information
-            projects_path (str): Path to projects directory
-        """
-        try:
-            root_path = os.path.abspath(os.path.join(projects_path, os.pardir))
-
-            def _to_relpath(path_value: Optional[str]) -> Optional[str]:
-                if not path_value:
-                    return path_value
-                try:
-                    rel = os.path.relpath(path_value, root_path)
-                except ValueError:
-                    rel = os.path.basename(path_value)
-                # Fail closed: never persist absolute paths in caches.
-                if os.path.isabs(rel):
-                    rel = os.path.basename(rel)
-                return rel
-
-            # Group projects by board_name
-            board_projects = {}
-            for project_name, project_info in projects_info.items():
-                board_name = project_info.get("board_name")
-                if not board_name:
-                    continue
-                if board_name not in board_projects:
-                    board_projects[board_name] = []
-                board_projects[board_name].append(
-                    {
-                        "project_name": project_name,
-                        "config": project_info.get("config", {}),
-                        "parent": project_info.get("parent"),
-                        "children": project_info.get("children", []),
-                        "ini_file": project_info.get("ini_file"),
-                    }
-                )
-
-            # Write project information to each board directory
-            for board_name, projects in board_projects.items():
-                board_path = os.path.join(projects_path, board_name)
-                if not os.path.exists(board_path):
-                    log.warning("Board directory does not exist: %s", board_path)
-                    continue
-
-                # Prepare project data for JSON output (store relative paths only).
-                board_projects_out = []
-                for project in projects:
-                    item = dict(project)
-                    item["ini_file"] = _to_relpath(item.get("ini_file"))
-                    board_projects_out.append(item)
-
-                project_data = {
-                    "board_name": board_name,
-                    "board_path": _to_relpath(board_path),
-                    "last_updated": datetime.now().isoformat(),
-                    "projects": board_projects_out,
-                }
-
-                # Write to projects.json in board directory
-                projects_json_path = os.path.join(board_path, "projects.json")
-                with open(projects_json_path, "w", encoding="utf-8") as f:
-                    json.dump(project_data, f, indent=2, ensure_ascii=False)
-
-                log.debug("Project information written to: %s", projects_json_path)
-
-        except (OSError, IOError, ValueError) as e:
-            log.error("Failed to write project information to board directories: %s", e)
-
-    __write_projects_info_to_boards(projects_info, projects_path)
+    if write_projects_index:
+        _write_projects_info_to_boards(projects_info, projects_path)
 
     return projects_info
 
@@ -1099,6 +1099,16 @@ def main():
             if result is False:
                 log.error("Operation '%s' failed", operate)
                 sys.exit(1)
+            if operate in {"project_new", "project_del"}:
+                try:
+                    _load_all_projects(
+                        env["projects_path"],
+                        common_configs,
+                        write_projects_index=True,
+                    )
+                except ValueError as err:
+                    log.error("Failed to refresh project index after '%s': %s", operate, err)
+                    sys.exit(1)
         except TypeError as e:
             log.error("Failed to call operation '%s': %s", operate, e)
             sys.exit(1)

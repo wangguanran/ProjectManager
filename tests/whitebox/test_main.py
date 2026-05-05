@@ -495,6 +495,33 @@ PROJECT_NAME=project2
         assert os.path.join("board01", "board01.ini") in message
         assert os.path.join("board02", "board02.ini") in message
 
+    def test_load_all_projects_does_not_rewrite_projects_json_by_default(self):
+        """Read-only project loading must not rewrite existing board metadata."""
+        projects_path = self._create_temp_projects_structure()
+
+        ini_content = """[testproject]
+PROJECT_NAME=test_project
+"""
+        board_path, _ini_file = self._create_board_structure(projects_path, "board01", ini_content)
+        projects_json = os.path.join(board_path, "projects.json")
+        original_json = json.dumps(
+            {
+                "board_name": "board01",
+                "board_path": "projects/board01",
+                "last_updated": "keep-this-timestamp",
+                "projects": [],
+            },
+            indent=2,
+        )
+        with open(projects_json, "w", encoding="utf-8") as f:
+            f.write(original_json)
+
+        result = self._load_projects_with_config(projects_path)
+
+        assert "testproject" in result
+        with open(projects_json, "r", encoding="utf-8") as f:
+            assert f.read() == original_json
+
     def test_load_all_projects_invalid_projects_handling(self):
         """Test handling of invalid projects."""
         projects_path = self._create_temp_projects_structure()
@@ -616,8 +643,8 @@ PROJECT_NAME=test_project
         # Should not inherit any common settings since [common] section is missing
         assert "SOME_SETTING" not in project_info["config"]
 
-    def test_load_all_projects_writes_projects_json_per_board(self):
-        """CFG-010: projects.json written per board directory."""
+    def test_load_all_projects_writes_projects_json_per_board_when_explicit(self):
+        """Explicit project index refresh writes projects.json per board directory."""
         projects_path = self._create_temp_projects_structure()
 
         ini_content = """[testproject]
@@ -626,7 +653,8 @@ PROJECT_PLATFORM=test_platform
 """
         board_path, _ini_file = self._create_board_structure(projects_path, "board01", ini_content)
 
-        result = self._load_projects_with_config(projects_path)
+        common_configs, _ = self._load_common_config(projects_path)
+        result = self._load_all_projects(projects_path, common_configs, write_projects_index=True)
         assert "testproject" in result
 
         projects_json = os.path.join(board_path, "projects.json")
