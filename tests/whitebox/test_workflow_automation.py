@@ -82,6 +82,7 @@ def test_auto_merge_pr_workflow_dispatches_release_watcher_for_github_token_merg
     assert 'base_branch="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json baseRefName --jq .baseRefName)"' in workflow
     assert "gh workflow run release-after-main-merge.yml" in workflow
     assert '--repo "$REPO"' in workflow
+    assert '--ref "$base_branch"' in workflow
     assert '-f "target_ref=$base_branch"' in workflow
     assert '-f "pr_number=$PR_NUMBER"' in workflow
     assert '-f "pr_head_sha=$HEAD_SHA"' in workflow
