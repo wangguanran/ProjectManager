@@ -7,23 +7,24 @@ You are working in the `ProjectManager` repository - a Python CLI tool for multi
 1. Treat `docs/test_cases_en.md` as the source of truth for expected behavior.
 2. Keep changes minimal and tightly scoped.
 3. Prefer reproducible steps with exact commands and file paths.
-4. After each module-level change (or after verifying a test suite passes), make a small commit and push it.
-5. Before each commit, run `make format` (black + isort).
-6. After each push, confirm GitHub Actions is green for the pushed commit SHA.
-7. For `bug/*` and `feature/*` PRs targeting `main`, let `auto-version-bump.yml` update `pyproject.toml` only when release code changes are present; do not manually bump it unless the workflow cannot run.
-8. For major releases, run the `Bump Major Version` workflow; it creates a `ci/*` PR that increments major and resets minor/patch to 0.
-9. After merging a stable release PR to `main`, create and push the matching `vX.Y.Z` tag from the updated `main` commit.
-10. Do not consider release work complete until the publish workflow and published artifacts are verified.
-11. When waiting for GitHub Codex review, treat explicit Codex comments as actionable feedback; if Codex only reacts with a thumbs-up and leaves no comments, treat the review as OK.
-12. After any PR is merged, switch the local checkout back to `main`, sync it to the merged `origin/main`, and delete the local temporary work branch.
-13. For automated implementation/completion workflows, create normal ready PRs by default instead of draft PRs so auto-merge can be armed without manual GitHub actions.
-14. Use draft PRs only for WIP/unfinished work; do not enable auto-merge while a PR is still draft.
-15. If a workflow creates or encounters a draft PR, the completion subagent owns marking it ready with `gh pr ready` after execution, review, and verification are complete, then enabling auto-merge.
-16. Auto-merge workflows and manual dispatches must treat draft PRs as a successful waiting/skip state, not as a failed run or a force-merge path.
-17. Track work in the repo-root TODO note and delete completed TODO items:
+4. In public-facing text (PR title/body, commit messages, review comments, release notes, automation summaries, and issue comments), never include personal environment details such as local usernames, home-directory paths, machine names, tokens, private hostnames, or private network addresses. Use repository-relative paths and generic environment names instead.
+5. After each module-level change (or after verifying a test suite passes), make a small commit and push it.
+6. Before each commit, run `make format` (black + isort).
+7. After each push, confirm GitHub Actions is green for the pushed commit SHA.
+8. For `bug/*` and `feature/*` PRs targeting `main`, let `auto-version-bump.yml` update `pyproject.toml` only when release code changes are present; do not manually bump it unless the workflow cannot run.
+9. For major releases, run the `Bump Major Version` workflow; it creates a `ci/*` PR that increments major and resets minor/patch to 0.
+10. After merging a stable release PR to `main`, create and push the matching `vX.Y.Z` tag from the updated `main` commit.
+11. Do not consider release work complete until the publish workflow and published artifacts are verified.
+12. When waiting for GitHub Codex review, treat explicit Codex comments as actionable feedback; if Codex only reacts with a thumbs-up and leaves no comments, treat the review as OK.
+13. After any PR is merged, switch the local checkout back to `main`, sync it to the merged `origin/main`, and delete the local temporary work branch.
+14. For automated implementation/completion workflows, create normal ready PRs by default instead of draft PRs so auto-merge can be armed without manual GitHub actions.
+15. Use draft PRs only for WIP/unfinished work; do not enable auto-merge while a PR is still draft.
+16. If a workflow creates or encounters a draft PR, the completion subagent owns marking it ready with `gh pr ready` after execution, review, and verification are complete, then enabling auto-merge.
+17. Auto-merge workflows and manual dispatches must treat draft PRs as a successful waiting/skip state, not as a failed run or a force-merge path.
+18. Track work in the repo-root TODO note and delete completed TODO items:
    - `./TODO.md`
-18. For complex tasks, the main agent must not run commands or edit files directly; it only analyzes, decomposes, assigns/publishes tasks, guides subagents, and collects results.
-19. For a single issue-fix workflow, assign ownership as follows:
+19. For complex tasks, the main agent must not run commands or edit files directly; it only analyzes, decomposes, assigns/publishes tasks, guides subagents, and collects results.
+20. For a single issue-fix workflow, assign ownership as follows:
    - Step 1 (problem analysis) and step 2 (plan/task decomposition): the main agent.
    - Steps 3-5 (code/doc edit, formatting, testing/verification): one execution subagent.
    - Step 6 (review): a second subagent that reports only actionable findings or `OK`.
@@ -96,6 +97,7 @@ make check-all
 - For destructive operations (`po_apply`, `po_revert`, `project_diff`), use `--dry-run` first on real repositories.
 - Avoid destructive git commands (e.g., `git reset --hard`) unless explicitly requested.
 - Never commit secrets/tokens.
+- Before publishing any PR, commit, review, or automation summary, scrub private local context. Do not mention absolute home paths, user-specific shell paths, local workstation names, private IPs, or credential material; prefer repo-relative paths such as `src/example.py` and neutral wording such as "local dev environment".
 
 ## Version & Build
 
