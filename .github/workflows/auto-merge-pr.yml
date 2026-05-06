@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Enable merge after required checks
+        id: enable
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
@@ -42,9 +43,16 @@ jobs:
             echo "PR #$PR_NUMBER head moved from $HEAD_SHA to $current_head; skipping stale auto-merge request."
             exit 0
           fi
-          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"
+          is_draft="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json isDraft --jq .isDraft)"
+          if [ "$is_draft" = "true" ]; then
+            echo "skipped_draft=true" >> "$GITHUB_OUTPUT"
+            echo "PR #$PR_NUMBER is draft/WIP; waiting for gh pr ready before enabling auto-merge."
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash --delete-branch --match-head-commit "$HEAD_SHA"
 
       - name: Dispatch release watcher for GitHub-token auto-merge
+        if: steps.enable.outputs.skipped_draft != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
