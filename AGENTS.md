@@ -16,10 +16,14 @@ You are working in the `ProjectManager` repository - a Python CLI tool for multi
 10. Do not consider release work complete until the publish workflow and published artifacts are verified.
 11. When waiting for GitHub Codex review, treat explicit Codex comments as actionable feedback; if Codex only reacts with a thumbs-up and leaves no comments, treat the review as OK.
 12. After any PR is merged, switch the local checkout back to `main`, sync it to the merged `origin/main`, and delete the local temporary work branch.
-13. Track work in the repo-root TODO note and delete completed TODO items:
+13. For automated implementation/completion workflows, create normal ready PRs by default instead of draft PRs so auto-merge can be armed without manual GitHub actions.
+14. Use draft PRs only for WIP/unfinished work; do not enable auto-merge while a PR is still draft.
+15. If a workflow creates or encounters a draft PR, the completion subagent owns marking it ready with `gh pr ready` after execution, review, and verification are complete, then enabling auto-merge.
+16. Auto-merge workflows and manual dispatches must treat draft PRs as a successful waiting/skip state, not as a failed run or a force-merge path.
+17. Track work in the repo-root TODO note and delete completed TODO items:
    - `./TODO.md`
-14. For complex tasks, the main agent must not run commands or edit files directly; it only analyzes, decomposes, assigns/publishes tasks, guides subagents, and collects results.
-15. For a single issue-fix workflow, assign ownership as follows:
+18. For complex tasks, the main agent must not run commands or edit files directly; it only analyzes, decomposes, assigns/publishes tasks, guides subagents, and collects results.
+19. For a single issue-fix workflow, assign ownership as follows:
    - Step 1 (problem analysis) and step 2 (plan/task decomposition): the main agent.
    - Steps 3-5 (code/doc edit, formatting, testing/verification): one execution subagent.
    - Step 6 (review): a second subagent that reports only actionable findings or `OK`.
@@ -111,6 +115,7 @@ GitHub Actions workflows in `.github/workflows/`:
 - `pylint.yml`: Linting
 - `publish-python.yml`: Manual PyPI release
 - `publish-release.yml`: Tag-based stable release, GitHub Release assets, PyPI publish, and Docker publish
+- `auto-merge-pr.yml`: PR auto-merge orchestration; arm auto-merge only for ready PRs and skip draft/WIP PRs until they are marked ready
 - `auto-version-bump.yml`: PR version bump automation for `bug/*` and `feature/*`
 - `bump-major-version.yml`: Manual major version bump PR creation
 - `validate-main-pr-source.yml`: Required main PR gate, including branch source, rebase/no-merge, and version bump validation

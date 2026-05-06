@@ -68,9 +68,27 @@ def test_auto_merge_pr_workflow_enables_merge_after_required_checks() -> None:
     assert "REPO: ${{ github.repository }}" in workflow
     assert 'gh pr view "$PR_NUMBER" --repo "$REPO"' in workflow
     assert (
-        'gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --merge --delete-branch --match-head-commit "$HEAD_SHA"'
+        'gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash --delete-branch --match-head-commit "$HEAD_SHA"'
         in workflow
     )
+
+
+def test_auto_merge_pr_workflow_dispatch_skips_draft_prs_before_merge() -> None:
+    workflow = (ROOT / ".github/workflows/auto-merge-pr.yml").read_text(encoding="utf-8")
+
+    draft_check = 'is_draft="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json isDraft --jq .isDraft)"'
+    waiting_message = 'echo "PR #$PR_NUMBER is draft/WIP; waiting for gh pr ready before enabling auto-merge."'
+    merge_command = (
+        'gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash --delete-branch --match-head-commit "$HEAD_SHA"'
+    )
+
+    assert draft_check in workflow
+    assert waiting_message in workflow
+    assert "id: enable" in workflow
+    assert 'echo "skipped_draft=true" >> "$GITHUB_OUTPUT"' in workflow
+    assert "if: steps.enable.outputs.skipped_draft != 'true'" in workflow
+    assert f"{waiting_message}\n            exit 0" in workflow
+    assert workflow.index(draft_check) < workflow.index(merge_command)
 
 
 def test_auto_merge_pr_workflow_dispatches_release_watcher_for_github_token_merges() -> None:
