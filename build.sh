@@ -49,6 +49,26 @@ ensure_venv() {
     fi
 }
 
+ensure_patchelf_for_staticx() {
+    if command -v patchelf >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "patchelf not found. Installing Python patchelf package in the build environment..."
+    python -m pip install patchelf >/dev/null 2>&1 || true
+    hash -r 2>/dev/null || true
+
+    if command -v patchelf >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "patchelf is required for Linux staticx linking but was not found." >&2
+    echo "Install patchelf before running ./build.sh, for example: apt-get install patchelf, yum install patchelf, or apk add patchelf." >&2
+    echo "If you cannot install system packages, use a build environment where patchelf is already available." >&2
+    echo "Skipping staticx; continuing with the PyInstaller binary." >&2
+    return 1
+}
+
 PLATFORM="$(detect_platform)"
 ADD_DATA_SEP=":"
 EXE_SUFFIX=""
@@ -153,30 +173,32 @@ echo "Binary generated at $BINARY_PATH"
 if [ "$PLATFORM" = "linux" ]; then
     echo -e "\033[32m--- Applying static linking for better compatibility ---\033[0m"
 
-    if ! command -v staticx >/dev/null 2>&1; then
-        echo "staticx not found. Installing for better compatibility..."
-        if ! python -m pip install staticx; then
-            echo "staticx install failed; continuing without static linking."
-        fi
-    fi
-
-    if command -v staticx >/dev/null 2>&1; then
-        # staticx depends on pkg_resources, which was removed in newer setuptools.
-        if ! python -c "import pkg_resources" >/dev/null 2>&1; then
-            echo "pkg_resources not available; installing setuptools<82 for staticx compatibility..."
-            python -m pip install "setuptools<82" >/dev/null 2>&1 || true
+    if ensure_patchelf_for_staticx; then
+        if ! command -v staticx >/dev/null 2>&1; then
+            echo "staticx not found. Installing for better compatibility..."
+            if ! python -m pip install staticx; then
+                echo "staticx install failed; continuing without static linking."
+            fi
         fi
 
-        if ! python -c "import pkg_resources" >/dev/null 2>&1; then
-            echo "pkg_resources still unavailable; skipping staticx."
-        elif staticx "$BINARY_PATH" "$BINARY_DIR/projman-static"; then
-            mv "$BINARY_DIR/projman-static" "$BINARY_PATH"
-            echo "Static linking applied successfully"
+        if command -v staticx >/dev/null 2>&1; then
+            # staticx depends on pkg_resources, which was removed in newer setuptools.
+            if ! python -c "import pkg_resources" >/dev/null 2>&1; then
+                echo "pkg_resources not available; installing setuptools<82 for staticx compatibility..."
+                python -m pip install "setuptools<82" >/dev/null 2>&1 || true
+            fi
+
+            if ! python -c "import pkg_resources" >/dev/null 2>&1; then
+                echo "pkg_resources still unavailable; skipping staticx."
+            elif staticx "$BINARY_PATH" "$BINARY_DIR/projman-static"; then
+                mv "$BINARY_DIR/projman-static" "$BINARY_PATH"
+                echo "Static linking applied successfully"
+            else
+                echo "staticx failed; continuing without static linking."
+            fi
         else
-            echo "staticx failed; continuing without static linking."
+            echo "staticx unavailable; continuing without static linking."
         fi
-    else
-        echo "staticx unavailable; continuing without static linking."
     fi
 else
     echo "Skipping staticx (unsupported on $PLATFORM)."

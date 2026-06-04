@@ -66,7 +66,7 @@ Builds the Python package and the standalone `projman` binary (PyInstaller).
 - Builds the raw PyInstaller standalone binary into `out/binary/`
 - Writes the final publishable/server-uploadable binary to `out/release/projman`
 - Records the final binary path in `out/projman_binary_path.txt`, which CI uploads with the build artifact
-- Linux-only: best-effort static linking via `staticx`
+- Linux-only: best-effort static linking via `staticx`; this step requires `patchelf`, so the script first tries to install the Python `patchelf` package in the build environment and skips static linking with a clear hint if `patchelf` is still unavailable
 - Builds only for the current OS/arch; use GitHub Actions release workflow for multi-platform binaries
 
 **Local verification**:

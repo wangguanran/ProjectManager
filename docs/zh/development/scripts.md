@@ -66,7 +66,7 @@
 - PyInstaller 原始独立二进制输出到 `out/binary/`
 - 最终可发布、可上传服务器的二进制输出到 `out/release/projman`
 - `out/projman_binary_path.txt` 记录当前系统/架构最终二进制路径，CI artifact 会随同上传
-- 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）
+- 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）；该阶段需要 `patchelf`，脚本会先尝试在构建环境中安装 Python `patchelf` 包，仍不可用时会提示预装系统依赖并跳过静态链接
 - 只会构建当前系统/架构的二进制；跨平台产物请用 GitHub Actions Release 工作流
 
 **本地验证**:
