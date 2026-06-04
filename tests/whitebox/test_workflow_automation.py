@@ -232,3 +232,30 @@ def test_publish_release_test_job_installs_console_script_before_pytest() -> Non
     assert "source venv/bin/activate" in workflow
     assert "python -m pip install --no-deps --no-build-isolation -e ." in workflow
     assert "command -v projman" in workflow
+
+
+def test_linux_build_jobs_install_patchelf_before_build_script() -> None:
+    workflow_names = (
+        "python-app.yml",
+        "publish-release.yml",
+        "publish-beta-release.yml",
+    )
+
+    for workflow_name in workflow_names:
+        workflow = (ROOT / f".github/workflows/{workflow_name}").read_text(encoding="utf-8")
+        for build_match in re.finditer(r"run: bash build\.sh", workflow):
+            dependency_index = workflow.rfind("sudo apt-get install -y", 0, build_match.start())
+            assert dependency_index != -1, workflow_name
+            dependency_step = workflow[dependency_index : build_match.start()]
+            assert "patchelf" in dependency_step, workflow_name
+
+
+def test_build_script_checks_patchelf_before_linux_staticx() -> None:
+    build_script = (ROOT / "build.sh").read_text(encoding="utf-8")
+
+    patchelf_index = build_script.index("command -v patchelf")
+    staticx_index = build_script.index("command -v staticx")
+
+    assert patchelf_index < staticx_index
+    assert "python -m pip install patchelf" in build_script
+    assert "Install patchelf before running ./build.sh" in build_script
