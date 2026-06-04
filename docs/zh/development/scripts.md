@@ -14,7 +14,7 @@
 ```
 
 **功能**:
-- 将 `out/binary/projman` 复制到安装目录
+- 优先将 `out/release/projman` 复制到安装目录；不存在时回退到 `out/binary/projman`
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
 - 当安装目录需要权限时自动使用 `sudo`
 - 对用户态安装输出 PATH 配置提示
@@ -63,9 +63,18 @@
 **功能**:
 - 默认在 `venv/` 中执行（不存在则自动创建）
 - Python 包输出到 `out/package/`
-- 独立二进制输出到 `out/binary/`
+- PyInstaller 原始独立二进制输出到 `out/binary/`
+- 最终可发布、可上传服务器的二进制输出到 `out/release/projman`
+- `out/projman_binary_path.txt` 记录当前系统/架构最终二进制路径，CI artifact 会随同上传
 - 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）
 - 只会构建当前系统/架构的二进制；跨平台产物请用 GitHub Actions Release 工作流
+
+**本地验证**:
+```bash
+./build.sh
+out/release/projman --version
+out/release/projman --help
+```
 
 ### `release.sh`
 

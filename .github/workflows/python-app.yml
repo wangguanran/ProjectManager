@@ -47,6 +47,8 @@ jobs:
       with:
         name: build-artifacts
         path: |
+          out/release/projman*
+          out/projman_binary_path.txt
           out/binary/projman*
           install.sh
           install-or-upgrade.sh
