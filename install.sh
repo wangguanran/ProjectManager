@@ -83,9 +83,12 @@ if [ "$PLATFORM" = "windows" ]; then
     EXE_SUFFIX=".exe"
 fi
 
-SRC_BIN="out/binary/projman${EXE_SUFFIX}"
+SRC_BIN="out/release/projman${EXE_SUFFIX}"
 if [ ! -f "$SRC_BIN" ]; then
-    echo "$SRC_BIN binary not found. Please run ./build.sh first." >&2
+    SRC_BIN="out/binary/projman${EXE_SUFFIX}"
+fi
+if [ ! -f "$SRC_BIN" ]; then
+    echo "projman binary not found under out/release/ or out/binary/. Please run ./build.sh first." >&2
     exit 1
 fi
 

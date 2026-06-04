@@ -14,7 +14,7 @@ Installs the standalone `projman` binary produced by `build.sh`.
 ```
 
 **Features**:
-- Copies `out/binary/projman` into an install prefix
+- Prefers `out/release/projman` when copying into an install prefix; falls back to `out/binary/projman`
 - Auto-selects `/usr/local/bin` when run as root, otherwise `~/.local/bin`
 - Uses `sudo` automatically when installing to a protected prefix
 - Prints PATH guidance for user installs
@@ -63,9 +63,18 @@ Builds the Python package and the standalone `projman` binary (PyInstaller).
 **Features**:
 - Automatically runs inside `venv/` (creates it if missing)
 - Builds Python packages into `out/package/`
-- Builds the standalone binary into `out/binary/`
+- Builds the raw PyInstaller standalone binary into `out/binary/`
+- Writes the final publishable/server-uploadable binary to `out/release/projman`
+- Records the final binary path in `out/projman_binary_path.txt`, which CI uploads with the build artifact
 - Linux-only: best-effort static linking via `staticx`
 - Builds only for the current OS/arch; use GitHub Actions release workflow for multi-platform binaries
+
+**Local verification**:
+```bash
+./build.sh
+out/release/projman --version
+out/release/projman --help
+```
 
 ### `release.sh`
 
