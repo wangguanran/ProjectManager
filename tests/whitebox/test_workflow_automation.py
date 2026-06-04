@@ -247,15 +247,29 @@ def test_linux_build_jobs_install_patchelf_before_build_script() -> None:
             dependency_index = workflow.rfind("sudo apt-get install -y", 0, build_match.start())
             assert dependency_index != -1, workflow_name
             dependency_step = workflow[dependency_index : build_match.start()]
-            assert "patchelf" in dependency_step, workflow_name
+            assert re.search(r"sudo apt-get install -y[^\n]*\bpatchelf\b", dependency_step), workflow_name
 
 
 def test_build_script_checks_patchelf_before_linux_staticx() -> None:
     build_script = (ROOT / "build.sh").read_text(encoding="utf-8")
 
-    patchelf_index = build_script.index("command -v patchelf")
+    helper_index = build_script.index("use_existing_patchelf_for_staticx")
+    deb_index = build_script.index("patchelf_0.14.3-1_amd64.deb")
+    fallback_bin_index = build_script.index('fallback_bin="$fallback_dir/usr/bin/patchelf"')
+    fallback_check_index = build_script.index('if [ -x "$fallback_bin" ]')
+    fallback_path_index = build_script.index('export PATH="$fallback_dir/usr/bin:$PATH"')
     staticx_index = build_script.index("command -v staticx")
 
-    assert patchelf_index < staticx_index
-    assert "python -m pip install patchelf" in build_script
-    assert "Install patchelf before running ./build.sh" in build_script
+    assert helper_index < deb_index < fallback_bin_index < fallback_check_index < fallback_path_index < staticx_index
+    assert "archive.ubuntu.com/ubuntu/pool/universe/p/patchelf" in build_script
+    assert "dpkg-deb -x" in build_script
+    assert 'export PATH="$fallback_dir/usr/bin:$PATH"' in build_script
+    assert "patchelf 0.17.2" in build_script
+    assert "if command -v patchelf >/dev/null 2>&1; then\n        return 0\n    fi" not in build_script
+    assert 'if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then' in build_script
+    assert "python -m pip install patchelf" not in build_script
+    assert (
+        "sudo apt-get install"
+        not in build_script[build_script.index("ensure_patchelf_for_staticx") : build_script.index("PLATFORM=")]
+    )
+    assert "Skipping staticx; continuing with the PyInstaller binary." in build_script

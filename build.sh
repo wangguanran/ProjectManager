@@ -49,22 +49,105 @@ ensure_venv() {
     fi
 }
 
+use_existing_patchelf_for_staticx() {
+    local patchelf_path patchelf_version
+    patchelf_path="$1"
+    if [ -z "$patchelf_path" ]; then
+        return 1
+    fi
+
+    patchelf_version="$("$patchelf_path" --version 2>/dev/null || true)"
+    if [ -z "$patchelf_version" ]; then
+        return 1
+    fi
+
+    case "$patchelf_version" in
+        *" 0.17.2"*|*"patchelf 0.17.2"*)
+            echo "Existing patchelf 0.17.2 is not compatible with this staticx build; skipping staticx." >&2
+            return 1
+            ;;
+    esac
+
+    echo "Using existing patchelf: $patchelf_path"
+    return 0
+}
+
 ensure_patchelf_for_staticx() {
-    if command -v patchelf >/dev/null 2>&1; then
+    local arch deb_url fallback_dir deb_path fallback_bin existing_patchelf_path
+    existing_patchelf_path="$(command -v patchelf 2>/dev/null || true)"
+    arch="$(uname -m 2>/dev/null || echo unknown)"
+    if [ "$arch" != "x86_64" ] && [ "$arch" != "amd64" ]; then
+        if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then
+            return 0
+        fi
+        echo "patchelf is required for Linux staticx linking but was not found." >&2
+        echo "Automatic fallback is only available on Linux x86_64/amd64; detected '$arch'." >&2
+        echo "Skipping staticx; continuing with the PyInstaller binary." >&2
+        return 1
+    fi
+
+    if ! command -v dpkg-deb >/dev/null 2>&1; then
+        echo "patchelf is required for Linux staticx linking but was not found." >&2
+        echo "dpkg-deb is unavailable, so the build script cannot unpack the distribution patchelf fallback." >&2
+        if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then
+            return 0
+        fi
+        echo "Skipping staticx; continuing with the PyInstaller binary." >&2
+        return 1
+    fi
+
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+        echo "patchelf is required for Linux staticx linking but was not found." >&2
+        echo "Neither curl nor wget is available to download the distribution patchelf fallback." >&2
+        if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then
+            return 0
+        fi
+        echo "Skipping staticx; continuing with the PyInstaller binary." >&2
+        return 1
+    fi
+
+    deb_url="https://archive.ubuntu.com/ubuntu/pool/universe/p/patchelf/patchelf_0.14.3-1_amd64.deb"
+    fallback_dir="${OUT_DIR:-out}/staticx-tools/patchelf-jammy"
+    deb_path="$fallback_dir/patchelf_0.14.3-1_amd64.deb"
+    fallback_bin="$fallback_dir/usr/bin/patchelf"
+
+    echo "Preparing Ubuntu Jammy patchelf fallback for staticx..."
+    mkdir -p "$fallback_dir"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$deb_url" -o "$deb_path" || true
+    else
+        wget -q "$deb_url" -O "$deb_path" || true
+    fi
+
+    if [ ! -s "$deb_path" ]; then
+        echo "Failed to download distribution patchelf fallback from $deb_url." >&2
+        if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then
+            return 0
+        fi
+        echo "Skipping staticx; continuing with the PyInstaller binary." >&2
+        return 1
+    fi
+
+    if ! dpkg-deb -x "$deb_path" "$fallback_dir"; then
+        echo "Failed to unpack distribution patchelf fallback." >&2
+        if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then
+            return 0
+        fi
+        echo "Skipping staticx; continuing with the PyInstaller binary." >&2
+        return 1
+    fi
+
+    if [ -x "$fallback_bin" ] && "$fallback_bin" --version >/dev/null 2>&1; then
+        export PATH="$fallback_dir/usr/bin:$PATH"
+        hash -r 2>/dev/null || true
+        "$fallback_bin" --version
         return 0
     fi
 
-    echo "patchelf not found. Installing Python patchelf package in the build environment..."
-    python -m pip install patchelf >/dev/null 2>&1 || true
-    hash -r 2>/dev/null || true
-
-    if command -v patchelf >/dev/null 2>&1; then
+    echo "Distribution patchelf fallback is not runnable after unpacking." >&2
+    if use_existing_patchelf_for_staticx "$existing_patchelf_path"; then
         return 0
     fi
-
-    echo "patchelf is required for Linux staticx linking but was not found." >&2
-    echo "Install patchelf before running ./build.sh, for example: apt-get install patchelf, yum install patchelf, or apk add patchelf." >&2
-    echo "If you cannot install system packages, use a build environment where patchelf is already available." >&2
     echo "Skipping staticx; continuing with the PyInstaller binary." >&2
     return 1
 }
