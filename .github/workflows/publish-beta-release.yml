@@ -19,11 +19,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf binutils git
-
       - name: Build project (beta channel)
         shell: bash
         env:
@@ -42,6 +37,7 @@ jobs:
     name: build-binaries (beta) (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: test
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -62,7 +58,7 @@ jobs:
         shell: bash
         env:
           PROJMAN_RELEASE_CHANNEL: beta
-        run: bash build.sh
+        run: bash build.sh --standalone
 
       - name: Run Windows PO file operation tests on binary
         if: runner.os == 'Windows'
@@ -138,6 +134,7 @@ jobs:
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: artifacts
 
@@ -147,17 +144,18 @@ jobs:
           set -euo pipefail
           mkdir -p release
           copied=0
-          while IFS= read -r file; do
-            name="$(basename "$file")"
-            cp "$file" "release/$name"
-            sha256sum "release/$name" > "release/$name.sha256"
-            copied=$((copied + 1))
-          done < <(find artifacts/projman-* -type f -name 'projman-*' | sort)
+          if [ -d artifacts ]; then
+            while IFS= read -r file; do
+              name="$(basename "$file")"
+              cp "$file" "release/$name"
+              sha256sum "release/$name" > "release/$name.sha256"
+              copied=$((copied + 1))
+            done < <(find artifacts/projman-* -type f -name 'projman-*' | sort)
+          fi
 
           if [ "$copied" -eq 0 ]; then
-            echo "No beta release binaries collected from artifacts/" >&2
+            echo "No beta release binaries collected from artifacts; continuing with package-only prerelease."
             find artifacts -maxdepth 3 -type f | sed 's#^#  - #' >&2 || true
-            exit 1
           fi
 
       - name: Compute beta tag
@@ -200,10 +198,11 @@ jobs:
 
           ## Install / Update
 
-          - If you already have projman installed:
-            - \`projman update --beta\`
-          - If you want to pin to stable releases:
-            - \`projman update --stable\`
+          - Default installs should use the Python package / venv console script path.
+          - Standalone binary updates are optional:
+            - \`projman update --standalone --beta\`
+          - To pin standalone binary updates to stable releases:
+            - \`projman update --standalone --stable\`
 
           ## Assets & Checksums
           EOF
@@ -231,6 +230,7 @@ jobs:
           prerelease: true
           files: |
             release/projman-*
+          fail_on_unmatched_files: false
           body_path: release/RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

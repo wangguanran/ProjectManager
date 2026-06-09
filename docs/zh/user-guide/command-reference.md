@@ -22,16 +22,16 @@ python -m src <命令> <参数> [选项]
 
 ## 维护命令
 
-### `update` - 更新 projman（二进制升级，支持 stable/beta 通道）
+### `update` - 更新 standalone projman 二进制（支持 stable/beta 通道）
 
 **状态**: ✅ 已实现
 
 **语法**:
 ```bash
-python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
+python -m src update --standalone [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
 ```
 
-**描述**: 自动检测当前平台/架构，从 GitHub Release 拉取最新二进制并安装到目标目录。若 Release 中存在匹配的 `.sha256` 资产，会进行 sha256 校验（可用 `--require-checksum` 强制必须存在 checksum）。
+**描述**: 仅用于 standalone 二进制更新。设置 `--standalone` 后，会自动检测当前平台/架构，从 GitHub Release 拉取最新二进制并安装到目标目录。若 Release 中存在匹配的 `.sha256` 资产，会进行 sha256 校验（可用 `--require-checksum` 强制必须存在 checksum）。默认安装路径应使用 Python 包 / venv console script（例如 PyPI、`install.sh`，或源码 checkout 中的 `install-or-upgrade.sh`）。
 
 **Stable vs Beta**
 - 默认通道推断（best-effort）：当前版本包含 `+beta` 则默认 `beta`，否则默认 `stable`。
@@ -41,9 +41,9 @@ python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner
 **示例**:
 ```bash
 python -m src update --dry-run
-python -m src update --beta --dry-run
-python -m src update --user
-python -m src update --require-checksum
+python -m src update --standalone --beta --dry-run
+python -m src update --standalone --user
+python -m src update --standalone --require-checksum
 ```
 
 ### `upgrade` - `update` 的别名

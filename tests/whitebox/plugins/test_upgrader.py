@@ -63,6 +63,17 @@ class TestUpgrader:
         )
         assert result is True
 
+    def test_upgrade_default_refuses_standalone_binary_install(self, tmp_path):
+        with patch.object(self.upgrader, "_http_get_json") as mocked_get_json:
+            result = self.upgrader.upgrade(
+                env={},
+                projects_info={},
+                prefix=str(tmp_path / "bin"),
+            )
+
+        assert result is False
+        mocked_get_json.assert_not_called()
+
     def test_upgrade_installs_selected_asset(self, tmp_path):
         install_dir = tmp_path / "install-bin"
         downloaded = tmp_path / "downloaded-projman"
@@ -90,6 +101,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                standalone=True,
             )
 
         assert result is True
@@ -139,6 +151,7 @@ class TestUpgrader:
                 projects_info={},
                 prefix=str(install_dir),
                 beta=True,
+                standalone=True,
             )
 
         assert result is True
@@ -188,6 +201,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                standalone=True,
             )
 
         assert result is True
@@ -234,6 +248,7 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix=str(install_dir),
+                standalone=True,
             )
 
         assert result is False
@@ -335,6 +350,7 @@ class TestUpgrader:
                 projects_info={},
                 prefix=str(install_dir),
                 require_checksum=True,
+                standalone=True,
             )
 
         assert result is False
@@ -359,5 +375,6 @@ class TestUpgrader:
                 env={},
                 projects_info={},
                 prefix="/tmp/unused",
+                standalone=True,
             )
         assert result is False
