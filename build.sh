@@ -6,6 +6,41 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
 VENV_DIR="${VENV_DIR:-venv}"
+BUILD_STANDALONE="${BUILD_STANDALONE:-0}"
+
+usage() {
+    echo "Usage: $0 [--standalone]"
+    echo ""
+    echo "Options:"
+    echo "  --standalone   Also build the PyInstaller/staticx standalone binary."
+}
+
+while [ "${1:-}" != "" ]; do
+    case "$1" in
+        --standalone)
+            BUILD_STANDALONE="1"
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+case "$(printf '%s' "$BUILD_STANDALONE" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|y|on)
+        BUILD_STANDALONE="1"
+        ;;
+    *)
+        BUILD_STANDALONE="0"
+        ;;
+esac
 
 detect_platform() {
     local uname_s
@@ -169,7 +204,7 @@ python -m pip install -r requirements.txt
 OUT_DIR="out"
 PACKAGE_DIR="$OUT_DIR/package"
 BINARY_DIR="$OUT_DIR/binary"
-mkdir -p "$PACKAGE_DIR" "$BINARY_DIR"
+mkdir -p "$PACKAGE_DIR"
 
 echo -e "\033[32m--- Cleaning up old builds ---\033[0m"
 if ! rm -rf build dist .pytest_cache *.egg-info "$OUT_DIR" 2>/dev/null; then
@@ -182,7 +217,7 @@ if ! rm -rf build dist .pytest_cache *.egg-info "$OUT_DIR" 2>/dev/null; then
         exit 1
     fi
 fi
-mkdir -p "$PACKAGE_DIR" "$BINARY_DIR"
+mkdir -p "$PACKAGE_DIR"
 
 echo -e "\033[32m--- Generating build metadata (git commit hash) ---\033[0m"
 python scripts/write_build_info.py
@@ -194,6 +229,21 @@ trap cleanup_build_info EXIT
 echo -e "\033[32m--- Building Python package ---\033[0m"
 python -m build --outdir "$PACKAGE_DIR"
 echo -e "\033[32m--- Python package build complete. Find the artifacts in the '$PACKAGE_DIR' directory. ---\033[0m"
+
+if [ "$BUILD_STANDALONE" != "1" ]; then
+    # Clean egg-info in src directory
+    rm -rf src/*.egg-info
+
+    # Show build summary
+    echo -e "\033[32m--- Build Summary ---\033[0m"
+    echo "Platform: $PLATFORM"
+    echo "Python packages: $PACKAGE_DIR/"
+    echo "Standalone binary: skipped (use --standalone or BUILD_STANDALONE=1)"
+    echo "All artifacts: $OUT_DIR/"
+    exit 0
+fi
+
+mkdir -p "$BINARY_DIR"
 
 echo -e "\033[32m--- Building standalone binary with pyinstaller ---\033[0m"
 

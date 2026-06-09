@@ -234,16 +234,34 @@ def test_publish_release_test_job_installs_console_script_before_pytest() -> Non
     assert "command -v projman" in workflow
 
 
-def test_linux_build_jobs_install_patchelf_before_build_script() -> None:
+def test_python_app_workflow_tests_package_install_by_default() -> None:
+    workflow = (ROOT / ".github/workflows/python-app.yml").read_text(encoding="utf-8")
+
+    assert "- name: Test package install" in workflow
+    assert "out/package/*" in workflow
+    assert "bash install.sh" in workflow
+    assert "- name: Test standalone binary install" not in workflow
+    assert "projman update --dry-run --user" not in workflow
+
+
+def test_publish_release_builds_standalone_as_optional_assets() -> None:
+    workflow = (ROOT / ".github/workflows/publish-release.yml").read_text(encoding="utf-8")
+
+    assert "continue-on-error: true" in workflow
+    assert "run: bash build.sh --standalone" in workflow
+    assert "No release binaries collected from artifacts; continuing with package-only release." in workflow
+    assert "release/projman-*" in workflow
+
+
+def test_linux_standalone_build_jobs_install_patchelf_before_build_script() -> None:
     workflow_names = (
-        "python-app.yml",
         "publish-release.yml",
         "publish-beta-release.yml",
     )
 
     for workflow_name in workflow_names:
         workflow = (ROOT / f".github/workflows/{workflow_name}").read_text(encoding="utf-8")
-        for build_match in re.finditer(r"run: bash build\.sh", workflow):
+        for build_match in re.finditer(r"run: bash build\.sh --standalone", workflow):
             dependency_index = workflow.rfind("sudo apt-get install -y", 0, build_match.start())
             assert dependency_index != -1, workflow_name
             dependency_step = workflow[dependency_index : build_match.start()]

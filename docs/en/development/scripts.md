@@ -6,15 +6,18 @@ This document describes the various scripts and automation tools available in th
 
 ### `install.sh`
 
-Installs the standalone `projman` binary produced by `build.sh`.
+Installs the Python package into a managed virtual environment and exposes the `projman` console script in the target bin directory.
 
 **Usage**:
 ```bash
-./install.sh [--system|--user] [--prefix DIR]
+./install.sh [--system|--user] [--prefix DIR] [--standalone]
 ```
 
 **Features**:
-- Prefers `out/release/projman` when copying into an install prefix; falls back to `out/binary/projman`
+- Uses `out/package/*.whl`; if no wheel exists, runs the default `./build.sh` package build
+- Creates or reuses a virtual environment and installs the wheel into it
+- Writes a `projman` wrapper into the selected bin directory that executes the venv console script
+- `--standalone` preserves the old binary-copy path and prefers `out/release/projman`, falling back to `out/binary/projman`
 - Auto-selects `/usr/local/bin` when run as root, otherwise `~/.local/bin`
 - Uses `sudo` automatically when installing to a protected prefix
 - Prints PATH guidance for user installs
@@ -53,27 +56,33 @@ Sets up a Python virtual environment for development.
 
 ### `build.sh`
 
-Builds the Python package and the standalone `projman` binary (PyInstaller).
+Builds Python package artifacts by default. Standalone PyInstaller/staticx binaries are explicit optional artifacts.
 
 **Usage**:
 ```bash
 ./build.sh
+./build.sh --standalone
+BUILD_STANDALONE=1 ./build.sh
 ```
 
 **Features**:
 - Automatically runs inside `venv/` (creates it if missing)
 - Builds Python packages into `out/package/`
-- Builds the raw PyInstaller standalone binary into `out/binary/`
-- Writes the final publishable/server-uploadable binary to `out/release/projman`
-- Records the final binary path in `out/projman_binary_path.txt`, which CI uploads with the build artifact
-- Linux-only: best-effort static linking via `staticx`; on Linux x86_64/amd64 this step first downloads and unpacks the Ubuntu Jammy `patchelf` deb into the build output and prepends it to `PATH`; only if that fallback cannot be prepared or run does the script try an existing compatible `patchelf` (known-incompatible 0.17.2 is rejected); if no usable `patchelf` is available, the script skips `staticx` and keeps the PyInstaller binary
+- Default mode does not run PyInstaller/staticx and does not require `patchelf`
+- With `--standalone` or `BUILD_STANDALONE=1`, builds the raw PyInstaller standalone binary into `out/binary/`
+- With standalone enabled, writes the final publishable/server-uploadable binary to `out/release/projman`
+- With standalone enabled, records the final binary path in `out/projman_binary_path.txt`
+- Standalone Linux-only: best-effort static linking via `staticx`; on Linux x86_64/amd64 this step first downloads and unpacks the Ubuntu Jammy `patchelf` deb into the build output and prepends it to `PATH`; only if that fallback cannot be prepared or run does the script try an existing compatible `patchelf` (known-incompatible 0.17.2 is rejected); if no usable `patchelf` is available, the script skips `staticx` and keeps the PyInstaller binary
 - Builds only for the current OS/arch; use GitHub Actions release workflow for multi-platform binaries
 
 **Local verification**:
 ```bash
 ./build.sh
-out/release/projman --version
-out/release/projman --help
+python -m pip install --force-reinstall out/package/*.whl
+projman --version
+
+./build.sh --standalone
+out/release/projman --version  # optional standalone path
 ```
 
 ### `release.sh`
@@ -94,7 +103,7 @@ Creates a new release with version management.
 
 ### `get_latest_release.sh`
 
-Downloads the latest GitHub Release asset for the current OS/arch and installs `projman`.
+Standalone-only helper: downloads the latest GitHub Release binary asset for the current OS/arch and installs `projman`.
 
 **Usage**:
 ```bash
@@ -107,6 +116,7 @@ Downloads the latest GitHub Release asset for the current OS/arch and installs `
 - Selects the best-matching asset (for example `projman-linux-x86_64`)
 - Installs `projman` to `/usr/local/bin` when run as root, otherwise `~/.local/bin`
 - Uses `sudo` automatically when installing to a protected prefix
+- Use `install.sh` or PyPI for the default Python package / venv console script installation path
 - For Windows, use `install.ps1`
 
 ### `install.ps1`
@@ -346,13 +356,16 @@ python coverage_report.py
 ### Building and Releasing
 
 ```bash
-# Build packages + standalone binary
+# Build Python package artifacts
 ./build.sh
+
+# Optional standalone binary
+./build.sh --standalone
 
 # Create a new release
 ./release.sh v1.2.3
 
-# Check latest release
+# Check or install latest optional standalone release binary
 ./get_latest_release.sh
 ```
 

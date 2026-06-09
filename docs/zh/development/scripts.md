@@ -6,15 +6,18 @@
 
 ### `install.sh`
 
-安装由 `build.sh` 生成的独立 `projman` 可执行文件。
+默认将 Python 包安装到受管理的虚拟环境，并在目标 bin 目录提供 `projman` console script 包装命令。
 
 **用法**:
 ```bash
-./install.sh [--system|--user] [--prefix DIR]
+./install.sh [--system|--user] [--prefix DIR] [--standalone]
 ```
 
 **功能**:
-- 优先将 `out/release/projman` 复制到安装目录；不存在时回退到 `out/binary/projman`
+- 默认使用 `out/package/*.whl`；如果 wheel 不存在，会先运行默认的 `./build.sh` 生成 Python 包
+- 创建或复用虚拟环境，并将 wheel 安装到该虚拟环境
+- 在目标 bin 目录写入 `projman` 包装命令，执行虚拟环境中的 console script
+- `--standalone` 保留旧的独立二进制复制路径：优先使用 `out/release/projman`，不存在时回退到 `out/binary/projman`
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
 - 当安装目录需要权限时自动使用 `sudo`
 - 对用户态安装输出 PATH 配置提示
@@ -53,27 +56,33 @@
 
 ### `build.sh`
 
-构建 Python 包以及独立的 `projman` 二进制（PyInstaller）。
+默认构建 Python 包产物。PyInstaller/staticx 独立二进制是显式可选产物。
 
 **用法**:
 ```bash
 ./build.sh
+./build.sh --standalone
+BUILD_STANDALONE=1 ./build.sh
 ```
 
 **功能**:
 - 默认在 `venv/` 中执行（不存在则自动创建）
 - Python 包输出到 `out/package/`
-- PyInstaller 原始独立二进制输出到 `out/binary/`
-- 最终可发布、可上传服务器的二进制输出到 `out/release/projman`
-- `out/projman_binary_path.txt` 记录当前系统/架构最终二进制路径，CI artifact 会随同上传
-- 仅 Linux：尝试使用 `staticx` 做静态链接（best-effort）；在 Linux x86_64/amd64 上，该阶段会先下载并解包 Ubuntu Jammy `patchelf` deb 到构建输出目录并前置到 `PATH`；只有该 fallback 无法准备或运行时，才尝试使用已有且兼容的 `patchelf`（会拒绝已知不兼容的 0.17.2）；如果仍无可用 `patchelf`，则跳过 `staticx`，保留 PyInstaller 二进制
+- 默认模式不会运行 PyInstaller/staticx，也不要求 `patchelf`
+- 使用 `--standalone` 或 `BUILD_STANDALONE=1` 时，PyInstaller 原始独立二进制输出到 `out/binary/`
+- standalone 模式下，最终可发布、可上传服务器的二进制输出到 `out/release/projman`
+- standalone 模式下，`out/projman_binary_path.txt` 记录当前系统/架构最终二进制路径
+- standalone Linux 模式：尝试使用 `staticx` 做静态链接（best-effort）；在 Linux x86_64/amd64 上，该阶段会先下载并解包 Ubuntu Jammy `patchelf` deb 到构建输出目录并前置到 `PATH`；只有该 fallback 无法准备或运行时，才尝试使用已有且兼容的 `patchelf`（会拒绝已知不兼容的 0.17.2）；如果仍无可用 `patchelf`，则跳过 `staticx`，保留 PyInstaller 二进制
 - 只会构建当前系统/架构的二进制；跨平台产物请用 GitHub Actions Release 工作流
 
 **本地验证**:
 ```bash
 ./build.sh
-out/release/projman --version
-out/release/projman --help
+python -m pip install --force-reinstall out/package/*.whl
+projman --version
+
+./build.sh --standalone
+out/release/projman --version  # 可选 standalone 路径
 ```
 
 ### `release.sh`
@@ -94,7 +103,7 @@ out/release/projman --help
 
 ### `get_latest_release.sh`
 
-根据当前系统/架构下载最新 Release 的资源并安装 `projman`。
+standalone-only 辅助脚本：根据当前系统/架构下载最新 GitHub Release 独立二进制资源并安装 `projman`。
 
 **用法**:
 ```bash
@@ -107,6 +116,7 @@ out/release/projman --help
 - 自动选择最匹配的资源（例如 `projman-linux-x86_64`）
 - 以 root 运行时默认安装到 `/usr/local/bin`，否则安装到 `~/.local/bin`
 - 当安装目录需要权限时自动使用 `sudo`
+- 默认 Python 包 / venv console script 安装路径请使用 `install.sh` 或 PyPI
 - Windows 请使用 `install.ps1`
 
 ### `install.ps1`
@@ -346,13 +356,16 @@ python coverage_report.py
 ### 构建和发布
 
 ```bash
-# 构建 Python 包 + 独立二进制
+# 构建 Python 包产物
 ./build.sh
+
+# 可选独立二进制
+./build.sh --standalone
 
 # 创建新发布
 ./release.sh v1.2.3
 
-# 检查最新发布
+# 检查或安装最新可选 standalone 发布二进制
 ./get_latest_release.sh
 ```
 

@@ -29,16 +29,16 @@ All commands accept the following global options:
 
 ## Maintenance Commands
 
-### `update` — Update projman binary (stable/beta channels)
+### `update` — Update standalone projman binary (stable/beta channels)
 
 **Status**: ✅ Implemented
 
 **Syntax**
 ```bash
-python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
+python -m src update --standalone [--beta|--stable] [--user|--system|--prefix <dir>] [--owner <owner>] [--repo <repo>] [--require-checksum]
 ```
 
-**Description**: Auto-detect the current platform/architecture, fetch the latest GitHub Release asset, optionally verify sha256 checksum (if published), and install `projman` to the selected location.
+**Description**: Standalone-only updater. With `--standalone`, it auto-detects the current platform/architecture, fetches the latest GitHub Release binary asset, optionally verifies sha256 checksum (if published), and installs `projman` to the selected location. Default installs should use the Python package / venv console script path (`pip`, `install.sh`, or `install-or-upgrade.sh` from a source checkout).
 
 **Stable vs Beta**
 - Default channel inference (best-effort): if current version contains `+beta`, default to `beta`; otherwise `stable`.
@@ -47,11 +47,11 @@ python -m src update [--beta|--stable] [--user|--system|--prefix <dir>] [--owner
 
 **Examples**
 ```bash
-python -m src update --user
-python -m src update --prefix ~/.local/bin
+python -m src update --standalone --user
+python -m src update --standalone --prefix ~/.local/bin
 python -m src update --dry-run
-python -m src update --beta --dry-run
-python -m src update --require-checksum
+python -m src update --standalone --beta --dry-run
+python -m src update --standalone --require-checksum
 ```
 
 ---

@@ -12,22 +12,18 @@ ProjectManager is a project management and patch (patch/override, PO) management
 
 ## Installation
 
-### One-shot Install or Upgrade
-
-```bash
-# Installs the latest stable release when projman is missing.
-# Runs `projman update` when projman is already installed.
-curl -fsSL https://raw.githubusercontent.com/wangguanran/ProjectManager/main/install-or-upgrade.sh | bash -s -- --user
-
-# From a cloned repository:
-bash install-or-upgrade.sh --user
-```
-
 ### Python Package
 
-**From PyPI**:
 ```bash
 pip install multi-project-manager
+```
+
+### Source Checkout Installer
+
+```bash
+git clone https://github.com/wangguanran/ProjectManager.git
+cd ProjectManager
+bash install-or-upgrade.sh --user
 ```
 
 **From GitHub Package Registry**:
@@ -114,12 +110,12 @@ python -m src <operation> [project_or_board_name] [parameters] [--options]
 - `--help`: Show detailed help for all operations
 - `--perf-analyze`: Enable cProfile performance analysis
 
-#### `upgrade` - Upgrade projman Binary
+#### `upgrade` - Upgrade standalone projman binary
 **Status**: ✅ Implemented
 
-**Usage**: `python -m src upgrade [--user|--system|--prefix DIR]`
+**Usage**: `python -m src upgrade --standalone [--user|--system|--prefix DIR]`
 
-**Description**: Detects current platform/architecture, downloads the latest release binary, and installs it to the selected prefix.
+**Description**: Standalone-only updater. Default installs should use the Python package / venv console script path.
 
 ## Detailed Command Reference
 

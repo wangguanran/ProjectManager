@@ -35,10 +35,6 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: "3.12"
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y patchelf binutils
     - name: Build project
       shell: bash
       run: bash build.sh
@@ -47,9 +43,7 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          out/release/projman*
-          out/projman_binary_path.txt
-          out/binary/projman*
+          out/package/*
           install.sh
           install-or-upgrade.sh
           get_latest_release.sh
@@ -66,13 +60,12 @@ jobs:
       with:
         name: build-artifacts
         path: .
-    - name: Test standalone binary install
+    - name: Test package install
       run: |
         bash install.sh
         export PATH="$HOME/.local/bin:$PATH"
         projman --version
         projman --help | grep -q "supported operations"
-        projman update --dry-run --user
         bash install-or-upgrade.sh --user --dry-run
         rm "$HOME/.local/bin/projman"
 

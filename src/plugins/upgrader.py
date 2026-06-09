@@ -1,8 +1,8 @@
 """
 Upgrade command for projman.
 
-Downloads the latest release binary from GitHub and installs it into the
-selected install prefix.
+Standalone-only updater for downloading a GitHub Release binary and installing
+it into the selected install prefix.
 """
 
 from __future__ import annotations
@@ -406,7 +406,7 @@ def _path_contains(path_value: str) -> bool:
     "upgrade",
     needs_repositories=False,
     needs_projects=False,
-    desc="Upgrade projman by downloading the latest release binary (alias: update)",
+    desc="Upgrade a standalone projman binary from GitHub Releases (alias: update)",
 )
 def upgrade(  # noqa: PLR0913
     env: Dict[str, Any],
@@ -422,8 +422,9 @@ def upgrade(  # noqa: PLR0913
     require_checksum: bool = False,
     beta: bool = False,
     stable: bool = False,
+    standalone: bool = False,
 ) -> bool:
-    """Upgrade projman from GitHub release binary (stable by default).
+    """Upgrade a standalone projman binary from GitHub Releases.
 
     Args:
         owner (str): GitHub repository owner.
@@ -436,6 +437,7 @@ def upgrade(  # noqa: PLR0913
         require_checksum (bool): If True, require a matching sha256 asset and abort if missing.
         beta (bool): If True, upgrade from latest prerelease (beta channel).
         stable (bool): If True, upgrade from latest stable release (overrides beta/default inference).
+        standalone (bool): Required to install a standalone Release binary.
     """
 
     return _upgrade_impl(
@@ -452,6 +454,7 @@ def upgrade(  # noqa: PLR0913
         require_checksum=require_checksum,
         beta=beta,
         stable=stable,
+        standalone=standalone,
         operation="upgrade",
     )
 
@@ -460,7 +463,7 @@ def upgrade(  # noqa: PLR0913
     "update",
     needs_repositories=False,
     needs_projects=False,
-    desc="Update projman by downloading the latest release binary (stable/beta channels)",
+    desc="Update a standalone projman binary from GitHub Releases",
 )
 def update(  # noqa: PLR0913
     env: Dict[str, Any],
@@ -476,8 +479,9 @@ def update(  # noqa: PLR0913
     require_checksum: bool = False,
     beta: bool = False,
     stable: bool = False,
+    standalone: bool = False,
 ) -> bool:
-    """Update projman from GitHub release binary (stable/beta channels).
+    """Update a standalone projman binary from GitHub Releases.
 
     This is the preferred command name. `upgrade` remains for backward compatibility.
     """
@@ -496,6 +500,7 @@ def update(  # noqa: PLR0913
         require_checksum=require_checksum,
         beta=beta,
         stable=stable,
+        standalone=standalone,
         operation="update",
     )
 
@@ -515,6 +520,7 @@ def _upgrade_impl(  # noqa: PLR0913
     require_checksum: bool,
     beta: Any,
     stable: Any,
+    standalone: bool,
     operation: str,
 ) -> bool:
     """Shared implementation for upgrade/update."""
@@ -557,6 +563,18 @@ def _upgrade_impl(  # noqa: PLR0913
 
     auth_token = str(token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
     api_url = _release_api_url_for_channel(owner, repo, channel=channel)
+
+    if not bool(standalone):
+        if dry_run:
+            print(f"DRY-RUN: channel={channel}")
+            print("DRY-RUN: default package/venv install is active; standalone binary update not selected.")
+            print("DRY-RUN: use --standalone to update a GitHub Release binary.")
+            return True
+        print(
+            "Error: update/upgrade only installs GitHub Release binaries when --standalone is set. "
+            "Use install.sh or install-or-upgrade.sh for the default package/venv install."
+        )
+        return False
 
     if dry_run:
         print(f"DRY-RUN: channel={channel}")

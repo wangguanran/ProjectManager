@@ -72,4 +72,4 @@ def test_installed_projman_command_runs_cli_outputs(tmp_path: Path) -> None:
         text=True,
     )
     assert update_result.returncode == 0
-    assert "DRY-RUN: target install path:" in update_result.stdout
+    assert "DRY-RUN: default package/venv install is active" in update_result.stdout
