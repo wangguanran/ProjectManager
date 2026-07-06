@@ -1,4 +1,4 @@
-name: Rename fix PR branch to bug
+name: Retarget fix PR to bug branch
 
 on:
   push:
@@ -6,16 +6,15 @@ on:
       - fix/po-revert-reset-and-manifest-include
 
 permissions:
-  administration: write
   contents: write
   pull-requests: write
 
 jobs:
-  rename-fix-branch:
-    name: rename-fix-branch
+  retarget-pr-212:
+    name: retarget-pr-212
     runs-on: ubuntu-latest
     steps:
-      - name: Rename fix/po-revert-reset-and-manifest-include to bug/*
+      - name: Point PR #212 at bug/* and remove fix/* branch
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -24,12 +23,8 @@ jobs:
         run: |
           set -euo pipefail
           old_enc="${OLD_BRANCH//\//%2F}"
-          new_enc="${NEW_BRANCH//\//%2F}"
 
-          # Remove temporary duplicate branch if present; ignore missing ref.
-          gh api -X DELETE "repos/${REPO}/git/refs/heads/${new_enc}" || true
+          gh pr edit 212 --repo "${REPO}" --head "${NEW_BRANCH}"
+          gh api -X DELETE "repos/${REPO}/git/refs/heads/${old_enc}"
 
-          gh api "repos/${REPO}/branches/${old_enc}/rename" \
-            -f new_name="${NEW_BRANCH}"
-
-          echo "Renamed ${OLD_BRANCH} -> ${NEW_BRANCH}"
+          echo "PR #212 now tracks ${NEW_BRANCH}; deleted ${OLD_BRANCH}"
