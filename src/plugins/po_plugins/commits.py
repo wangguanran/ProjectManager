@@ -17,9 +17,7 @@ from .registry import (
     register_simple_plugin,
 )
 from .runtime import PoPluginContext, PoPluginRuntime
-from .utils import extract_patch_targets
-
-SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
+from .utils import SKIPPED_COMMIT_STATUSES, extract_patch_targets, resolve_commit_reset_target
 FORMAT_PATCH_SUBJECT_PREFIX_RE = re.compile(r"^\[PATCH(?:\s+\d+/\d+)?\]\s*")
 
 
@@ -277,30 +275,6 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     return True
 
 
-def _resolve_reset_target(repo_path: str, commit_entry: Dict[str, Any]) -> Optional[str]:
-    """Return the commit to reset --hard to when undoing a PO-applied commit patch."""
-    head_before = commit_entry.get("head_before")
-    if head_before:
-        return head_before
-
-    shas = commit_entry.get("commit_shas") or []
-    if not shas and commit_entry.get("head_after"):
-        shas = [commit_entry["head_after"]]
-    if not shas:
-        return None
-
-    parent_result = subprocess.run(
-        ["git", "rev-parse", f"{shas[0]}^"],
-        cwd=repo_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if parent_result.returncode != 0:
-        return None
-    return parent_result.stdout.strip()
-
-
 def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     """Remove commits applied by PO by resetting to the recorded pre-apply HEAD."""
     for repo_root, repo_name in runtime.repositories or []:
@@ -319,7 +293,7 @@ def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 continue
 
             head_after = commit_entry.get("head_after")
-            reset_target = _resolve_reset_target(repo_path, commit_entry)
+            reset_target = resolve_commit_reset_target(repo_path, commit_entry)
             if not reset_target:
                 log.warning(
                     "No reset target recorded for commit entry in po '%s' repo '%s'; skipping",

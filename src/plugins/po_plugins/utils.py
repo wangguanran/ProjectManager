@@ -7,7 +7,10 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Dict, List
+import subprocess
+from typing import Any, Dict, List, Optional
+
+SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
 
 
 def safe_cache_segment(value: str) -> str:
@@ -64,3 +67,27 @@ def extract_patch_targets(patch_text: str) -> List[str]:
         elif a_path and a_path != "/dev/null":
             targets.append(a_path)
     return sorted(set(targets))
+
+
+def resolve_commit_reset_target(repo_path: str, commit_entry: Dict[str, Any]) -> Optional[str]:
+    """Return the commit to reset --hard to when undoing a PO-applied commit patch."""
+    head_before = commit_entry.get("head_before")
+    if head_before:
+        return head_before
+
+    shas = commit_entry.get("commit_shas") or []
+    if not shas and commit_entry.get("head_after"):
+        shas = [commit_entry["head_after"]]
+    if not shas:
+        return None
+
+    parent_result = subprocess.run(
+        ["git", "rev-parse", f"{shas[0]}^"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if parent_result.returncode != 0:
+        return None
+    return parent_result.stdout.strip()

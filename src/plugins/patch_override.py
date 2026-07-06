@@ -22,9 +22,11 @@ from src.plugins.po_plugins.registry import (
     get_po_plugins,
 )
 from src.plugins.po_plugins.runtime import PoPluginContext, PoPluginRuntime
-from src.plugins.po_plugins.utils import extract_patch_targets
 from src.plugins.po_plugins.utils import (
+    SKIPPED_COMMIT_STATUSES,
+    extract_patch_targets,
     po_applied_record_path as _po_applied_record_path,
+    resolve_commit_reset_target,
 )
 
 # from src.profiler import auto_profile  # unused
@@ -419,15 +421,9 @@ def build_po_revert_plan(
             record = runtime.load_applied_record(repo_root, po_name)
             commits = (record or {}).get("commits") or []
             for entry in reversed(commits):
-                if entry.get("status") in {"already_applied", "already_in_history"}:
+                if entry.get("status") in SKIPPED_COMMIT_STATUSES:
                     continue
-                reset_target = entry.get("head_before")
-                if not reset_target:
-                    shas = entry.get("commit_shas") or []
-                    if not shas and entry.get("head_after"):
-                        shas = [entry["head_after"]]
-                    if shas:
-                        reset_target = f"{shas[0]}^"
+                reset_target = resolve_commit_reset_target(repo_root, entry)
                 if not reset_target:
                     continue
                 actions_by_repo.setdefault(repo_name, []).append(
