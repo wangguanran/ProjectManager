@@ -14,7 +14,7 @@ jobs:
     name: retarget-pr-212
     runs-on: ubuntu-latest
     steps:
-      - name: Point PR #212 at bug/* and remove fix/* branch
+      - name: Open compliant bug/* PR, close #212, delete fix/*
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -24,7 +24,21 @@ jobs:
           set -euo pipefail
           old_enc="${OLD_BRANCH//\//%2F}"
 
-          gh pr edit 212 --repo "${REPO}" --head "${NEW_BRANCH}"
-          gh api -X DELETE "repos/${REPO}/git/refs/heads/${old_enc}"
+          existing="$(gh pr list --repo "${REPO}" --head "${NEW_BRANCH}" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "${existing}" ]; then
+            new_pr="$(gh pr create --repo "${REPO}" --base main --head "${NEW_BRANCH}" \
+              --title "fix(po): manifest include, PATCH prefix strip, and commit reset on revert" \
+              --body "Supersedes #212 after retargeting to compliant bug/* branch naming.")"
+            echo "Created ${new_pr}"
+          else
+            echo "Open PR already exists for ${NEW_BRANCH}: #${existing}"
+          fi
 
-          echo "PR #212 now tracks ${NEW_BRANCH}; deleted ${OLD_BRANCH}"
+          if gh pr view 212 --repo "${REPO}" --json state --jq .state | grep -q '^OPEN$'; then
+            gh pr close 212 --repo "${REPO}" \
+              --comment "Closed in favor of bug/${NEW_BRANCH#bug/} to satisfy validate-main-source-branch."
+          fi
+
+          gh api -X DELETE "repos/${REPO}/git/refs/heads/${old_enc}" || true
+
+          echo "Retarget complete for ${REPO}"
