@@ -17,7 +17,11 @@ from .registry import (
     register_simple_plugin,
 )
 from .runtime import PoPluginContext, PoPluginRuntime
-from .utils import SKIPPED_COMMIT_STATUSES, extract_patch_targets, resolve_commit_reset_target
+from .utils import (
+    SKIPPED_COMMIT_STATUSES,
+    extract_patch_targets,
+    resolve_commit_reset_target,
+)
 
 FORMAT_PATCH_SUBJECT_PREFIX_RE = re.compile(r"^\[PATCH(?:\s+\d+/\d+)?\]\s*")
 

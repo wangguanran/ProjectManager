@@ -22,12 +22,11 @@ from src.plugins.po_plugins.registry import (
     get_po_plugins,
 )
 from src.plugins.po_plugins.runtime import PoPluginContext, PoPluginRuntime
+from src.plugins.po_plugins.utils import SKIPPED_COMMIT_STATUSES, extract_patch_targets
 from src.plugins.po_plugins.utils import (
-    SKIPPED_COMMIT_STATUSES,
-    extract_patch_targets,
     po_applied_record_path as _po_applied_record_path,
-    resolve_commit_reset_target,
 )
+from src.plugins.po_plugins.utils import resolve_commit_reset_target
 
 # from src.profiler import auto_profile  # unused
 

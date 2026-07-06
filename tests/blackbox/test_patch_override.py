@@ -204,13 +204,16 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
         check=True,
     ).stdout.strip()
     assert head_after_revert == head_before_apply
-    assert "revert" not in subprocess.run(
-        ["git", "log", "--oneline", "-5"],
-        cwd=str(workspace_a),
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.lower()
+    assert (
+        "revert"
+        not in subprocess.run(
+            ["git", "log", "--oneline", "-5"],
+            cwd=str(workspace_a),
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.lower()
+    )
 
 
 def test_po_005c_commit_apply_skips_original_commit_in_history(workspace_a: Path) -> None:
