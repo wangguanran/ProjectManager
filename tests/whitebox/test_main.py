@@ -1457,6 +1457,63 @@ class TestFindRepositories:
         finally:
             os.chdir(original_cwd)
 
+    def test_find_repositories_manifest_nested_include_paths(self):
+        """REPO-005: Nested includes resolve from manifests root, not parent dir."""
+        temp_dir = self._create_temp_directory()
+        temp_dir_real = os.path.realpath(temp_dir)
+
+        repo_dir = os.path.join(temp_dir, ".repo")
+        manifests_dir = os.path.join(repo_dir, "manifests")
+        board_dir = os.path.join(manifests_dir, "projects", "Qualcomm", "SM6225")
+        include_dir = os.path.join(board_dir, "MT582.includes", "vendor")
+        os.makedirs(include_dir)
+
+        manifest_content = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <include name="projects/Qualcomm/SM6225/MT582.xml" />
+</manifest>"""
+        with open(os.path.join(repo_dir, "manifest.xml"), "w", encoding="utf-8") as f:
+            f.write(manifest_content)
+
+        board_manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <include name="projects/Qualcomm/SM6225/MT582.includes/vendor/nested.xml" />
+  <project path="modem" name="modem" />
+</manifest>"""
+        with open(os.path.join(board_dir, "MT582.xml"), "w", encoding="utf-8") as f:
+            f.write(board_manifest)
+
+        nested_manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <project path="LA.VENDOR.13.2.1.R2/kernel_platform/msm-kernel" name="msm-kernel" />
+</manifest>"""
+        with open(os.path.join(include_dir, "nested.xml"), "w", encoding="utf-8") as f:
+            f.write(nested_manifest)
+
+        for project_path in ["modem", "LA.VENDOR.13.2.1.R2/kernel_platform/msm-kernel"]:
+            project_dir = os.path.join(temp_dir, project_path)
+            os.makedirs(project_dir)
+            os.makedirs(os.path.join(project_dir, ".git"))
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            with patch("src.__main__.log") as mock_log:
+                repositories = self._find_repositories()
+
+            repo_names = [repo[1] for repo in repositories]
+            assert "modem" in repo_names
+            assert "LA.VENDOR.13.2.1.R2/kernel_platform/msm-kernel" in repo_names
+            mock_log.warning.assert_not_called()
+
+            repos_file = os.path.join(temp_dir, "projects", "repositories.json")
+            with open(repos_file, "r", encoding="utf-8") as f:
+                repo_data = json.load(f)
+            assert os.path.realpath(repo_data["current_directory"]) == temp_dir_real
+            assert len(repo_data["repositories"]) == 2
+        finally:
+            os.chdir(original_cwd)
+
     def test_find_repositories_no_git_repos(self):
         """REPO-004: No .repo and no .git => repositories empty; no crash."""
         temp_dir = self._create_temp_directory()
