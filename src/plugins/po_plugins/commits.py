@@ -20,6 +20,63 @@ from .runtime import PoPluginContext, PoPluginRuntime
 from .utils import extract_patch_targets
 
 SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
+FORMAT_PATCH_SUBJECT_PREFIX_RE = re.compile(r"^\[PATCH(?:\s+\d+/\d+)?\]\s*")
+
+
+def _strip_format_patch_subject_prefix(message: str) -> str:
+    """Remove git format-patch default subject prefix from commit message."""
+    if not message:
+        return message
+    lines = message.splitlines()
+    if not lines:
+        return message
+    new_first = FORMAT_PATCH_SUBJECT_PREFIX_RE.sub("", lines[0], count=1)
+    if new_first == lines[0]:
+        return message
+    lines[0] = new_first
+    rebuilt = "\n".join(lines)
+    if message.endswith("\n"):
+        rebuilt += "\n"
+    return rebuilt
+
+
+def _amend_head_commit_message(repo_path: str, new_message: str) -> bool:
+    result = subprocess.run(
+        ["git", "commit", "--amend", "-m", new_message],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        log.error(
+            "Failed to amend commit message in '%s': %s",
+            repo_path,
+            summarize_output(result.stderr),
+        )
+        return False
+    return True
+
+
+def _normalize_head_commit_subject_after_am(repo_path: str) -> bool:
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%B"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        log.error("Failed to read HEAD commit message in '%s'", repo_path)
+        return False
+
+    original_message = result.stdout
+    normalized_message = _strip_format_patch_subject_prefix(original_message)
+    if normalized_message == original_message:
+        return True
+
+    log.debug("Stripping format-patch [PATCH] prefix from HEAD commit in '%s'", repo_path)
+    return _amend_head_commit_message(repo_path, normalized_message)
 
 
 def _extract_original_commit_sha(patch_text: str) -> Optional[str]:
@@ -173,6 +230,9 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 continue
 
             log.error("Failed to apply commit patch '%s': %s", patch_file, summarize_output(result.stderr))
+            return False
+
+        if not ctx.dry_run and not _normalize_head_commit_subject_after_am(patch_target):
             return False
 
         head_after = head_before

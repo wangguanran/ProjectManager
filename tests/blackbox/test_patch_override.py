@@ -177,7 +177,7 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
         text=True,
         check=True,
     ).stdout.strip()
-    assert subject == "[PATCH] add commit file"
+    assert subject == "add commit file"
 
     record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
     record = json.loads(record_path.read_text(encoding="utf-8"))
