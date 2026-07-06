@@ -1,0 +1,35 @@
+name: Rename fix PR branch to bug
+
+on:
+  push:
+    branches:
+      - fix/po-revert-reset-and-manifest-include
+
+permissions:
+  administration: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  rename-fix-branch:
+    name: rename-fix-branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rename fix/po-revert-reset-and-manifest-include to bug/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OLD_BRANCH: fix/po-revert-reset-and-manifest-include
+          NEW_BRANCH: bug/po-revert-reset-and-manifest-include
+        run: |
+          set -euo pipefail
+          old_enc="${OLD_BRANCH//\//%2F}"
+          new_enc="${NEW_BRANCH//\//%2F}"
+
+          # Remove temporary duplicate branch if present; ignore missing ref.
+          gh api -X DELETE "repos/${REPO}/git/refs/heads/${new_enc}" || true
+
+          gh api "repos/${REPO}/branches/${old_enc}/rename" \
+            -f new_name="${NEW_BRANCH}"
+
+          echo "Renamed ${OLD_BRANCH} -> ${NEW_BRANCH}"
