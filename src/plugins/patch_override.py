@@ -419,19 +419,25 @@ def build_po_revert_plan(
             record = runtime.load_applied_record(repo_root, po_name)
             commits = (record or {}).get("commits") or []
             for entry in reversed(commits):
-                if entry.get("status") == "already_applied":
+                if entry.get("status") in {"already_applied", "already_in_history"}:
                     continue
-                shas = entry.get("commit_shas") or []
-                if not shas and entry.get("head_after"):
-                    shas = [entry["head_after"]]
-                for sha in reversed([s for s in shas if s]):
-                    actions_by_repo.setdefault(repo_name, []).append(
-                        {
-                            "type": "commit_revert",
-                            "po": po_name,
-                            "sha": sha,
-                        }
-                    )
+                reset_target = entry.get("head_before")
+                if not reset_target:
+                    shas = entry.get("commit_shas") or []
+                    if not shas and entry.get("head_after"):
+                        shas = [entry["head_after"]]
+                    if shas:
+                        reset_target = f"{shas[0]}^"
+                if not reset_target:
+                    continue
+                actions_by_repo.setdefault(repo_name, []).append(
+                    {
+                        "type": "commit_reset",
+                        "po": po_name,
+                        "reset_to": reset_target,
+                        "head_after": entry.get("head_after") or "",
+                    }
+                )
 
     # Cleanup actions (what po_revert would remove when not in dry-run).
     for repo_root, repo_name in repo_entries:
@@ -453,6 +459,7 @@ def build_po_revert_plan(
                 str(item.get("po", "")),
                 str(item.get("type", "")),
                 str(item.get("source", "")),
+                str(item.get("reset_to", "")),
                 str(item.get("sha", "")),
             ),
         )

@@ -164,6 +164,13 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
 
     subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=str(workspace_a), check=True)
     assert not commit_file.exists()
+    head_before_apply = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(workspace_a),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
 
     result = run_cli(["po_apply", "projA"], cwd=workspace_a)
     assert result.returncode == 0
@@ -189,6 +196,21 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     assert revert.returncode == 0
     assert not commit_file.exists()
     assert not record_path.exists()
+    head_after_revert = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(workspace_a),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert head_after_revert == head_before_apply
+    assert "revert" not in subprocess.run(
+        ["git", "log", "--oneline", "-5"],
+        cwd=str(workspace_a),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.lower()
 
 
 def test_po_005c_commit_apply_skips_original_commit_in_history(workspace_a: Path) -> None:

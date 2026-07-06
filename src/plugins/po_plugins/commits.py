@@ -277,8 +277,32 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     return True
 
 
+def _resolve_reset_target(repo_path: str, commit_entry: Dict[str, Any]) -> Optional[str]:
+    """Return the commit to reset --hard to when undoing a PO-applied commit patch."""
+    head_before = commit_entry.get("head_before")
+    if head_before:
+        return head_before
+
+    shas = commit_entry.get("commit_shas") or []
+    if not shas and commit_entry.get("head_after"):
+        shas = [commit_entry["head_after"]]
+    if not shas:
+        return None
+
+    parent_result = subprocess.run(
+        ["git", "rev-parse", f"{shas[0]}^"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if parent_result.returncode != 0:
+        return None
+    return parent_result.stdout.strip()
+
+
 def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
-    """Revert commits applied by PO (git revert)."""
+    """Remove commits applied by PO by resetting to the recorded pre-apply HEAD."""
     for repo_root, repo_name in runtime.repositories or []:
         record = runtime.load_applied_record(repo_root, ctx.po_name)
         if not record:
@@ -293,47 +317,52 @@ def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         for commit_entry in reversed(commits):
             if commit_entry.get("status") in SKIPPED_COMMIT_STATUSES:
                 continue
-            shas = commit_entry.get("commit_shas") or []
-            if not shas and commit_entry.get("head_after"):
-                shas = [commit_entry["head_after"]]
 
-            for sha in reversed(shas):
-                if not sha:
-                    continue
-                if ctx.dry_run:
-                    log.info("DRY-RUN: cd %s && git revert --no-edit %s", repo_path, sha)
-                    continue
-
-                result = subprocess.run(
-                    ["git", "revert", "--no-edit", sha],
-                    cwd=repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False,
+            head_after = commit_entry.get("head_after")
+            reset_target = _resolve_reset_target(repo_path, commit_entry)
+            if not reset_target:
+                log.warning(
+                    "No reset target recorded for commit entry in po '%s' repo '%s'; skipping",
+                    ctx.po_name,
+                    repo_name,
                 )
-                log.debug(
-                    "git revert result: returncode=%s stdout=%s stderr=%s",
-                    result.returncode,
-                    summarize_output(result.stdout),
+                continue
+
+            if head_after and not _repo_history_contains_commit(repo_path, head_after):
+                log.warning(
+                    "Applied commit '%s' is no longer in history for repo '%s'; skipping reset to '%s'",
+                    head_after,
+                    repo_name,
+                    reset_target,
+                )
+                continue
+
+            if ctx.dry_run:
+                log.info("DRY-RUN: cd %s && git reset --hard %s", repo_path, reset_target)
+                continue
+
+            result = subprocess.run(
+                ["git", "reset", "--hard", reset_target],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            log.debug(
+                "git reset --hard result: returncode=%s stdout=%s stderr=%s",
+                result.returncode,
+                summarize_output(result.stdout),
+                summarize_output(result.stderr),
+            )
+            if result.returncode != 0:
+                log.error(
+                    "Failed to reset repo '%s' to '%s' for po '%s': %s",
+                    repo_name,
+                    reset_target,
+                    ctx.po_name,
                     summarize_output(result.stderr),
                 )
-                if result.returncode != 0:
-                    log.error(
-                        "Failed to revert commit '%s' for po '%s' in repo '%s': %s",
-                        sha,
-                        ctx.po_name,
-                        repo_name,
-                        summarize_output(result.stderr),
-                    )
-                    # Best-effort cleanup of revert state.
-                    subprocess.run(
-                        ["git", "revert", "--abort"],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    return False
+                return False
 
     return True
 
