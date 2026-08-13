@@ -220,8 +220,8 @@ def test_validate_hooks_rejects_signatures_that_cannot_accept_context() -> None:
     assert res["valid"] is False
 
 
-def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> None:
-    """HOOK-008: Platform failure falls back to global."""
+def test_execute_hooks_with_fallback_platform_failure_is_fatal() -> None:
+    """HOOK-008: Any hook returning False fails the whole run (no false success)."""
     calls: List[str] = []
 
     def plat(ctx: Dict[str, Any]) -> bool:
@@ -238,12 +238,12 @@ def test_execute_hooks_with_fallback_platform_failure_falls_back_to_global() -> 
     register_hook(HookType.BUILD, "glob", glob)
 
     ok = execute_hooks_with_fallback(HookType.BUILD, context={}, platform="platA")
-    assert ok is True
+    assert ok is False
     assert calls == ["glob", "plat"]
 
 
-def test_execute_hooks_with_fallback_runs_unexecuted_global_hooks_after_platform_failure() -> None:
-    """HOOK-008: Platform failure falls back to unexecuted global hooks."""
+def test_execute_hooks_with_fallback_stops_after_platform_failure() -> None:
+    """HOOK-008: Later hooks do not run after a False return; overall result is False."""
     calls: List[str] = []
 
     def global_before(ctx: Dict[str, Any]) -> bool:
@@ -266,5 +266,21 @@ def test_execute_hooks_with_fallback_runs_unexecuted_global_hooks_after_platform
     register_hook(HookType.BUILD, "global_after", global_after, priority=HookPriority.LOW)
 
     ok = execute_hooks_with_fallback(HookType.BUILD, context={}, platform="platA")
-    assert ok is True
-    assert calls == ["global_before", "platform", "global_after"]
+    assert ok is False
+    assert calls == ["global_before", "platform"]
+
+
+def test_execute_hooks_with_fallback_platform_only_failure_is_false() -> None:
+    """HOOK-008: Lone platform False must not become True via empty global fallback."""
+    calls: List[str] = []
+
+    def platform_fail(ctx: Dict[str, Any]) -> bool:
+        _ = ctx
+        calls.append("platform")
+        return False
+
+    register_hook(HookType.BUILD, "platform_fail", platform_fail, platform="platA")
+
+    ok = execute_hooks_with_fallback(HookType.BUILD, context={}, platform="platA")
+    assert ok is False
+    assert calls == ["platform"]

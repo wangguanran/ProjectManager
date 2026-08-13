@@ -130,7 +130,7 @@
 | HOOK-005 | Hook Exec | Exception handling follows stop_on_error | Same as above | 1. Register a hook that raises a normal `Exception` subclass and a normal hook.<br>2. Run `execute_hooks(stop_on_error=False)`.<br>3. Run `execute_hooks(stop_on_error=True)`. | With `stop_on_error=False`, error is logged, subsequent hook runs, and overall returns True. With `stop_on_error=True`, execution stops and returns False. | P2 | Compatibility |
 | HOOK-006 | Hook Exec | execute_single_hook failure result | Same as above | 1. Call `execute_single_hook` with a missing hook_name.<br>2. Register a hook that raises a normal `Exception` subclass and call `execute_single_hook`. | Missing hooks and hook exceptions return success=False with error message. | P2 | Negative |
 | HOOK-007 | Hook Validate | No-arg hook is invalid | Same as above | 1. Register a no-arg function.<br>2. Call `validate_hooks`. | Hook appears in invalid list; valid=False. | P2 | Functional |
-| HOOK-008 | Hook Fallback | Platform failure falls back to global | Same as above | 1. Register platform hook returning False.<br>2. Register global hook returning True.<br>3. Call `execute_hooks_with_fallback(..., platform='platA')`. | Falls back to global hook and returns True. | P1 | Functional |
+| HOOK-008 | Hook Failure | Any hook False is fatal | Same as above | 1. Register platform hook returning False.<br>2. Register global hook returning True.<br>3. Call `execute_hooks_with_fallback(..., platform='platA')`. | Returns False; must not succeed via empty remaining-global fallback. | P1 | Functional |
 
 ## 5. Board & Project Management (src/plugins/project_manager.py)
 
