@@ -22,7 +22,7 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     if not os.path.isdir(ctx.po_patch_dir):
         log.debug("No patches dir for po: '%s'", ctx.po_name)
         return True
-    log.debug("applying patches for po: '%s'", ctx.po_name)
+    log.info("applying patches for po: '%s'", ctx.po_name)
 
     for current_dir, _, files in os.walk(ctx.po_patch_dir):
         for fname in files:
@@ -52,7 +52,6 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 return False
 
             patch_file = os.path.join(current_dir, fname)
-            log.debug("will apply patch: '%s' to repo: '%s'", patch_file, patch_target)
             if not ctx.reapply and runtime.applied_record_exists(patch_target, ctx.po_name):
                 log.info(
                     "po '%s' already applied for repo '%s', skipping patch '%s'",
@@ -61,6 +60,8 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     rel_path,
                 )
                 continue
+
+            log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
 
             try:
                 with open(patch_file, "r", encoding="utf-8") as f:
@@ -85,7 +86,6 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 cwd=patch_target,
                 description=f"Apply patch {os.path.basename(patch_file)} to {repo_name}",
             )
-            log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
             log.debug(
                 "git apply result: returncode=%s stdout=%s stderr=%s",
                 result.returncode,
@@ -113,7 +113,7 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 log.error("Failed to apply patch '%s': %s", patch_file, summarize_output(result.stderr))
                 return False
 
-            log.info("patch applied successfully for repo: '%s'", patch_target)
+            log.info("patch applied successfully: '%s' to repo: '%s'", patch_file, patch_target)
 
     return True
 

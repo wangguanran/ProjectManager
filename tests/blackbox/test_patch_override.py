@@ -144,6 +144,10 @@ def test_po_005_patch_apply_success(workspace_a: Path) -> None:
     result = run_cli(["po_apply", "projA"], cwd=workspace_a)
     assert result.returncode == 0
     assert "line2" in target.read_text(encoding="utf-8")
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert "applying patch:" in combined
+    assert "tmp_file.patch" in combined
+    assert "[INFO    ]" in combined
 
 
 def test_po_005d_preexisting_patch_is_not_reverted(workspace_a: Path) -> None:
@@ -193,6 +197,9 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     assert result.returncode == 0
     assert commit_file.exists()
     assert "line2" in (workspace_a / "src" / "tmp_file.txt").read_text(encoding="utf-8")
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert "applying commit patch:" in combined
+    assert "[INFO    ]" in combined
 
     subject = subprocess.run(
         ["git", "log", "-1", "--pretty=%s"],

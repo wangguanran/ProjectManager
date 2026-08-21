@@ -174,7 +174,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     if not os.path.isdir(ctx.po_commit_dir):
         log.debug("No commits dir for po: '%s'", ctx.po_name)
         return True
-    log.debug("applying commits for po: '%s'", ctx.po_name)
+    log.info("applying commits for po: '%s'", ctx.po_name)
 
     commit_files: List[Tuple[str, str]] = []
     for current_dir, _, files in os.walk(ctx.po_commit_dir):
@@ -257,6 +257,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             if head_before_result.returncode == 0:
                 head_before = head_before_result.stdout.strip()
 
+        log.info("applying commit patch: '%s' to repo: '%s'", patch_file, patch_target)
         result = runtime.execute_command(
             ctx,
             patch_target,
@@ -359,6 +360,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             )
             return False
 
+        log.info("commit patch applied successfully: '%s' to repo: '%s'", patch_file, patch_target)
         head_after = head_before
         if not ctx.dry_run:
             head_after_result = subprocess.run(
