@@ -392,7 +392,7 @@ python -m src po_apply myproject
 python -m src po_revert <project-name> [--dry-run] [--emit-plan [<path>]] [--po <po1,po2>]
 ```
 
-**Description**: Revert the previously applied patches and overrides for the project, and remove applied record markers so the PO can be applied again.
+**Description**: Revert the previously applied patches, overrides, and commit patches for the project. Commit-patch revert moves `HEAD` with `git reset --hard` to the recorded pre-apply commit; applied records are removed only after every selected PO is reverted successfully.
 
 **Arguments**
 - `project-name` (required): Project whose PO set should be reverted.
@@ -402,9 +402,16 @@ python -m src po_revert <project-name> [--dry-run] [--emit-plan [<path>]] [--po 
 - `--emit-plan`: Emit a machine-readable JSON execution plan to stdout (or to `<path>` when provided) without modifying repositories.
 - `--po`: Revert only the selected PO(s) from `PROJECT_PO_CONFIG` (comma/space separated).
 
+**Commit-revert safety**
+- Run `--dry-run` or `--emit-plan` first. A blocked plan sets `executable=false`, reports `commit_revert_blocked` actions and top-level `blockers`, and suppresses all mutating and cleanup actions.
+- Commit POs must be reverted strictly from the current stack top. Selecting an older PO while a newer PO or user commit is above it is rejected; `HEAD`, files, and applied records are preserved.
+- The recorded `head_after` and reset target must both exist and form one continuous chain. Missing or diverged history is rejected and the applied record is retained for recovery.
+- The tracked worktree and index must be clean immediately before `git reset --hard`. Dirty tracked changes block the reset. Untracked files are not removed by `git reset --hard`.
+
 **Example**
 ```bash
 python -m src po_revert myproject
+python -m src po_revert myproject --dry-run --po po_base
 ```
 
 ---

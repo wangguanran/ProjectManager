@@ -683,7 +683,7 @@ def _find_repositories():
                 if include_path is None:
                     log.warning("Include file not found: %s (searched: %s)", name, ", ".join(candidates))
                     continue
-                parse_manifest_file(include_path, include_base_dir=os.path.dirname(include_path), visited=visited)
+                parse_manifest_file(include_path, include_base_dir=include_base_dir, visited=visited)
         except ET.ParseError as e:
             log.error("Failed to parse manifest '%s': %s", manifest_file, e)
         except FileNotFoundError:

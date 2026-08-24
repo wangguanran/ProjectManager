@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from src.log_manager import log, summarize_output
 
@@ -17,9 +17,138 @@ from .registry import (
     register_simple_plugin,
 )
 from .runtime import PoPluginContext, PoPluginRuntime
-from .utils import extract_patch_targets
+from .utils import (
+    SKIPPED_COMMIT_STATUSES,
+    extract_patch_targets,
+    resolve_commit_reset_target,
+)
 
-SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
+FORMAT_PATCH_SUBJECT_PREFIX_RE = re.compile(
+    r"^\[(?:(?:RFC\s+PATCH)|(?:PATCH(?:\s+RFC)?))(?:\s+v\d+)?(?:\s+\d+/\d+)?\]\s*"
+)
+
+
+def _strip_format_patch_subject_prefix(message: str) -> str:
+    """Remove git format-patch default subject prefix from commit message."""
+    if not message:
+        return message
+    lines = message.splitlines()
+    if not lines:
+        return message
+    new_first = FORMAT_PATCH_SUBJECT_PREFIX_RE.sub("", lines[0], count=1)
+    if new_first == lines[0]:
+        return message
+    lines[0] = new_first
+    rebuilt = "\n".join(lines)
+    if message.endswith("\n"):
+        rebuilt += "\n"
+    return rebuilt
+
+
+def _amend_head_commit_message(repo_path: str, new_message: str) -> bool:
+    result = subprocess.run(
+        ["git", "commit", "--amend", "-m", new_message],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        log.error(
+            "Failed to amend commit message in '%s': %s",
+            repo_path,
+            summarize_output(result.stderr),
+        )
+        return False
+    return True
+
+
+def _normalize_head_commit_subject_after_am(repo_path: str) -> bool:
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%B"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        log.error("Failed to read HEAD commit message in '%s'", repo_path)
+        return False
+
+    original_message = result.stdout
+    normalized_message = _strip_format_patch_subject_prefix(original_message)
+    if normalized_message == original_message:
+        return True
+
+    log.debug("Stripping format-patch [PATCH] prefix from HEAD commit in '%s'", repo_path)
+    return _amend_head_commit_message(repo_path, normalized_message)
+
+
+def _resolve_commit(repo_path: str, revision: str) -> Optional[str]:
+    if not revision:
+        return None
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def inspect_commit_revert_chain(
+    repo_path: str,
+    po_name: str,
+    commit_entries: List[Dict[str, Any]],
+    expected_head: Optional[str] = None,
+) -> Tuple[List[Dict[str, str]], Optional[str]]:
+    """Validate that recorded commit entries form the current removable stack top."""
+    active_entries = [entry for entry in commit_entries if entry.get("status") not in SKIPPED_COMMIT_STATUSES]
+    if not active_entries:
+        return [], expected_head
+    current_head = expected_head or _resolve_commit(repo_path, "HEAD")
+    blockers: List[Dict[str, str]] = []
+    for entry in reversed(active_entries):
+        head_after = str(entry.get("head_after") or "")
+        reset_target = str(resolve_commit_reset_target(repo_path, entry) or "")
+        reason = ""
+        if not head_after:
+            reason = "missing head_after"
+        elif not _resolve_commit(repo_path, head_after):
+            reason = f"head_after '{head_after}' is not a valid commit"
+        elif not reset_target:
+            reason = "missing reset target"
+        elif not _resolve_commit(repo_path, reset_target):
+            reason = f"reset target '{reset_target}' is not a valid commit"
+        elif not current_head:
+            reason = "cannot resolve current HEAD"
+        elif head_after != current_head:
+            reason = f"current stack top is '{current_head}', expected '{head_after}'"
+
+        if reason:
+            blockers.append(
+                {
+                    "po": po_name,
+                    "repo": repo_path,
+                    "head_after": head_after,
+                    "reset_to": reset_target,
+                    "reason": reason,
+                }
+            )
+            break
+        current_head = reset_target
+    return blockers, current_head
+
+
+def tracked_worktree_is_clean(repo_path: str) -> bool:
+    """Return whether tracked staged and unstaged changes are absent."""
+    for command in (["git", "diff", "--quiet"], ["git", "diff", "--cached", "--quiet"]):
+        if subprocess.run(command, cwd=repo_path, capture_output=True, check=False).returncode != 0:
+            return False
+    return True
 
 
 def _extract_original_commit_sha(patch_text: str) -> Optional[str]:
@@ -175,6 +304,61 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             log.error("Failed to apply commit patch '%s': %s", patch_file, summarize_output(result.stderr))
             return False
 
+        if not ctx.dry_run and not _normalize_head_commit_subject_after_am(patch_target):
+            record = runtime.get_repo_record(ctx, patch_target, repo_name)
+            prior_commits = record.get("commits") or []
+            rollback_target = (
+                next(
+                    (
+                        entry.get("head_before")
+                        for entry in prior_commits
+                        if entry.get("status") not in SKIPPED_COMMIT_STATUSES
+                        and entry.get("head_before")
+                        and _resolve_commit(patch_target, str(entry["head_before"]))
+                    ),
+                    None,
+                )
+                or head_before
+            )
+            rollback = subprocess.run(
+                (
+                    ["git", "reset", "--hard", rollback_target]
+                    if rollback_target
+                    else ["git", "rev-parse", "--verify", "HEAD"]
+                ),
+                cwd=patch_target,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if rollback_target and rollback.returncode == 0:
+                log.error(
+                    "Commit subject normalization failed for '%s'; restored repo '%s' to '%s'",
+                    patch_file,
+                    repo_name,
+                    rollback_target,
+                )
+                return False
+
+            recovery_head = _resolve_commit(patch_target, "HEAD")
+            record["commits"].append(
+                {
+                    "patch_file": os.path.relpath(patch_file, start=ctx.po_path),
+                    "targets": patch_targets,
+                    "status": "normalization_failed",
+                    "head_before": head_before,
+                    "head_after": recovery_head,
+                    "commit_shas": [recovery_head] if recovery_head else [],
+                    "original_commit_sha": original_commit_sha,
+                }
+            )
+            runtime.finalize_records(ctx)
+            log.error(
+                "Commit subject normalization failed for '%s' and rollback failed; recovery state was recorded",
+                patch_file,
+            )
+            return False
+
         head_after = head_before
         if not ctx.dry_run:
             head_after_result = subprocess.run(
@@ -218,62 +402,62 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
 
 
 def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
-    """Revert commits applied by PO (git revert)."""
+    """Remove commits applied by PO by resetting to the recorded pre-apply HEAD."""
     for repo_root, repo_name in runtime.repositories or []:
         record = runtime.load_applied_record(repo_root, ctx.po_name)
         if not record:
             continue
         commits = record.get("commits") or []
-        if not commits:
+        active_commits = [entry for entry in commits if entry.get("status") not in SKIPPED_COMMIT_STATUSES]
+        if not active_commits:
             continue
 
         repo_path = record.get("repo_path") or repo_root
         log.info("reverting commits for po '%s' in repo '%s'", ctx.po_name, repo_name)
 
-        for commit_entry in reversed(commits):
-            if commit_entry.get("status") in SKIPPED_COMMIT_STATUSES:
+        blockers, _ = inspect_commit_revert_chain(repo_path, ctx.po_name, active_commits)
+        if blockers:
+            log.error(
+                "Cannot safely revert commit po '%s' in repo '%s': %s", ctx.po_name, repo_name, blockers[0]["reason"]
+            )
+            return False
+        if not ctx.dry_run and not tracked_worktree_is_clean(repo_path):
+            log.error(
+                "Cannot safely revert commit po '%s' in repo '%s': tracked worktree or index is dirty",
+                ctx.po_name,
+                repo_name,
+            )
+            return False
+
+        for commit_entry in reversed(active_commits):
+            reset_target = cast(str, resolve_commit_reset_target(repo_path, commit_entry))
+
+            if ctx.dry_run:
+                log.info("DRY-RUN: cd %s && git reset --hard %s", repo_path, reset_target)
                 continue
-            shas = commit_entry.get("commit_shas") or []
-            if not shas and commit_entry.get("head_after"):
-                shas = [commit_entry["head_after"]]
 
-            for sha in reversed(shas):
-                if not sha:
-                    continue
-                if ctx.dry_run:
-                    log.info("DRY-RUN: cd %s && git revert --no-edit %s", repo_path, sha)
-                    continue
-
-                result = subprocess.run(
-                    ["git", "revert", "--no-edit", sha],
-                    cwd=repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                log.debug(
-                    "git revert result: returncode=%s stdout=%s stderr=%s",
-                    result.returncode,
-                    summarize_output(result.stdout),
+            result = subprocess.run(
+                ["git", "reset", "--hard", reset_target],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            log.debug(
+                "git reset --hard result: returncode=%s stdout=%s stderr=%s",
+                result.returncode,
+                summarize_output(result.stdout),
+                summarize_output(result.stderr),
+            )
+            if result.returncode != 0:
+                log.error(
+                    "Failed to reset repo '%s' to '%s' for po '%s': %s",
+                    repo_name,
+                    reset_target,
+                    ctx.po_name,
                     summarize_output(result.stderr),
                 )
-                if result.returncode != 0:
-                    log.error(
-                        "Failed to revert commit '%s' for po '%s' in repo '%s': %s",
-                        sha,
-                        ctx.po_name,
-                        repo_name,
-                        summarize_output(result.stderr),
-                    )
-                    # Best-effort cleanup of revert state.
-                    subprocess.run(
-                        ["git", "revert", "--abort"],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    return False
+                return False
 
     return True
 
