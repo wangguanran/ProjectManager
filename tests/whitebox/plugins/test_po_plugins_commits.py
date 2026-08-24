@@ -28,6 +28,34 @@ def test_strip_format_patch_subject_prefix_variants(subject: str, expected: str)
     assert commits._strip_format_patch_subject_prefix(subject) == expected
 
 
+def test_amend_failure_preserves_git_reason_without_absolute_paths(tmp_path, monkeypatch, caplog) -> None:
+    repo = tmp_path / "repo"
+    patch_file = tmp_path / "po" / "commits" / "001-change.patch"
+    git_error = f"fatal: Unable to create '{repo}/.git/index.lock': File exists while applying {patch_file}"
+    monkeypatch.setattr(
+        commits.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr=git_error),
+    )
+
+    assert (
+        commits._amend_head_commit_message(
+            str(repo),
+            "normalized subject",
+            repo_name="root",
+            rel_path="001-change.patch",
+            patch_file=str(patch_file),
+        )
+        is False
+    )
+
+    assert "index.lock" in caplog.text
+    assert "File exists" in caplog.text
+    assert "001-change.patch" in caplog.text
+    assert "repo 'root'" in caplog.text
+    assert str(tmp_path) not in caplog.text
+
+
 def test_apply_commits_rolls_back_when_subject_amend_fails(tmp_path, monkeypatch) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -77,7 +105,7 @@ def test_apply_commits_rolls_back_when_subject_amend_fails(tmp_path, monkeypatch
         exclude_files={},
         applied_records={},
     )
-    monkeypatch.setattr(commits, "_normalize_head_commit_subject_after_am", lambda _repo: False)
+    monkeypatch.setattr(commits, "_normalize_head_commit_subject_after_am", lambda _repo, **_kwargs: False)
 
     assert commits._apply_commits(ctx, runtime) is False
     assert (
@@ -140,7 +168,11 @@ def test_apply_commits_rolls_back_all_patches_when_second_amend_fails(tmp_path, 
         applied_records={},
     )
     outcomes = iter([True, False])
-    monkeypatch.setattr(commits, "_normalize_head_commit_subject_after_am", lambda _repo: next(outcomes))
+    monkeypatch.setattr(
+        commits,
+        "_normalize_head_commit_subject_after_am",
+        lambda _repo, **_kwargs: next(outcomes),
+    )
 
     assert commits._apply_commits(ctx, runtime) is False
     assert (
@@ -218,7 +250,11 @@ def test_apply_commits_rollback_ignores_skipped_entry_before_active_commits(tmp_
         applied_records={},
     )
     outcomes = iter([True, False])
-    monkeypatch.setattr(commits, "_normalize_head_commit_subject_after_am", lambda _repo: next(outcomes))
+    monkeypatch.setattr(
+        commits,
+        "_normalize_head_commit_subject_after_am",
+        lambda _repo, **_kwargs: next(outcomes),
+    )
 
     assert commits._apply_commits(ctx, runtime) is False
     assert (

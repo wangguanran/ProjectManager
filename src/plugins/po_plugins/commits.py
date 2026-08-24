@@ -20,6 +20,7 @@ from .runtime import PoPluginContext, PoPluginRuntime
 from .utils import (
     SKIPPED_COMMIT_STATUSES,
     extract_patch_targets,
+    redact_patch_diagnostic,
     resolve_commit_reset_target,
 )
 
@@ -45,7 +46,14 @@ def _strip_format_patch_subject_prefix(message: str) -> str:
     return rebuilt
 
 
-def _amend_head_commit_message(repo_path: str, new_message: str) -> bool:
+def _amend_head_commit_message(
+    repo_path: str,
+    new_message: str,
+    *,
+    repo_name: str,
+    rel_path: str,
+    patch_file: str,
+) -> bool:
     result = subprocess.run(
         ["git", "commit", "--amend", "-m", new_message],
         cwd=repo_path,
@@ -55,15 +63,30 @@ def _amend_head_commit_message(repo_path: str, new_message: str) -> bool:
     )
     if result.returncode != 0:
         log.error(
-            "Failed to amend commit message in '%s': %s",
-            repo_path,
-            summarize_output(result.stderr),
+            "Failed to amend commit message for patch '%s' in repo '%s': %s",
+            rel_path,
+            repo_name,
+            summarize_output(
+                redact_patch_diagnostic(
+                    result.stderr,
+                    patch_file=patch_file,
+                    patch_target=repo_path,
+                    rel_path=rel_path,
+                    repo_name=repo_name,
+                )
+            ),
         )
         return False
     return True
 
 
-def _normalize_head_commit_subject_after_am(repo_path: str) -> bool:
+def _normalize_head_commit_subject_after_am(
+    repo_path: str,
+    *,
+    repo_name: str,
+    rel_path: str,
+    patch_file: str,
+) -> bool:
     result = subprocess.run(
         ["git", "log", "-1", "--format=%B"],
         cwd=repo_path,
@@ -72,7 +95,20 @@ def _normalize_head_commit_subject_after_am(repo_path: str) -> bool:
         check=False,
     )
     if result.returncode != 0:
-        log.error("Failed to read HEAD commit message in '%s'", repo_path)
+        log.error(
+            "Failed to read HEAD commit message for patch '%s' in repo '%s': %s",
+            rel_path,
+            repo_name,
+            summarize_output(
+                redact_patch_diagnostic(
+                    result.stderr,
+                    patch_file=patch_file,
+                    patch_target=repo_path,
+                    rel_path=rel_path,
+                    repo_name=repo_name,
+                )
+            ),
+        )
         return False
 
     original_message = result.stdout
@@ -80,8 +116,14 @@ def _normalize_head_commit_subject_after_am(repo_path: str) -> bool:
     if normalized_message == original_message:
         return True
 
-    log.debug("Stripping format-patch [PATCH] prefix from HEAD commit in '%s'", repo_path)
-    return _amend_head_commit_message(repo_path, normalized_message)
+    log.debug("Stripping format-patch [PATCH] prefix from HEAD commit")
+    return _amend_head_commit_message(
+        repo_path,
+        normalized_message,
+        repo_name=repo_name,
+        rel_path=rel_path,
+        patch_file=patch_file,
+    )
 
 
 def _resolve_commit(repo_path: str, revision: str) -> Optional[str]:
@@ -170,7 +212,7 @@ def _repo_history_contains_commit(repo_path: str, commit_sha: str) -> bool:
 
 
 def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
-    log.debug("po_name: '%s', po_commit_dir: '%s'", ctx.po_name, ctx.po_commit_dir)
+    log.debug("checking commit patches for po: '%s'", ctx.po_name)
     if not os.path.isdir(ctx.po_commit_dir):
         log.debug("No commits dir for po: '%s'", ctx.po_name)
         return True
@@ -221,7 +263,18 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             with open(patch_file, "r", encoding="utf-8") as f:
                 patch_text = f.read()
         except OSError as e:
-            log.error("Failed to read commit patch '%s': %s", patch_file, e)
+            log.error(
+                "Failed to read commit patch '%s' for repo '%s': %s",
+                rel_path,
+                repo_name,
+                redact_patch_diagnostic(
+                    e,
+                    patch_file=patch_file,
+                    patch_target=patch_target,
+                    rel_path=rel_path,
+                    repo_name=repo_name,
+                ),
+            )
             return False
 
         patch_targets = extract_patch_targets(patch_text)
@@ -257,15 +310,21 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             if head_before_result.returncode == 0:
                 head_before = head_before_result.stdout.strip()
 
-        log.info("applying commit patch: '%s' to repo: '%s'", patch_file, patch_target)
-        result = runtime.execute_command(
-            ctx,
-            patch_target,
-            repo_name,
-            ["git", "am", "-k", "--keep-cr", patch_file],
-            cwd=patch_target,
-            description=f"Apply commit patch {os.path.basename(patch_file)} to {repo_name}",
-        )
+        if ctx.dry_run:
+            log.info("planned git am commit patch: '%s' to repo: '%s'", rel_path, repo_name)
+            result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        else:
+            log.info("applying commit patch: '%s' to repo: '%s'", rel_path, repo_name)
+            result = runtime.execute_command(
+                ctx,
+                patch_target,
+                repo_name,
+                ["git", "am", "-k", "--keep-cr", patch_file],
+                cwd=patch_target,
+                description=f"Apply commit patch {os.path.basename(patch_file)} to {repo_name}",
+                log_command=["git", "am", "-k", "--keep-cr", rel_path],
+                log_cwd=repo_name,
+            )
         if result.returncode != 0:
             # Make sure we clean up am state before continuing.
             runtime.execute_command(
@@ -275,6 +334,8 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 ["git", "am", "--abort"],
                 cwd=patch_target,
                 description=f"Abort failed git am for {os.path.basename(patch_file)}",
+                log_command=["git", "am", "--abort"],
+                log_cwd=repo_name,
             )
 
             already_applied = runtime.execute_command(
@@ -284,6 +345,8 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 ["git", "apply", "--reverse", "--check", patch_file],
                 cwd=patch_target,
                 description=f"Check commit patch already applied {os.path.basename(patch_file)} to {repo_name}",
+                log_command=["git", "apply", "--reverse", "--check", rel_path],
+                log_cwd=repo_name,
             )
             if already_applied.returncode == 0:
                 log.info(
@@ -302,10 +365,28 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 )
                 continue
 
-            log.error("Failed to apply commit patch '%s': %s", patch_file, summarize_output(result.stderr))
+            log.error(
+                "Failed to apply commit patch '%s' to repo '%s': %s",
+                rel_path,
+                repo_name,
+                summarize_output(
+                    redact_patch_diagnostic(
+                        result.stderr,
+                        patch_file=patch_file,
+                        patch_target=patch_target,
+                        rel_path=rel_path,
+                        repo_name=repo_name,
+                    )
+                ),
+            )
             return False
 
-        if not ctx.dry_run and not _normalize_head_commit_subject_after_am(patch_target):
+        if not ctx.dry_run and not _normalize_head_commit_subject_after_am(
+            patch_target,
+            repo_name=repo_name,
+            rel_path=rel_path,
+            patch_file=patch_file,
+        ):
             record = runtime.get_repo_record(ctx, patch_target, repo_name)
             prior_commits = record.get("commits") or []
             rollback_target = (
@@ -335,7 +416,7 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             if rollback_target and rollback.returncode == 0:
                 log.error(
                     "Commit subject normalization failed for '%s'; restored repo '%s' to '%s'",
-                    patch_file,
+                    rel_path,
                     repo_name,
                     rollback_target,
                 )
@@ -355,12 +436,14 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             )
             runtime.finalize_records(ctx)
             log.error(
-                "Commit subject normalization failed for '%s' and rollback failed; recovery state was recorded",
-                patch_file,
+                "Commit subject normalization failed for '%s' in repo '%s' and rollback failed; recovery state was recorded",
+                rel_path,
+                repo_name,
             )
             return False
 
-        log.info("commit patch applied successfully: '%s' to repo: '%s'", patch_file, patch_target)
+        if not ctx.dry_run:
+            log.info("commit patch applied successfully: '%s' to repo: '%s'", rel_path, repo_name)
         head_after = head_before
         if not ctx.dry_run:
             head_after_result = subprocess.run(

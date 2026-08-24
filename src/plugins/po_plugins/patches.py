@@ -12,13 +12,13 @@ from src.log_manager import log, summarize_output
 
 from .registry import APPLY_PHASE_PER_PO, REVERT_PHASE_PER_PO, register_simple_plugin
 from .runtime import PoPluginContext, PoPluginRuntime
-from .utils import extract_patch_targets
+from .utils import extract_patch_targets, redact_patch_diagnostic
 
 SKIPPED_PATCH_STATUSES = {"already_applied"}
 
 
 def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
-    log.debug("po_name: '%s', po_patch_dir: '%s'", ctx.po_name, ctx.po_patch_dir)
+    log.debug("checking patches for po: '%s'", ctx.po_name)
     if not os.path.isdir(ctx.po_patch_dir):
         log.debug("No patches dir for po: '%s'", ctx.po_name)
         return True
@@ -61,13 +61,27 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                 )
                 continue
 
-            log.info("applying patch: '%s' to repo: '%s'", patch_file, patch_target)
+            if ctx.dry_run:
+                log.info("planned git apply patch: '%s' to repo: '%s'", rel_path, repo_name)
+            else:
+                log.info("applying patch: '%s' to repo: '%s'", rel_path, repo_name)
 
             try:
                 with open(patch_file, "r", encoding="utf-8") as f:
                     patch_targets = extract_patch_targets(f.read())
             except OSError as e:
-                log.error("Failed to read patch '%s': %s", patch_file, e)
+                log.error(
+                    "Failed to read patch '%s' for repo '%s': %s",
+                    rel_path,
+                    repo_name,
+                    redact_patch_diagnostic(
+                        e,
+                        patch_file=patch_file,
+                        patch_target=patch_target,
+                        rel_path=rel_path,
+                        repo_name=repo_name,
+                    ),
+                )
                 return False
 
             record = runtime.get_repo_record(ctx, patch_target, repo_name)
@@ -78,19 +92,40 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             }
             record["patches"].append(patch_entry)
 
-            result = runtime.execute_command(
-                ctx,
-                patch_target,
-                repo_name,
-                ["git", "apply", patch_file],
-                cwd=patch_target,
-                description=f"Apply patch {os.path.basename(patch_file)} to {repo_name}",
-            )
+            if ctx.dry_run:
+                result = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+            else:
+                result = runtime.execute_command(
+                    ctx,
+                    patch_target,
+                    repo_name,
+                    ["git", "apply", patch_file],
+                    cwd=patch_target,
+                    description=f"Apply patch {os.path.basename(patch_file)} to {repo_name}",
+                    log_command=["git", "apply", rel_path],
+                    log_cwd=repo_name,
+                )
             log.debug(
                 "git apply result: returncode=%s stdout=%s stderr=%s",
                 result.returncode,
-                summarize_output(result.stdout),
-                summarize_output(result.stderr),
+                summarize_output(
+                    redact_patch_diagnostic(
+                        result.stdout,
+                        patch_file=patch_file,
+                        patch_target=patch_target,
+                        rel_path=rel_path,
+                        repo_name=repo_name,
+                    )
+                ),
+                summarize_output(
+                    redact_patch_diagnostic(
+                        result.stderr,
+                        patch_file=patch_file,
+                        patch_target=patch_target,
+                        rel_path=rel_path,
+                        repo_name=repo_name,
+                    )
+                ),
             )
             if result.returncode != 0:
                 already_applied = runtime.execute_command(
@@ -100,6 +135,8 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     ["git", "apply", "--reverse", "--check", patch_file],
                     cwd=patch_target,
                     description=f"Check patch already applied {os.path.basename(patch_file)} to {repo_name}",
+                    log_command=["git", "apply", "--reverse", "--check", rel_path],
+                    log_cwd=repo_name,
                 )
                 if already_applied.returncode == 0:
                     log.info(
@@ -110,10 +147,24 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
                     patch_entry["status"] = "already_applied"
                     continue
 
-                log.error("Failed to apply patch '%s': %s", patch_file, summarize_output(result.stderr))
+                log.error(
+                    "Failed to apply patch '%s' to repo '%s': %s",
+                    rel_path,
+                    repo_name,
+                    summarize_output(
+                        redact_patch_diagnostic(
+                            result.stderr,
+                            patch_file=patch_file,
+                            patch_target=patch_target,
+                            rel_path=rel_path,
+                            repo_name=repo_name,
+                        )
+                    ),
+                )
                 return False
 
-            log.info("patch applied successfully: '%s' to repo: '%s'", patch_file, patch_target)
+            if not ctx.dry_run:
+                log.info("patch applied successfully: '%s' to repo: '%s'", rel_path, repo_name)
 
     return True
 

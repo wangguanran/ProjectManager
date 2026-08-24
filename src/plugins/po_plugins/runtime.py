@@ -127,8 +127,10 @@ class PoPluginRuntime:
         cwd: Optional[str] = None,
         description: str = "",
         shell: bool = False,
+        log_command=None,
+        log_cwd: Optional[str] = None,
     ) -> subprocess.CompletedProcess:
-        """Execute command and record it to repo-root applied record."""
+        """Execute and record a command, optionally using safe values in diagnostic logs."""
         formatted = self._format_command(command, cwd=cwd, description=description, shell=shell)
 
         if getattr(ctx, "dry_run", False):
@@ -146,8 +148,8 @@ class PoPluginRuntime:
 
         log_cmd_event(
             log,
-            command=command,
-            cwd=cwd,
+            command=command if log_command is None else log_command,
+            cwd=cwd if log_cwd is None else log_cwd,
             description=description,
             returncode=result.returncode,
             stdout=result.stdout,
