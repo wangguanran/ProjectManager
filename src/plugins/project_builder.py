@@ -2,14 +2,19 @@
 Project build utility class for CLI operations.
 """
 
+import ctypes
+import errno
 import glob
 import json
 import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
+import sys
 import tarfile
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -906,6 +911,584 @@ def _collect_artifacts(ctx: BuildContext, rules_override: Optional[str] = None) 
             handle.write("\n")
 
     return True
+
+
+def _git_result(repo_path: str, args: List[str]) -> subprocess.CompletedProcess:
+    command = ["git", *args]
+    try:
+        return subprocess.run(
+            command,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return subprocess.CompletedProcess(
+            command,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}",
+        )
+
+
+def _repo_upstream(repo_path: str) -> Tuple[str, Optional[Tuple[str, subprocess.CompletedProcess]]]:
+    branch_result = _git_result(repo_path, ["symbolic-ref", "--quiet", "--short", "HEAD"])
+    if branch_result.returncode == 1:
+        return "", None
+    if branch_result.returncode != 0:
+        return "", ("git symbolic-ref HEAD", branch_result)
+
+    branch = branch_result.stdout.strip()
+    upstream_result = _git_result(
+        repo_path,
+        ["for-each-ref", "--format=%(upstream:short)", f"refs/heads/{branch}"],
+    )
+    if upstream_result.returncode != 0:
+        return "", ("git upstream query", upstream_result)
+
+    upstream = upstream_result.stdout.strip()
+    if not upstream:
+        return "", None
+
+    verify_result = _git_result(repo_path, ["rev-parse", "--verify", upstream])
+    if verify_result.returncode != 0:
+        return "", (f"git verify upstream {upstream}", verify_result)
+    return upstream, None
+
+
+def _write_text(path: str, text: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def _mark_history_partial(item: Dict[str, Any], operation: str, result: subprocess.CompletedProcess) -> None:
+    detail = (result.stderr or result.stdout or f"{operation} failed").strip()[:500]
+    error = f"{operation}: {detail}"
+    item["status"] = "partial"
+    item["error"] = "; ".join(filter(None, [item.get("error", ""), error]))
+
+
+def _safe_history_repo_name(repo_name: str) -> str:
+    name = str(repo_name).strip().replace("\\", "/")
+    parts = name.split("/")
+    if not name or any(part in {"", ".", ".."} for part in parts):
+        return ""
+    return os.path.join(*parts)
+
+
+_HISTORY_RESERVED_COMPONENTS = {
+    "history",
+    "local_commits.txt",
+    "local_patches",
+    "meta.json",
+    "repos",
+    "summary.json",
+    "repo-history",
+}
+
+
+def _preflight_history_repo_names(repositories: List[Tuple[str, str]]) -> Optional[List[str]]:
+    safe_names: List[str] = []
+    folded_parts: List[Tuple[str, ...]] = []
+    for _, repo_name in repositories:
+        safe_name = _safe_history_repo_name(repo_name)
+        parts = tuple(part.casefold() for part in safe_name.split(os.sep)) if safe_name else ()
+        if not safe_name:
+            log.error("Unsafe repository name for history output: %s", repo_name)
+            return None
+        if any(part in _HISTORY_RESERVED_COMPONENTS for part in parts):
+            log.error("Reserved repository name for history output: %s", repo_name)
+            return None
+        for existing in folded_parts:
+            common_len = min(len(parts), len(existing))
+            if parts[:common_len] == existing[:common_len]:
+                log.error("Colliding repository name for history output: %s", repo_name)
+                return None
+        safe_names.append(safe_name)
+        folded_parts.append(parts)
+    return safe_names
+
+
+_O_DIRECTORY = getattr(os, "O_DIRECTORY", None)
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", None)
+
+
+def _history_capabilities_available() -> bool:
+    if _O_DIRECTORY is None or _O_NOFOLLOW is None:
+        return False
+    required_dir_fd = {os.open, os.mkdir, os.stat, os.unlink, os.rmdir}
+    if not required_dir_fd.issubset(os.supports_dir_fd):
+        return False
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform.startswith("linux") and hasattr(libc, "renameat2"):
+        rename = libc.renameat2
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(-1, b"probe", -1, b"probe", 1)
+    elif sys.platform == "darwin" and hasattr(libc, "renameatx_np"):
+        rename = libc.renameatx_np
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(-1, b"probe", -1, b"probe", 0x00000004)
+    else:
+        return False
+    return result == -1 and ctypes.get_errno() == errno.EBADF
+
+
+def _directory_open_flags() -> int:
+    if _O_DIRECTORY is None or _O_NOFOLLOW is None:
+        raise OSError(errno.ENOTSUP, "safe directory-open flags are unavailable")
+    return os.O_RDONLY | _O_DIRECTORY | _O_NOFOLLOW
+
+
+def _open_or_create_dir_at(parent_fd: int, name: str, *, create: bool = True) -> int:
+    """Open one directory component without following a symlink."""
+    if not name or name in {".", ".."} or os.sep in name or (os.altsep and os.altsep in name):
+        raise ValueError(f"unsafe directory component: {name!r}")
+    if create:
+        try:
+            os.mkdir(name, mode=0o755, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+    return os.open(name, _directory_open_flags(), dir_fd=parent_fd)
+
+
+def _open_directory_chain(
+    root_fd: int, components: List[str], *, create: bool
+) -> Tuple[int, List[Tuple[str, int, int]]]:
+    current_fd = os.dup(root_fd)
+    identities: List[Tuple[str, int, int]] = []
+    try:
+        for component in components:
+            next_fd = _open_or_create_dir_at(current_fd, component, create=create)
+            os.close(current_fd)
+            current_fd = next_fd
+            current_stat = os.fstat(current_fd)
+            identities.append((component, current_stat.st_dev, current_stat.st_ino))
+        return current_fd, identities
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
+def _verify_directory_chain(root_fd: int, identities: List[Tuple[str, int, int]]) -> bool:
+    current_fd = os.dup(root_fd)
+    try:
+        for component, expected_dev, expected_ino in identities:
+            next_fd = _open_or_create_dir_at(current_fd, component, create=False)
+            os.close(current_fd)
+            current_fd = next_fd
+            current_stat = os.fstat(current_fd)
+            if (current_stat.st_dev, current_stat.st_ino) != (expected_dev, expected_ino):
+                return False
+        return True
+    except (OSError, ValueError):
+        return False
+    finally:
+        os.close(current_fd)
+
+
+def _directory_fd_path(directory_fd: int) -> str:
+    for prefix in (f"/proc/{os.getpid()}/fd", "/dev/fd"):
+        candidate = os.path.join(prefix, str(directory_fd))
+        if os.path.exists(candidate):
+            return candidate
+    raise OSError(errno.ENOTSUP, "directory descriptor paths are unavailable")
+
+
+def _clear_directory_fd(directory_fd: int) -> None:
+    for name in os.listdir(directory_fd):
+        entry_stat = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if stat.S_ISDIR(entry_stat.st_mode):
+            child_fd = os.open(name, _directory_open_flags(), dir_fd=directory_fd)
+            try:
+                _clear_directory_fd(child_fd)
+            finally:
+                os.close(child_fd)
+            os.rmdir(name, dir_fd=directory_fd)
+        else:
+            os.unlink(name, dir_fd=directory_fd)
+
+
+def _path_matches_identity(parent_fd: int, name: str, identity: Tuple[int, int]) -> bool:
+    try:
+        current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError:
+        return False
+    return (current.st_dev, current.st_ino) == identity
+
+
+def _remove_private_directory(
+    parent_fd: int,
+    name: str,
+    directory_fd: Optional[int],
+    identity: Optional[Tuple[int, int]],
+) -> None:
+    if directory_fd is None or identity is None:
+        return
+    opened = os.fstat(directory_fd)
+    if (opened.st_dev, opened.st_ino) != identity or not _path_matches_identity(parent_fd, name, identity):
+        return
+    try:
+        _clear_directory_fd(directory_fd)
+        if _path_matches_identity(parent_fd, name, identity):
+            os.rmdir(name, dir_fd=parent_fd)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        log.warning("Failed to clean private history staging directory: %s", exc)
+
+
+def _rename_noreplace(source_fd: int, source: str, destination_fd: int, destination: str) -> None:
+    """Atomically rename within trusted parents, refusing to replace a destination."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    encoded_source = os.fsencode(source)
+    encoded_destination = os.fsencode(destination)
+    if sys.platform.startswith("linux") and hasattr(libc, "renameat2"):
+        rename = libc.renameat2
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(source_fd, encoded_source, destination_fd, encoded_destination, 1)
+    elif sys.platform == "darwin" and hasattr(libc, "renameatx_np"):
+        rename = libc.renameatx_np
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(source_fd, encoded_source, destination_fd, encoded_destination, 0x00000004)
+    else:
+        raise OSError(errno.ENOTSUP, "atomic no-replace rename is unavailable")
+    if result != 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number), destination)
+
+
+def _copy_file_exclusive(source: str, destination: str) -> Tuple[int, int]:
+    destination_fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    opened_stat = os.fstat(destination_fd)
+    identity = (opened_stat.st_dev, opened_stat.st_ino)
+    try:
+        with open(source, "rb") as source_handle, os.fdopen(os.dup(destination_fd), "wb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle)
+        os.fsync(destination_fd)
+        current = os.stat(destination, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != identity:
+            raise OSError(errno.ESTALE, "artifact staging path changed during copy")
+        return identity
+    except (OSError, shutil.Error):
+        try:
+            current = os.stat(destination, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) == identity:
+                os.unlink(destination)
+        except FileNotFoundError:
+            pass
+        raise
+    finally:
+        os.close(destination_fd)
+
+
+def _build_history_stage(
+    stage_root: str,
+    root_dir: str,
+    repositories: List[Tuple[str, str]],
+    safe_repo_names: List[str],
+    project_name: str,
+    ts: str,
+    synced_limit: int,
+    archive_name: str,
+    keep_dir: bool,
+) -> Tuple[Dict[str, Any], str]:
+    history_root = os.path.join(stage_root, "history")
+    os.mkdir(history_root)
+    repos_dir = os.path.join(history_root, "repos")
+    os.mkdir(repos_dir)
+    summary_repos: List[Dict[str, Any]] = []
+    log_format = "%H%x09%h%x09%ad%x09%an%x09%s"
+    date_fmt = "iso-strict"
+
+    for idx, ((repo_path, repo_name), safe_repo_name) in enumerate(zip(repositories, safe_repo_names)):
+        log.info("Recording history %s/%s: %s", idx + 1, len(repositories), repo_name)
+        repo_out = os.path.join(repos_dir, safe_repo_name)
+        os.makedirs(repo_out, exist_ok=True)
+        item: Dict[str, Any] = {
+            "name": repo_name,
+            "path": os.path.relpath(repo_path, start=root_dir) if os.path.isabs(repo_path) else repo_path,
+            "git": False,
+            "head": "",
+            "upstream": "",
+            "synced_commit_count": 0,
+            "local_commit_count": 0,
+            "local_patch_count": 0,
+            "status": "ok",
+            "error": "",
+        }
+        git_marker = os.path.join(repo_path, ".git")
+        if not (os.path.isdir(git_marker) or os.path.isfile(git_marker)):
+            item["status"] = "skipped"
+            item["error"] = "not a git repository"
+            summary_repos.append(item)
+            _write_text(os.path.join(repo_out, "meta.json"), json.dumps(item, indent=2, ensure_ascii=False) + "\n")
+            continue
+
+        item["git"] = True
+        head_result = _git_result(repo_path, ["rev-parse", "HEAD"])
+        if head_result.returncode != 0:
+            _mark_history_partial(item, "rev-parse HEAD", head_result)
+            summary_repos.append(item)
+            _write_text(os.path.join(repo_out, "meta.json"), json.dumps(item, indent=2, ensure_ascii=False) + "\n")
+            continue
+        item["head"] = head_result.stdout.strip()
+        upstream, upstream_error = _repo_upstream(repo_path)
+        item["upstream"] = upstream
+        if upstream_error:
+            operation, result = upstream_error
+            _mark_history_partial(item, operation, result)
+
+        synced_ref = upstream or "HEAD"
+        synced_result = _git_result(
+            repo_path,
+            ["log", synced_ref, f"--max-count={synced_limit}", f"--format={log_format}", f"--date={date_fmt}"],
+        )
+        if synced_result.returncode != 0:
+            _mark_history_partial(item, f"git log {synced_ref}", synced_result)
+        synced_log = synced_result.stdout if synced_result.returncode == 0 else ""
+        _write_text(os.path.join(repo_out, "synced_commits.txt"), synced_log)
+        item["synced_commit_count"] = len([line for line in synced_log.splitlines() if line.strip()])
+
+        local_shas: List[str] = []
+        if upstream:
+            local_result = _git_result(repo_path, ["rev-list", "--reverse", f"{upstream}..HEAD"])
+            if local_result.returncode != 0:
+                _mark_history_partial(item, f"git rev-list {upstream}..HEAD", local_result)
+            local_list = local_result.stdout.strip() if local_result.returncode == 0 else ""
+            local_shas = [line for line in local_list.splitlines() if line.strip()]
+            local_log_result = _git_result(
+                repo_path,
+                ["log", f"{upstream}..HEAD", "--reverse", f"--format={log_format}", f"--date={date_fmt}"],
+            )
+            if local_log_result.returncode != 0:
+                _mark_history_partial(item, f"git log {upstream}..HEAD", local_log_result)
+            local_log = local_log_result.stdout if local_log_result.returncode == 0 else ""
+            _write_text(os.path.join(repo_out, "local_commits.txt"), local_log)
+            item["local_commit_count"] = len(local_shas)
+
+            if local_shas:
+                patch_dir = os.path.join(repo_out, "local_patches")
+                os.makedirs(patch_dir, exist_ok=True)
+                result = _git_result(repo_path, ["format-patch", f"{upstream}..HEAD", "-o", patch_dir])
+                if result.returncode != 0:
+                    _mark_history_partial(item, "git format-patch", result)
+                    log.warning("format-patch failed for %s: %s", repo_name, item["error"])
+                else:
+                    item["local_patch_count"] = len([name for name in os.listdir(patch_dir) if name.endswith(".patch")])
+        elif upstream_error:
+            _write_text(
+                os.path.join(repo_out, "local_commits.txt"),
+                "# upstream query failed; local temporary commits cannot be distinguished\n",
+            )
+        else:
+            _write_text(
+                os.path.join(repo_out, "local_commits.txt"),
+                "# no upstream configured; local temporary commits cannot be distinguished\n",
+            )
+
+        _write_text(os.path.join(repo_out, "meta.json"), json.dumps(item, indent=2, ensure_ascii=False) + "\n")
+        summary_repos.append(item)
+
+    summary = {
+        "schema_version": 1,
+        "operation": "project_record_history",
+        "project_name": project_name,
+        "timestamp": ts,
+        "synced_max": synced_limit,
+        "repository_count": len(summary_repos),
+        "local_commit_repos": sum(1 for repo in summary_repos if repo.get("local_commit_count", 0) > 0),
+        "partial_repository_count": sum(1 for repo in summary_repos if repo.get("status") == "partial"),
+        "repositories": summary_repos,
+    }
+    _write_text(os.path.join(history_root, "summary.json"), json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
+    archive_path = os.path.join(stage_root, archive_name)
+    log.info("Creating private history archive: %s", archive_path)
+    with tarfile.open(archive_path, "w:gz") as archive:
+        archive.add(history_root, arcname="history")
+    if not keep_dir:
+        shutil.rmtree(history_root)
+    return summary, archive_path
+
+
+@register(
+    "project_record_history",
+    needs_repositories=True,
+    desc="Record per-repo commit history after po_apply; archive patches for local commits ahead of upstream.",
+)
+def project_record_history(
+    env: Dict,
+    projects_info: Dict,
+    project_name: str,
+    timestamp: Optional[str] = None,
+    synced_max: int = 50,
+    artifact_dir: str = "",
+    dry_run: bool = False,
+    keep_dir: bool = False,
+) -> bool:
+    """Record repository history and publish complete outputs atomically."""
+    _ = projects_info
+    ts = str(timestamp).strip() if timestamp else datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = re.sub(r"[^0-9A-Za-z_-]+", "_", ts) or datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_project_name = _safe_project_name(project_name)
+    root_dir = os.path.realpath(os.path.abspath(str(env.get("root_path") or os.getcwd())))
+    repositories = _normalise_repositories(env.get("repositories", []))
+    safe_repo_names = _preflight_history_repo_names(repositories)
+    if safe_repo_names is None:
+        return False
+
+    artifact = str(artifact_dir or "").strip()
+    artifact_components: Optional[List[str]] = None
+    absolute_artifact = ""
+    if artifact:
+        if os.path.isabs(artifact):
+            log.error("Absolute artifact directories are not supported: %s", artifact)
+            return False
+        else:
+            safe_artifact = _safe_relpath(artifact)
+            if not safe_artifact:
+                log.error("Unsafe relative artifact directory: %s", artifact)
+                return False
+            artifact_components = safe_artifact.split(os.sep)
+
+    try:
+        synced_limit = max(1, int(synced_max))
+    except (TypeError, ValueError):
+        synced_limit = 50
+    archive_name = f"repo-history_{safe_project_name}_{ts}.tar.gz"
+    if not dry_run and not _history_capabilities_available():
+        log.error("Safe descriptor-relative atomic publication is unavailable on this platform")
+        return False
+    if dry_run:
+        log.info("DRY-RUN: would privately build and publish history timestamp: %s", ts)
+        log.info("DRY-RUN: synced_max=%s artifact_dir=%s keep_dir=%s", synced_limit, artifact or "(none)", keep_dir)
+        for repo_path, repo_name in repositories:
+            log.info("DRY-RUN: would record history for repo '%s' at '%s'", repo_name, repo_path)
+        return True
+
+    root_fd: Optional[int] = None
+    timestamp_parent_fd: Optional[int] = None
+    artifact_parent_fd: Optional[int] = None
+    stage_fd: Optional[int] = None
+    timestamp_chain: List[Tuple[str, int, int]] = []
+    artifact_chain: List[Tuple[str, int, int]] = []
+    stage_name = f".{ts}.tmp-{uuid.uuid4().hex}"
+    artifact_stage_name = f".{archive_name}.tmp-{uuid.uuid4().hex}"
+    artifact_published = False
+    artifact_identity: Optional[Tuple[int, int]] = None
+    timestamp_identity: Optional[Tuple[int, int]] = None
+    timestamp_published = False
+    publication_valid = False
+    try:
+        root_fd = os.open(root_dir, _directory_open_flags())
+        _directory_fd_path(root_fd)
+        if artifact:
+            if artifact_components is not None:
+                artifact_parent_fd, artifact_chain = _open_directory_chain(root_fd, artifact_components, create=True)
+            else:
+                raise OSError(errno.ENOTSUP, "absolute artifact directories are unsupported")
+            try:
+                os.stat(archive_name, dir_fd=artifact_parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                log.error("History artifact already exists: %s", archive_name)
+                return False
+
+        timestamp_parent_fd, timestamp_chain = _open_directory_chain(
+            root_fd, [".cache", "build", safe_project_name], create=True
+        )
+        try:
+            os.stat(ts, dir_fd=timestamp_parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            log.error("History timestamp output already exists: %s", ts)
+            return False
+
+        os.mkdir(stage_name, mode=0o700, dir_fd=timestamp_parent_fd)
+        stage_fd = os.open(stage_name, _directory_open_flags(), dir_fd=timestamp_parent_fd)
+        stage_stat = os.fstat(stage_fd)
+        timestamp_identity = (stage_stat.st_dev, stage_stat.st_ino)
+        stage_root = _directory_fd_path(stage_fd)
+        summary, archive_path = _build_history_stage(
+            stage_root,
+            root_dir,
+            repositories,
+            safe_repo_names,
+            project_name,
+            ts,
+            synced_limit,
+            archive_name,
+            _coerce_bool(keep_dir, False),
+        )
+
+        if artifact:
+            assert artifact_parent_fd is not None
+            artifact_stage_path = os.path.join(_directory_fd_path(artifact_parent_fd), artifact_stage_name)
+            artifact_identity = _copy_file_exclusive(archive_path, artifact_stage_path)
+            if not _path_matches_identity(artifact_parent_fd, artifact_stage_name, artifact_identity):
+                raise OSError(errno.ESTALE, "artifact staging path changed before publication")
+
+        if not _verify_directory_chain(root_fd, timestamp_chain):
+            raise OSError(errno.ESTALE, "history output directory changed before publication")
+        if artifact_components is not None and not _verify_directory_chain(root_fd, artifact_chain):
+            raise OSError(errno.ESTALE, "artifact output directory changed before publication")
+
+        if artifact_parent_fd is not None:
+            _rename_noreplace(artifact_parent_fd, artifact_stage_name, artifact_parent_fd, archive_name)
+            artifact_published = True
+        _rename_noreplace(timestamp_parent_fd, stage_name, timestamp_parent_fd, ts)
+        timestamp_published = True
+        timestamp_reachable = timestamp_identity is not None and _path_matches_identity(
+            timestamp_parent_fd, ts, timestamp_identity
+        )
+        artifact_reachable = artifact_parent_fd is None or (
+            artifact_identity is not None
+            and _path_matches_identity(artifact_parent_fd, archive_name, artifact_identity)
+        )
+        if (
+            not _verify_directory_chain(root_fd, timestamp_chain)
+            or (artifact_components is not None and not _verify_directory_chain(root_fd, artifact_chain))
+            or not timestamp_reachable
+            or not artifact_reachable
+        ):
+            raise OSError(errno.ESTALE, "published history output is no longer reachable through requested paths")
+        publication_valid = True
+        log.info(
+            "History recorded: repos=%s local_commit_repos=%s archive=%s",
+            summary["repository_count"],
+            summary["local_commit_repos"],
+            archive_name,
+        )
+        return True
+    except (OSError, shutil.Error, tarfile.TarError, RuntimeError, ValueError) as exc:
+        log.error("Failed to record or publish history atomically: %s", exc)
+        return False
+    finally:
+        if artifact_parent_fd is not None:
+            artifact_name = archive_name if artifact_published else artifact_stage_name
+            if not publication_valid and artifact_identity is not None:
+                try:
+                    if _path_matches_identity(artifact_parent_fd, artifact_name, artifact_identity):
+                        os.unlink(artifact_name, dir_fd=artifact_parent_fd)
+                except FileNotFoundError:
+                    pass
+            os.close(artifact_parent_fd)
+        if stage_fd is not None:
+            if not publication_valid and timestamp_parent_fd is not None:
+                timestamp_name = ts if timestamp_published else stage_name
+                _remove_private_directory(timestamp_parent_fd, timestamp_name, stage_fd, timestamp_identity)
+            os.close(stage_fd)
+        if timestamp_parent_fd is not None:
+            os.close(timestamp_parent_fd)
+        if root_fd is not None:
+            os.close(root_fd)
 
 
 @register(
