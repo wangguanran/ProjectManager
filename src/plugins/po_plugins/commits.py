@@ -29,6 +29,10 @@ FORMAT_PATCH_SUBJECT_PREFIX_RE = re.compile(
 )
 
 
+def _is_patch_file(filename: str) -> bool:
+    return filename.endswith(".patch")
+
+
 def _strip_format_patch_subject_prefix(message: str) -> str:
     """Remove git format-patch default subject prefix from commit message."""
     if not message:
@@ -222,6 +226,8 @@ def _apply_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     for current_dir, _, files in os.walk(ctx.po_commit_dir):
         for fname in files:
             if fname == ".gitkeep":
+                continue
+            if not _is_patch_file(fname):
                 continue
             patch_file = os.path.join(current_dir, fname)
             rel_path = os.path.relpath(patch_file, ctx.po_commit_dir)
@@ -554,6 +560,8 @@ def _list_commits(po_path: str, _runtime: PoPluginRuntime) -> Dict[str, Any]:
         for root, _, files in os.walk(commits_dir):
             for f in files:
                 if f == ".gitkeep":
+                    continue
+                if not _is_patch_file(f):
                     continue
                 rel_path = os.path.relpath(os.path.join(root, f), commits_dir)
                 commit_files.append(rel_path)

@@ -17,6 +17,10 @@ from .utils import extract_patch_targets, redact_patch_diagnostic
 SKIPPED_PATCH_STATUSES = {"already_applied"}
 
 
+def _is_patch_file(filename: str) -> bool:
+    return filename.endswith(".patch")
+
+
 def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     log.debug("checking patches for po: '%s'", ctx.po_name)
     if not os.path.isdir(ctx.po_patch_dir):
@@ -27,6 +31,8 @@ def _apply_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
     for current_dir, _, files in os.walk(ctx.po_patch_dir):
         for fname in files:
             if fname == ".gitkeep":
+                continue
+            if not _is_patch_file(fname):
                 continue
             rel_path = os.path.relpath(os.path.join(current_dir, fname), ctx.po_patch_dir)
             path_parts = rel_path.split(os.sep)
@@ -181,6 +187,8 @@ def _revert_patches(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
         for fname in files:
             if fname == ".gitkeep":
                 continue
+            if not _is_patch_file(fname):
+                continue
             log.debug("current_dir: '%s', fname: '%s'", current_dir, fname)
             rel_path = os.path.relpath(os.path.join(current_dir, fname), ctx.po_patch_dir)
             log.debug("patch rel_path: '%s'", rel_path)
@@ -260,6 +268,8 @@ def _list_patches(po_path: str, _runtime: PoPluginRuntime) -> Dict[str, Any]:
         for root, _, files in os.walk(patches_dir):
             for f in files:
                 if f == ".gitkeep":
+                    continue
+                if not _is_patch_file(f):
                     continue
                 rel_path = os.path.relpath(os.path.join(root, f), patches_dir)
                 patch_files.append(rel_path)

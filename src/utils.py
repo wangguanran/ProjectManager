@@ -106,6 +106,9 @@ def get_version():
 
     def _try_get_git_sha_from_repo(repo_dir: str) -> str:
         # Best-effort: only for dev/source runs where `.git` exists.
+        git_marker = os.path.join(repo_dir, ".git")
+        if not (os.path.isdir(git_marker) or os.path.isfile(git_marker)):
+            return ""
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--short", "HEAD"],

@@ -184,6 +184,40 @@ python -m src project_diff myproject --keep-diff-dir
 
 ---
 
+### `project_record_history` — Archive repository commit history
+
+**Status**: ✅ Implemented
+
+**Syntax**
+```bash
+python -m src project_record_history <project-name> [--timestamp <ts>] [--synced-max <N>] [--artifact-dir <dir>] [--dry-run] [--keep-dir]
+```
+
+**Description**: Record per-repository commit history after `po_apply` and before a build. Commits reachable from the configured upstream (or `HEAD` when no upstream is configured) are written to `synced_commits.txt`. Commits in `@{u}..HEAD` are written to `local_commits.txt` and exported to `local_patches/*.patch`.
+
+The command writes `.cache/build/<project-name>/<timestamp>/history/` and creates `repo-history_<project-name>_<timestamp>.tar.gz`. The history tree, archive, and optional artifact are built as private siblings and published with atomic no-replace renames only after generation succeeds. Existing directories, symbolic links, and artifact targets are rejected rather than reused or overwritten. A failed archive, artifact copy, or publication cleans private staging so the same timestamp can be retried.
+
+Relative `--artifact-dir` and timestamp parents are traversed from an open project-root descriptor, one component at a time, without following symbolic links. `..` traversal, symbolic-link escapes, and concurrent parent swaps cannot redirect writes outside the project root. Absolute artifact directories are rejected. Platforms without descriptor-relative no-follow operations, descriptor paths, or atomic no-replace rename support fail before creating output or collecting Git history.
+
+Repository-level Git failures, including upstream lookup failures, process-spawn errors, and a disappearing working directory, are recorded as `partial` in `summary.json`; processing continues with the remaining repositories. A branch with no configured upstream remains a normal supported case. Repository output names are checked globally before any output is written. Unsafe paths, case-insensitive duplicates, ancestor/descendant overlaps, and generated-file names such as `meta.json` or `local_patches` are rejected.
+
+**Arguments**
+- `project-name` (required): Name of the project.
+
+**Options**
+- `--timestamp`: Override the timestamp directory name; the resulting output must not already exist.
+- `--synced-max`: Maximum number of synced-side commits to record (default: 50).
+- `--artifact-dir`: Exclusively copy the tar.gz archive to this directory; relative paths must remain inside the project root.
+- `--dry-run`: Print the plan without writing files.
+- `--keep-dir`: Keep the unpacked history directory after archiving.
+
+**Example**
+```bash
+python -m src project_record_history myproject --artifact-dir jenkins-artifacts
+```
+
+---
+
 ### `snapshot_create` — Create a workspace snapshot (lockfile)
 
 **Status**: ✅ Implemented

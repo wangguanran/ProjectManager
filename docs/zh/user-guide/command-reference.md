@@ -148,6 +148,43 @@ python -m src project_diff myproject --keep-diff-dir
 
 ---
 
+### `project_record_history` - 记录仓库提交历史（含本地临时 commit patch）
+
+**状态**: ✅ 已实现
+
+**语法**:
+```bash
+python -m src project_record_history <项目名称> [--timestamp <ts>] [--synced-max <N>] [--artifact-dir <dir>] [--dry-run] [--keep-dir]
+```
+
+**描述**: 在 `po_apply` 之后、编译之前记录每个仓库的 commit 历史：
+
+- **服务器同步侧**（upstream / 无 upstream 时的 HEAD）：只写入 `synced_commits.txt` 提交列表（默认最多 50 条）
+- **本地临时 commit**（`@{u}..HEAD`，通常来自 `commits/` + `git am`）：写入 `local_commits.txt`，并用 `git format-patch` 生成 `local_patches/*.patch` 作为归档产物
+
+输出目录为 `.cache/build/<项目>/<时间戳>/history/`，并打包为 `repo-history_<项目>_<时间戳>.tar.gz`。history 目录、压缩包和可选 artifact 都先在各自目标的同级私有 staging 中完整生成，仅在成功后通过原子 no-replace rename 发布。已有目录、符号链接或 artifact 目标会被拒绝，不复用也不覆盖。压缩、artifact 复制或发布失败时会清理私有 staging，因此可以使用相同时间戳重试。
+
+相对 `--artifact-dir` 和时间戳父目录从已打开的项目根目录描述符开始逐级遍历，且不跟随符号链接；拒绝 `..` 穿越、符号链接逃逸和并发父目录替换，避免写入被重定向到项目根目录之外。绝对 artifact 目录会被拒绝。若平台不支持 descriptor-relative no-follow、descriptor path 或原子 no-replace rename，会在创建输出或采集 Git 历史前安全失败。
+
+单仓库 Git 操作失败（包括 upstream 查询失败、进程启动异常或工作目录消失）会在 `summary.json` 中标记为 `partial`，并继续处理其他仓库；分支确实没有配置 upstream 仍是正常支持的情况。任何写入前都会全局检查仓库输出名，并拒绝不安全路径、大小写不敏感重复、祖先/后代重叠，以及 `meta.json`、`local_patches` 等生成文件保留名。
+
+**参数**:
+- `项目名称`（必需）: 项目名称
+
+**选项**:
+- `--timestamp`: 覆盖时间戳目录名；对应输出必须尚不存在
+- `--synced-max`: 同步侧最多记录的提交数（默认 50）
+- `--artifact-dir`: 独占复制 tar.gz 到该目录；相对路径必须保持在项目根目录内
+- `--dry-run`: 仅打印计划，不写文件
+- `--keep-dir`: 打包后保留解压的 history 目录
+
+**示例**:
+```bash
+python -m src project_record_history myproject --artifact-dir jenkins-artifacts
+```
+
+---
+
 ### `snapshot_create` - 生成工作区快照（锁文件）
 
 **状态**: ✅ 已实现
