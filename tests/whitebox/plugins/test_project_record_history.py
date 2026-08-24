@@ -138,6 +138,30 @@ def test_record_history_rejects_relative_artifact_escape(tmp_path: Path, artifac
     assert not (tmp_path / ".cache").exists()
 
 
+@pytest.mark.parametrize(
+    "artifact_dir",
+    [
+        ".cache/build/demo/same",
+        ".cache/build/demo/same/artifacts",
+        ".cache/build/demo",
+    ],
+)
+def test_record_history_rejects_overlapping_artifact_paths_without_residue(tmp_path: Path, artifact_dir: str) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    env = {"repositories": [(str(repo), "root")], "root_path": str(tmp_path)}
+
+    for _attempt in range(2):
+        assert not project_builder.project_record_history(
+            env,
+            {},
+            "demo",
+            timestamp="same",
+            artifact_dir=artifact_dir,
+        )
+        assert not (tmp_path / ".cache").exists()
+
+
 def test_record_history_rejects_relative_artifact_symlink_escape(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)

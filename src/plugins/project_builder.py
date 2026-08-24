@@ -1011,6 +1011,13 @@ def _preflight_history_repo_names(repositories: List[Tuple[str, str]]) -> Option
     return safe_names
 
 
+def _history_output_paths_overlap(left: Tuple[str, ...], right: Tuple[str, ...]) -> bool:
+    folded_left = tuple(component.casefold() for component in left)
+    folded_right = tuple(component.casefold() for component in right)
+    common_length = min(len(folded_left), len(folded_right))
+    return folded_left[:common_length] == folded_right[:common_length]
+
+
 _O_DIRECTORY = getattr(os, "O_DIRECTORY", None)
 _O_NOFOLLOW = getattr(os, "O_NOFOLLOW", None)
 
@@ -1361,6 +1368,20 @@ def project_record_history(
     except (TypeError, ValueError):
         synced_limit = 50
     archive_name = f"repo-history_{safe_project_name}_{ts}.tar.gz"
+    if artifact_components is not None:
+        timestamp_output = (".cache", "build", safe_project_name, ts)
+        internal_archive_output = (*timestamp_output, archive_name)
+        artifact_parent_output = tuple(artifact_components)
+        artifact_output = (*artifact_parent_output, archive_name)
+        timestamp_paths = (timestamp_output, internal_archive_output)
+        artifact_paths = (artifact_parent_output, artifact_output)
+        if any(
+            _history_output_paths_overlap(timestamp_path, artifact_path)
+            for timestamp_path in timestamp_paths
+            for artifact_path in artifact_paths
+        ):
+            log.error("History timestamp and artifact outputs overlap: %s", artifact)
+            return False
     if not dry_run and not _history_capabilities_available():
         log.error("Safe descriptor-relative atomic publication is unavailable on this platform")
         return False
