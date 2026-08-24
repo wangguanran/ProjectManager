@@ -13,6 +13,22 @@ from typing import Any, Dict, List, Optional
 SKIPPED_COMMIT_STATUSES = {"already_applied", "already_in_history"}
 
 
+def redact_patch_diagnostic(
+    value: object,
+    *,
+    patch_file: str,
+    patch_target: str,
+    rel_path: str,
+    repo_name: str,
+) -> str:
+    """Replace apply-time absolute paths with their safe diagnostic labels."""
+    text = str(value or "")
+    for sensitive, replacement in ((patch_file, rel_path), (patch_target, repo_name)):
+        if sensitive:
+            text = text.replace(sensitive, replacement)
+    return text
+
+
 def safe_cache_segment(value: str) -> str:
     value = str(value or "").strip()
     if not value:

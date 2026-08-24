@@ -144,6 +144,50 @@ def test_po_005_patch_apply_success(workspace_a: Path) -> None:
     result = run_cli(["po_apply", "projA"], cwd=workspace_a)
     assert result.returncode == 0
     assert "line2" in target.read_text(encoding="utf-8")
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert "applying patch:" in combined
+    assert "tmp_file.patch" in combined
+    patch_log_lines = [line for line in combined.splitlines() if "tmp_file.patch" in line]
+    assert patch_log_lines
+    assert all(str(workspace_a) not in line for line in patch_log_lines)
+    assert "[INFO    ]" in combined
+    latest_log = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
+    persisted_patch_lines = [
+        line for line in latest_log.splitlines() if "tmp_file.patch" in line or "po_patch_dir" in line
+    ]
+    assert persisted_patch_lines
+    assert any("repo: 'root'" in line for line in persisted_patch_lines)
+    assert all(str(workspace_a) not in line for line in persisted_patch_lines)
+
+    record_path = workspace_a / ".cache" / "po_applied" / "boardA" / "projA" / "po_base.json"
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    command = next(item for item in record["commands"] if item["cmd"].startswith("git apply "))
+    assert str(workspace_a) in command["cmd"]
+    assert command["cwd"] == str(workspace_a)
+
+
+def test_po_005a_patch_apply_dry_run_logs_plan_without_success(workspace_a: Path) -> None:
+    target = workspace_a / "src" / "tmp_file.txt"
+    target.write_text("line1", encoding="utf-8")
+
+    result = run_cli(["po_apply", "projA", "--dry-run"], cwd=workspace_a)
+
+    assert result.returncode == 0
+    assert target.read_text(encoding="utf-8") == "line1"
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert "planned git apply patch:" in combined
+    assert "tmp_file.patch" in combined
+    assert "patch applied successfully" not in combined
+    patch_log_lines = [line for line in combined.splitlines() if "tmp_file.patch" in line]
+    assert patch_log_lines
+    assert all(str(workspace_a) not in line for line in patch_log_lines)
+    latest_log = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
+    persisted_patch_lines = [
+        line for line in latest_log.splitlines() if "tmp_file.patch" in line or "po_patch_dir" in line
+    ]
+    assert persisted_patch_lines
+    assert any("repo: 'root'" in line for line in persisted_patch_lines)
+    assert all(str(workspace_a) not in line for line in persisted_patch_lines)
 
 
 def test_po_005d_preexisting_patch_is_not_reverted(workspace_a: Path) -> None:
@@ -193,6 +237,23 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     assert result.returncode == 0
     assert commit_file.exists()
     assert "line2" in (workspace_a / "src" / "tmp_file.txt").read_text(encoding="utf-8")
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert "applying commit patch:" in combined
+    patch_basename = next(commits_dir.glob("*.patch")).name
+    assert patch_basename in combined
+    patch_log_lines = [line for line in combined.splitlines() if patch_basename in line]
+    assert patch_log_lines
+    assert all(str(workspace_a) not in line for line in patch_log_lines)
+    assert "[INFO    ]" in combined
+    latest_log = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
+    persisted_patch_lines = [
+        line
+        for line in latest_log.splitlines()
+        if patch_basename in line or "po_commit_dir" in line or "Stripping format-patch" in line
+    ]
+    assert persisted_patch_lines
+    assert any("repo: 'root'" in line for line in persisted_patch_lines)
+    assert all(str(workspace_a) not in line for line in persisted_patch_lines)
 
     subject = subprocess.run(
         ["git", "log", "-1", "--pretty=%s"],
@@ -208,6 +269,9 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
     assert record.get("commits"), "Commit application should be recorded"
     commands = record.get("commands", [])
     assert any(item.get("cmd", "").startswith("git am -k --keep-cr ") for item in commands)
+    git_am_command = next(item for item in commands if item["cmd"].startswith("git am -k --keep-cr "))
+    assert str(workspace_a) in git_am_command["cmd"]
+    assert git_am_command["cwd"] == str(workspace_a)
 
     revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
     assert revert.returncode == 0
@@ -231,6 +295,79 @@ def test_po_005b_commit_apply_success(workspace_a: Path) -> None:
             check=True,
         ).stdout.lower()
     )
+
+
+def test_po_005b_commit_apply_dry_run_logs_plan_without_success(workspace_a: Path) -> None:
+    commits_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "commits"
+    commits_dir.mkdir(parents=True, exist_ok=True)
+
+    commit_file = workspace_a / "commit_file.txt"
+    commit_file.write_text("from commit\n", encoding="utf-8")
+    subprocess.run(["git", "add", "commit_file.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "add commit file"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "format-patch", "-1", "HEAD", "-o", str(commits_dir)], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=str(workspace_a), check=True)
+
+    result = run_cli(["po_apply", "projA", "--dry-run"], cwd=workspace_a)
+
+    assert result.returncode == 0
+    assert not commit_file.exists()
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert "planned git am commit patch:" in combined
+    patch_basename = next(commits_dir.glob("*.patch")).name
+    assert patch_basename in combined
+    assert "commit patch applied successfully" not in combined
+    patch_log_lines = [line for line in combined.splitlines() if patch_basename in line]
+    assert patch_log_lines
+    assert all(str(workspace_a) not in line for line in patch_log_lines)
+    latest_log = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
+    persisted_patch_lines = [
+        line for line in latest_log.splitlines() if patch_basename in line or "po_commit_dir" in line
+    ]
+    assert persisted_patch_lines
+    assert any("repo: 'root'" in line for line in persisted_patch_lines)
+    assert all(str(workspace_a) not in line for line in persisted_patch_lines)
+
+
+def test_po_005b_commit_apply_failure_logs_safe_recovery(workspace_a: Path) -> None:
+    commits_dir = workspace_a / "projects" / "boardA" / "po" / "po_base" / "commits"
+    commits_dir.mkdir(parents=True, exist_ok=True)
+
+    conflict_file = workspace_a / "commit_conflict.txt"
+    conflict_file.write_text("from patch\n", encoding="utf-8")
+    subprocess.run(["git", "add", "commit_conflict.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "add conflicting file"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "format-patch", "-1", "HEAD", "-o", str(commits_dir)], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=str(workspace_a), check=True)
+    conflict_file.write_text("local version\n", encoding="utf-8")
+    subprocess.run(["git", "add", "commit_conflict.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "local conflicting file"], cwd=str(workspace_a), check=True)
+    head_before = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    result = run_cli(["po_apply", "projA"], cwd=workspace_a, check=False)
+
+    assert result.returncode != 0
+    assert conflict_file.read_text(encoding="utf-8") == "local version\n"
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+        ).stdout.strip()
+        == head_before
+    )
+    assert not (workspace_a / ".git" / "rebase-apply").exists()
+    patch_basename = next(commits_dir.glob("*.patch")).name
+    combined = f"{result.stdout}\n{result.stderr}"
+    relevant_console = [line for line in combined.splitlines() if patch_basename in line or "commits.py" in line]
+    assert relevant_console
+    assert all(str(workspace_a) not in line for line in relevant_console)
+    latest_log = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
+    relevant_persisted = [line for line in latest_log.splitlines() if patch_basename in line or "commits.py" in line]
+    assert relevant_persisted
+    assert all(str(workspace_a) not in line for line in relevant_persisted)
+    assert '["git", "am", "--abort"]' in latest_log
+    assert f'["git", "apply", "--reverse", "--check", "{patch_basename}"]' in latest_log
 
 
 def test_po_005c_commit_apply_skips_original_commit_in_history(workspace_a: Path) -> None:
@@ -432,6 +569,16 @@ def test_po_006_patch_apply_fail(workspace_a: Path) -> None:
     bad_patch.write_text("invalid patch", encoding="utf-8")
     result = run_cli(["po_apply", "projA"], cwd=workspace_a, check=False)
     assert result.returncode != 0
+    combined = f"{result.stdout}\n{result.stderr}"
+    relevant_console = [line for line in combined.splitlines() if "bad.patch" in line or "patches.py" in line]
+    assert relevant_console
+    assert all(str(workspace_a) not in line for line in relevant_console)
+    latest_log = (workspace_a / ".cache" / "latest.log").read_text(encoding="utf-8")
+    relevant_persisted = [line for line in latest_log.splitlines() if "bad.patch" in line or "patches.py" in line]
+    assert relevant_persisted
+    assert all(str(workspace_a) not in line for line in relevant_persisted)
+    assert '["git", "apply", "bad.patch"]' in latest_log
+    assert '["git", "apply", "--reverse", "--check", "bad.patch"]' in latest_log
 
 
 def test_po_007_override_copy_success(workspace_a: Path, tmp_path: Path) -> None:
