@@ -164,7 +164,7 @@ python -m src project_record_history <项目名称> [--timestamp <ts>] [--synced
 
 输出目录为 `.cache/build/<项目>/<时间戳>/history/`，并打包为 `repo-history_<项目>_<时间戳>.tar.gz`。history 目录、压缩包和可选 artifact 都先在各自目标的同级私有 staging 中完整生成，仅在成功后通过原子 no-replace rename 发布。已有目录、符号链接或 artifact 目标会被拒绝，不复用也不覆盖。压缩、artifact 复制或发布失败时会清理私有 staging，因此可以使用相同时间戳重试。
 
-相对 `--artifact-dir` 和时间戳父目录从已打开的项目根目录描述符开始逐级遍历，且不跟随符号链接；拒绝 `..` 穿越、符号链接逃逸和并发父目录替换，避免写入被重定向到项目根目录之外。绝对 artifact 目录会被拒绝。若平台不支持 descriptor-relative no-follow、descriptor path 或原子 no-replace rename，会在创建输出或采集 Git 历史前安全失败。
+相对 `--artifact-dir` 和时间戳父目录从已打开的项目根目录描述符开始逐级遍历，且不跟随符号链接；拒绝 `..` 穿越、符号链接逃逸和并发父目录替换，避免写入被重定向到项目根目录之外。artifact 目录必须与时间戳输出树互不重叠；相同路径、祖先路径和后代路径都会在创建任何目录前被拒绝。绝对 artifact 目录会被拒绝。若平台不支持 descriptor-relative no-follow、descriptor path 或原子 no-replace rename，会在创建输出或采集 Git 历史前安全失败。
 
 单仓库 Git 操作失败（包括 upstream 查询失败、进程启动异常或工作目录消失）会在 `summary.json` 中标记为 `partial`，并继续处理其他仓库；分支确实没有配置 upstream 仍是正常支持的情况。任何写入前都会全局检查仓库输出名，并拒绝不安全路径、大小写不敏感重复、祖先/后代重叠，以及 `meta.json`、`local_patches` 等生成文件保留名。
 
