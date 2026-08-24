@@ -8,6 +8,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from src.__main__ import _load_all_projects, _load_common_config
 from src.plugins.patch_override import parse_po_config, po_apply, po_revert
 
@@ -67,6 +69,21 @@ def _env_with_blocked_unix_file_tools(tmp_path: Path):
 
 def _remove_po_base_patch(root: Path) -> None:
     (root / "projects" / "boardA" / "po" / "po_base" / "patches" / "tmp_file.patch").unlink()
+
+
+def _prepare_commit_po(root: Path, po_name: str, filename: str) -> None:
+    commits_dir = root / "projects" / "boardA" / "po" / po_name / "commits"
+    commits_dir.mkdir(parents=True, exist_ok=True)
+    target = root / filename
+    target.write_text(f"from {po_name}\n", encoding="utf-8")
+    subprocess.run(["git", "add", filename], cwd=str(root), check=True)
+    subprocess.run(["git", "commit", "-m", f"apply {po_name}"], cwd=str(root), check=True)
+    subprocess.run(["git", "format-patch", "-1", "HEAD", "-o", str(commits_dir)], cwd=str(root), check=True)
+    subprocess.run(["git", "reset", "--hard", "HEAD~1"], cwd=str(root), check=True)
+
+
+def _record_path(root: Path, po_name: str) -> Path:
+    return root / ".cache" / "po_applied" / "boardA" / "projA" / f"{po_name}.json"
 
 
 def test_po_001_parse_po_config() -> None:
@@ -249,6 +266,165 @@ def test_po_005c_commit_apply_skips_original_commit_in_history(workspace_a: Path
     revert = run_cli(["po_revert", "projA"], cwd=workspace_a)
     assert revert.returncode == 0
     assert commit_file.exists()
+
+
+def test_po_revert_rejects_selected_commit_po_below_stack_top(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a po_b")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    _prepare_commit_po(workspace_a, "po_b", "po_b.txt")
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+    head_before_revert = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    result = run_cli(["po_revert", "projA", "--po", "po_a"], cwd=workspace_a, check=False)
+
+    assert result.returncode != 0
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+        ).stdout.strip()
+        == head_before_revert
+    )
+    assert (workspace_a / "po_a.txt").exists()
+    assert (workspace_a / "po_b.txt").exists()
+    assert _record_path(workspace_a, "po_a").exists()
+    assert _record_path(workspace_a, "po_b").exists()
+
+
+def test_po_revert_allows_commit_pos_in_stack_top_order(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a po_b")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    _prepare_commit_po(workspace_a, "po_b", "po_b.txt")
+    base_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+
+    result = run_cli(["po_revert", "projA"], cwd=workspace_a)
+
+    assert result.returncode == 0
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+        ).stdout.strip()
+        == base_head
+    )
+    assert not (workspace_a / "po_a.txt").exists()
+    assert not (workspace_a / "po_b.txt").exists()
+    assert not _record_path(workspace_a, "po_a").exists()
+    assert not _record_path(workspace_a, "po_b").exists()
+
+
+def test_po_revert_allows_selected_stack_top_and_preserves_lower_po(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a po_b")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    _prepare_commit_po(workspace_a, "po_b", "po_b.txt")
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+    po_a_record = json.loads(_record_path(workspace_a, "po_a").read_text(encoding="utf-8"))
+    po_a_head = po_a_record["commits"][-1]["head_after"]
+
+    result = run_cli(["po_revert", "projA", "--po", "po_b"], cwd=workspace_a)
+
+    assert result.returncode == 0
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+        ).stdout.strip()
+        == po_a_head
+    )
+    assert (workspace_a / "po_a.txt").exists()
+    assert not (workspace_a / "po_b.txt").exists()
+    assert _record_path(workspace_a, "po_a").exists()
+    assert not _record_path(workspace_a, "po_b").exists()
+
+
+def test_po_revert_rejects_commit_added_after_po(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+    (workspace_a / "user_commit.txt").write_text("keep\n", encoding="utf-8")
+    subprocess.run(["git", "add", "user_commit.txt"], cwd=str(workspace_a), check=True)
+    subprocess.run(["git", "commit", "-m", "user commit"], cwd=str(workspace_a), check=True)
+    user_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    result = run_cli(["po_revert", "projA"], cwd=workspace_a, check=False)
+
+    assert result.returncode != 0
+    assert (
+        subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(workspace_a), capture_output=True, text=True, check=True
+        ).stdout.strip()
+        == user_head
+    )
+    assert (workspace_a / "user_commit.txt").exists()
+    assert _record_path(workspace_a, "po_a").exists()
+
+
+def test_po_revert_rejects_dirty_tracked_worktree(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+    baseline = workspace_a / "baseline.txt"
+    baseline.write_text("dirty\n", encoding="utf-8")
+
+    result = run_cli(["po_revert", "projA"], cwd=workspace_a, check=False)
+
+    assert result.returncode != 0
+    assert baseline.read_text(encoding="utf-8") == "dirty\n"
+    assert (workspace_a / "po_a.txt").exists()
+    assert _record_path(workspace_a, "po_a").exists()
+
+
+@pytest.mark.parametrize("broken_field", ["head_before", "head_after"])
+def test_po_revert_exposes_invalid_commit_record_and_preserves_it(workspace_a: Path, broken_field: str) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+    record_path = _record_path(workspace_a, "po_a")
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    record["commits"][0][broken_field] = "deadbeef"
+    record_path.write_text(json.dumps(record), encoding="utf-8")
+
+    plan_result = run_cli(["po_revert", "projA", "--emit-plan"], cwd=workspace_a)
+    plan = json.loads(plan_result.stdout)
+    actions = [action for repo in plan["per_repo_actions"] for action in repo["actions"]]
+    assert plan["blockers"]
+    assert any(action["type"] == "commit_revert_blocked" for action in actions)
+    assert not any(action["type"] == "remove_applied_record" and action["po"] == "po_a" for action in actions)
+
+    result = run_cli(["po_revert", "projA"], cwd=workspace_a, check=False)
+    assert result.returncode != 0
+    assert record_path.exists()
+    assert (workspace_a / "po_a.txt").exists()
+
+
+def test_po_revert_plan_blocker_suppresses_all_mutating_actions(workspace_a: Path) -> None:
+    _remove_common_po_config(workspace_a)
+    _update_project_po_config(workspace_a, "projA", "po_a po_b")
+    _prepare_commit_po(workspace_a, "po_a", "po_a.txt")
+    _prepare_commit_po(workspace_a, "po_b", "po_b.txt")
+    assert run_cli(["po_apply", "projA"], cwd=workspace_a).returncode == 0
+    po_b_record_path = _record_path(workspace_a, "po_b")
+    po_b_record = json.loads(po_b_record_path.read_text(encoding="utf-8"))
+    po_b_record["commits"][0]["head_before"] = "deadbeef"
+    po_b_record_path.write_text(json.dumps(po_b_record), encoding="utf-8")
+
+    result = run_cli(["po_revert", "projA", "--emit-plan"], cwd=workspace_a)
+    plan = json.loads(result.stdout)
+    actions = [action for repo in plan["per_repo_actions"] for action in repo["actions"]]
+
+    assert plan["executable"] is False
+    assert plan["blockers"]
+    assert all(action["type"] == "commit_revert_blocked" for action in actions)
 
 
 def test_po_006_patch_apply_fail(workspace_a: Path) -> None:

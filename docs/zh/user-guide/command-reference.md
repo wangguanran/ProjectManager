@@ -364,7 +364,7 @@ python -m src po_apply myproject
 python -m src po_revert <项目名称> [--dry-run] [--emit-plan [<path>]] [--po <po1,po2>]
 ```
 
-**描述**: 回滚指定项目的所有已应用补丁和覆盖，并清理已应用记录，使后续可再次应用。
+**描述**: 回滚指定项目已应用的补丁、覆盖和 commit patch。commit patch 回滚会使用 `git reset --hard` 将 `HEAD` 移动到记录的应用前提交；只有全部选中 PO 都成功回滚后才删除已应用记录。
 
 **参数**:
 - `项目名称`（必需）: 要回滚PO的项目名称
@@ -374,15 +374,24 @@ python -m src po_revert <项目名称> [--dry-run] [--emit-plan [<path>]] [--po 
 - `--emit-plan`: 输出机器可读的 JSON 执行计划到 stdout（或写入 `<path>`），且不会修改仓库内容。
 - `--po`: 仅回滚指定的 PO（从 `PROJECT_PO_CONFIG` 中筛选，逗号/空格分隔）。
 
+**commit 回滚安全限制**:
+- 建议先运行 `--dry-run` 或 `--emit-plan`。无法安全回滚时，计划会设置 `executable=false`，输出 `commit_revert_blocked` 动作和顶层 `blockers`，并抑制全部修改及清理动作。
+- commit PO 必须严格从当前栈顶开始回滚。若选中的旧 PO 上方仍有更新 PO 或用户提交，操作会拒绝执行，并保留 `HEAD`、文件和已应用记录。
+- 记录的 `head_after` 和 reset target 必须存在并形成连续链。记录缺失或历史已分叉时会拒绝回滚，并保留 applied record 以便恢复。
+- 执行 `git reset --hard` 前，受 Git 跟踪的工作区和 index 必须干净；dirty tracked changes 会阻止回滚。`git reset --hard` 不删除 untracked files。
+
 **流程**:
 1. 从项目配置读取 `PROJECT_PO_CONFIG`
-2. 使用 `git apply --reverse` 回滚补丁
-3. 删除覆盖文件（如果被git跟踪则从git恢复）
-4. 清理每个目标仓库根目录下的已应用记录（例如：`<repo>/.cache/po_applied/<board>/<project>/<po>.json`），使后续可再次应用
+2. 预检 commit PO 的栈顶和提交链一致性
+3. 使用 `git apply --reverse` 回滚补丁
+4. 删除覆盖文件（如果被git跟踪则从git恢复）
+5. 在 tracked worktree/index 干净时，将 commit PO reset 到记录的应用前 `HEAD`
+6. 仅在全部步骤成功后清理每个目标仓库根目录下的已应用记录（例如：`<repo>/.cache/po_applied/<board>/<project>/<po>.json`），使后续可再次应用
 
 **示例**:
 ```bash
 python -m src po_revert myproject
+python -m src po_revert myproject --dry-run --po po_base
 ```
 
 ---

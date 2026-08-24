@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.log_manager import log
 from src.operations.registry import register
 from src.plan_utils import emit_plan_json, parse_emit_plan
+from src.plugins.po_plugins.commits import inspect_commit_revert_chain
 from src.plugins.po_plugins.registry import (
     APPLY_PHASE_GLOBAL_PRE,
     APPLY_PHASE_PER_PO,
@@ -355,6 +356,8 @@ def build_po_revert_plan(
         actions_by_repo["root"] = []
 
     po_items: List[Dict[str, Any]] = []
+    blockers: List[Dict[str, str]] = []
+    blocked_pos = set()
     for po_name in reversed(apply_pos):
         po_path = os.path.join(po_dir, po_name)
         plugin_files: Dict[str, Any] = {}
@@ -416,9 +419,23 @@ def build_po_revert_plan(
 
     # commits revert uses applied records, not PO directory listing.
     for repo_root, repo_name in repo_entries:
+        expected_head = None
         for po_name in reversed(apply_pos):
             record = runtime.load_applied_record(repo_root, po_name)
             commits = (record or {}).get("commits") or []
+            po_blockers, next_head = inspect_commit_revert_chain(repo_root, po_name, commits, expected_head)
+            if po_blockers:
+                blockers.extend(po_blockers)
+                blocked_pos.add(po_name)
+                actions_by_repo.setdefault(repo_name, []).append(
+                    {
+                        "type": "commit_revert_blocked",
+                        "po": po_name,
+                        "reason": po_blockers[0]["reason"],
+                    }
+                )
+                continue
+            expected_head = next_head
             for entry in reversed(commits):
                 if entry.get("status") in SKIPPED_COMMIT_STATUSES:
                     continue
@@ -437,6 +454,8 @@ def build_po_revert_plan(
     # Cleanup actions (what po_revert would remove when not in dry-run).
     for repo_root, repo_name in repo_entries:
         for po_name in reversed(apply_pos):
+            if po_name in blocked_pos:
+                continue
             record_path = _po_applied_record_path(repo_root, board_name, project_name, po_name)
             actions_by_repo.setdefault(repo_name, []).append(
                 {
@@ -445,6 +464,10 @@ def build_po_revert_plan(
                     "path": os.path.relpath(record_path, start=workspace_root),
                 }
             )
+
+    if blockers:
+        for repo_name, actions in list(actions_by_repo.items()):
+            actions_by_repo[repo_name] = [action for action in actions if action.get("type") == "commit_revert_blocked"]
 
     # Stable ordering for per-repo actions.
     for repo_name, actions in list(actions_by_repo.items()):
@@ -474,6 +497,8 @@ def build_po_revert_plan(
             for repo_path, repo_name in repo_entries
         ],
         "pos": po_items,
+        "executable": not blockers,
+        "blockers": blockers,
         "per_repo_actions": _per_repo_plan_actions(repo_entries, actions_by_repo),
     }
 
@@ -716,6 +741,22 @@ def po_revert(
         po_configs=env.get("po_configs", {}),
     )
 
+    # Validate the complete selected commit stack before reverting any patches or overrides.
+    for repo_path, repo_name in repositories or []:
+        expected_head = None
+        for po_name in reversed(apply_pos):
+            record = runtime.load_applied_record(repo_path, po_name)
+            commits = (record or {}).get("commits") or []
+            blockers, expected_head = inspect_commit_revert_chain(repo_path, po_name, commits, expected_head)
+            if blockers:
+                log.error(
+                    "Cannot safely revert commit po '%s' in repo '%s': %s",
+                    po_name,
+                    repo_name,
+                    blockers[0]["reason"],
+                )
+                return False
+
     plugins = get_po_plugins()
     per_po_plugins = sorted(
         [plugin for plugin in plugins if plugin.revert_phase == REVERT_PHASE_PER_PO],
@@ -772,25 +813,35 @@ def po_revert(
                 log.error("po revert aborted due to commit revert error in po: '%s'", po_name)
                 return False
 
-        # Clear applied flag so the PO can be applied again after a successful revert.
-        po_applied_flag_path = os.path.join(po_dir, po_name, "po_applied")
-        if not dry_run and os.path.isfile(po_applied_flag_path):
-            try:
-                os.remove(po_applied_flag_path)
-                log.debug("Removed po_applied flag: '%s'", po_applied_flag_path)
-            except OSError as e:
-                log.warning("Failed to remove po_applied flag '%s': %s", po_applied_flag_path, e)
-
-        log.info("po '%s' has been reverted", po_name)
-        if not dry_run:
-            for repo_path, _repo_name in repositories or []:
-                record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+    # Stage 3: only after every selected PO reverted successfully, clear all markers and records.
+    if not dry_run:
+        for po_name in reversed(apply_pos):
+            po_applied_flag_path = os.path.join(po_dir, po_name, "po_applied")
+            if os.path.isfile(po_applied_flag_path):
                 try:
-                    if os.path.exists(record_path):
-                        os.remove(record_path)
-                except OSError:
-                    # Best-effort cleanup only.
-                    pass
+                    os.remove(po_applied_flag_path)
+                    log.debug("Removed po_applied flag: '%s'", po_applied_flag_path)
+                except OSError as e:
+                    log.error("Failed to remove po_applied flag '%s': %s", po_applied_flag_path, e)
+                    return False
+
+            for repo_path, repo_name in repositories or []:
+                record_path = _po_applied_record_path(repo_path, board_name, project_name, po_name)
+                if not os.path.exists(record_path):
+                    continue
+                try:
+                    os.remove(record_path)
+                except OSError as e:
+                    log.error(
+                        "Failed to remove applied record for po '%s' in repo '%s': %s",
+                        po_name,
+                        repo_name,
+                        e,
+                    )
+                    return False
+
+    for po_name in reversed(apply_pos):
+        log.info("po '%s' has been reverted", po_name)
 
     log.info("po revert finished for project: '%s'", project_name)
     return True
