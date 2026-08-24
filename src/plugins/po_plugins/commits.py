@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from src.log_manager import log, summarize_output
 
@@ -430,7 +430,7 @@ def _revert_commits(ctx: PoPluginContext, runtime: PoPluginRuntime) -> bool:
             return False
 
         for commit_entry in reversed(active_commits):
-            reset_target = resolve_commit_reset_target(repo_path, commit_entry)
+            reset_target = cast(str, resolve_commit_reset_target(repo_path, commit_entry))
 
             if ctx.dry_run:
                 log.info("DRY-RUN: cd %s && git reset --hard %s", repo_path, reset_target)
