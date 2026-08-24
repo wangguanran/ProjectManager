@@ -188,13 +188,20 @@ def execute_hooks_with_fallback(
     fallback_to_global: bool = True,
 ) -> bool:
     """
-    Execute hooks with fallback to global hooks if platform hooks fail.
+    Execute merged global+platform hooks for a platform.
+
+    Any hook returning False is a hard failure. Do not treat an empty
+    "remaining global hooks" list as success after a platform hook failed
+    (that previously marked failed builds as succeeded).
+
+    If the platform merge yields no hooks, optionally fall back to global-only
+    hooks when ``fallback_to_global`` is True.
 
     Args:
         hook_type: Type of hooks to execute
         context: Context data passed to hooks
         platform: Platform name for platform-specific hooks
-        fallback_to_global: Whether to fall back to global hooks if platform hooks fail
+        fallback_to_global: If no merged hooks exist, run global hooks
 
     Returns:
         True if hooks executed successfully, False otherwise
@@ -202,21 +209,18 @@ def execute_hooks_with_fallback(
     if not platform:
         return execute_hooks(hook_type, context, None)
 
-    # Try merged global/platform hooks first
     executed_hooks: Set[Tuple[Optional[str], str]] = set()
     platform_hooks = get_hooks(hook_type, platform)
-    platform_result, failed_hook = _execute_hook_list(hook_type, platform_hooks, context, executed_hooks=executed_hooks)
 
-    if platform_result or not fallback_to_global:
+    if platform_hooks:
+        platform_result, _failed_hook = _execute_hook_list(
+            hook_type, platform_hooks, context, executed_hooks=executed_hooks
+        )
         return platform_result
 
-    if failed_hook is not None and failed_hook.get("platform") is None:
-        return False
+    if not fallback_to_global:
+        log.debug("No hooks for type '%s' platform '%s'", hook_type, platform)
+        return True
 
-    # Fall back to global hooks
-    log.info("Platform hooks failed for %s, falling back to global hooks", platform)
-    fallback_hooks = [hook for hook in get_hooks(hook_type, None) if _hook_key(hook) not in executed_hooks]
-    fallback_result, _failed_hook = _execute_hook_list(
-        hook_type, fallback_hooks, context, executed_hooks=executed_hooks
-    )
-    return fallback_result
+    log.info("No platform hooks for %s, falling back to global hooks", platform)
+    return execute_hooks(hook_type, context, None)
