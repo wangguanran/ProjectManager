@@ -12,7 +12,7 @@ pyinstaller>=6.0.0
 pylint>=3.0.0,<4
 
 # Code quality and formatting
-black==24.8.0
+black==26.10.1
 isort==5.13.2
 mypy>=1.5.0
 types-toml>=0.10.8
